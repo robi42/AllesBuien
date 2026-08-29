@@ -1,0 +1,8 @@
+[workspace]
+members = ["core", "app"]
+resolver = "2"
+
+[workspace.dependencies]
+cxx-qt = "=0.10.0"
+cxx-qt-lib = "=0.10.0"
+cxx-qt-build = "=0.10.0"

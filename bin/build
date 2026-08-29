@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cargo --version | grep -q '1\.98' || {
+  printf 'error: expected Cargo 1.98, got %s\n' "$(cargo --version)" >&2
+  exit 1
+}
+printf 'cargo: %s\n' "$(command -v cargo)"
+cargo build --release

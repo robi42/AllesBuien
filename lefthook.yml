@@ -1,0 +1,6 @@
+min_version: "2.0.0"
+
+pre-commit:
+  jobs:
+    - name: cargo-checks
+      run: cargo fmt --all --check && cargo clippy --all-targets -- -D warnings

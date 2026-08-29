@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+QT_QPA_PLATFORM=offscreen cargo test --workspace
+cargo tree -p allesbuien-core | grep -qi cxx && exit 1 || true
+cargo llvm-cov -p allesbuien-core --fail-under-lines 85
+cargo llvm-cov --version | grep -qF "$(cat .llvm-cov-version)"
