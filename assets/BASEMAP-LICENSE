@@ -1,0 +1,15 @@
+Natural Earth 1:10m basemap source
+
+Natural Earth commit: ca96624a56bd078437bca8184e78163e5039ad19
+Land: https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_land.geojson
+Lakes: https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_lakes.geojson
+Boundaries: https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_admin_0_boundary_lines_land.geojson
+
+Natural Earth terms: https://www.naturalearthdata.com/about/terms-of-use/
+
+Natural Earth states that all versions of its raster and vector map data are in
+the public domain. The maps may be used in any manner, including modification,
+electronic dissemination, printing, and commercial use. No permission or
+credit is required.
+
+Basemap SHA-256: 08230d74b926c7d852fdae14c5de8d9e5974828054010e4d7ccb221a661ac388
