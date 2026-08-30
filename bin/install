@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-printf 'finalized in todo 20\n'
+./bin/build && (cd pkgbuild && makepkg -f)
+
+printf '%s\n' \
+  'INSTALL MODE: B' \
+  'Run: cargo install --root "$HOME/.local" --path app && DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}" && install -Dm644 pkgbuild/allesbuien.desktop "$DATA_HOME/applications/allesbuien.desktop" && install -Dm644 pkgbuild/allesbuien.svg "$DATA_HOME/icons/hicolor/scalable/apps/allesbuien.svg" && install -Dm644 LICENSE "$DATA_HOME/licenses/allesbuien/LICENSE"'
