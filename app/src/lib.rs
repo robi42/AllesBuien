@@ -14,6 +14,7 @@ use allesbuien_core::{
 mod app_style;
 mod bootstrap;
 pub mod image_provider;
+pub mod radar_controller;
 mod services;
 pub mod weather_controller;
 
@@ -53,6 +54,7 @@ pub fn run() -> Result<(), RunError> {
         radar: Arc::new(radar),
         notifier: Arc::new(NotifySend),
         location: config.location,
+        radar_state_dir: config.state_dir,
     });
     let exit_code = AppBuilder::new(
         services,

@@ -1,10 +1,39 @@
-use cxx_qt_lib::{QColor, QImage, QImageFormat, QQmlImageProviderBaseImageType, QSize, QString};
+use std::sync::{Arc, OnceLock, RwLock};
+
+use cxx_qt_lib::{QImage, QQmlImageProviderBaseImageType, QSize, QString};
+
+pub(crate) type FrameBytes = Arc<[u8]>;
+
+#[derive(Default)]
+struct FrameStore {
+    generation: u64,
+    frames: Vec<FrameBytes>,
+}
+
+static FRAME_STORE: OnceLock<RwLock<FrameStore>> = OnceLock::new();
+
+fn frame_store() -> &'static RwLock<FrameStore> {
+    FRAME_STORE.get_or_init(|| RwLock::new(FrameStore::default()))
+}
+
+pub(crate) fn begin_generation(generation: u64) {
+    if let Ok(mut store) = frame_store().write() {
+        store.generation = generation;
+        store.frames.clear();
+    }
+}
+
+pub(crate) fn replace_frames(generation: u64, frames: Vec<FrameBytes>) {
+    if let Ok(mut store) = frame_store().write()
+        && store.generation == generation
+    {
+        store.frames = frames;
+    }
+}
 
 #[cxx_qt::bridge]
 pub mod ffi {
     unsafe extern "C++" {
-        include!("cxx-qt-lib/qcolor.h");
-        type QColor = cxx_qt_lib::QColor;
         include!("cxx-qt-lib/qimage.h");
         type QImage = cxx_qt_lib::QImage;
         include!("cxx-qt-lib/qsize.h");
@@ -77,12 +106,28 @@ impl cxx_qt::Constructor<(QQmlImageProviderBaseImageType,)> for ffi::ImageProvid
 impl ffi::ImageProvider {
     pub fn request_image(
         self: core::pin::Pin<&mut Self>,
-        _id: &QString,
+        id: &QString,
         _size: *mut QSize,
         _requested_size: &QSize,
     ) -> QImage {
-        let mut image = QImage::from_width_height_and_format(16, 16, QImageFormat::Format_RGBA8888);
-        image.fill(&QColor::from_rgb(65, 105, 225));
-        image
+        let id = id.to_string();
+        let Some((generation, index)) = id.split_once('/') else {
+            return QImage::default();
+        };
+        let (Ok(generation), Ok(index)) = (generation.parse::<u64>(), index.parse::<usize>())
+        else {
+            return QImage::default();
+        };
+        let Ok(store) = frame_store().read() else {
+            return QImage::default();
+        };
+        if store.generation != generation {
+            return QImage::default();
+        }
+        store
+            .frames
+            .get(index)
+            .and_then(|frame| QImage::from_data(frame, Some("PNG")))
+            .unwrap_or_default()
     }
 }

@@ -4,7 +4,7 @@ use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
 use allesbuien_core::{
     config::LocationConfig,
     notify::{Notifier, NotifyError},
-    radar::{RadarApi, RadarFuture},
+    radar::{RadarApi, RadarError, RadarFuture},
     weather::{FeedApi, FeedFuture, WeatherData},
 };
 
@@ -28,7 +28,11 @@ struct StubRadarApi;
 
 impl RadarApi for StubRadarApi {
     fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
-        Box::pin(async { unreachable!("bootstrap must not fetch radar metadata") })
+        Box::pin(async {
+            Err(RadarError::InvalidRunTimestamp {
+                timestamp: String::new(),
+            })
+        })
     }
 
     fn frame<'a>(&'a self, _url: &'a str) -> RadarFuture<'a, Vec<u8>> {
@@ -56,6 +60,7 @@ fn creates_engine_and_window_when_booting_with_stub_services() {
             longitude: 4.84,
             label: String::from("Amsterdam-West"),
         },
+        radar_state_dir: PathBuf::from("/nonexistent/test-radar"),
     });
     let builder = AppBuilder::new(
         services,

@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use allesbuien_core::{
     config::LocationConfig, notify::Notifier, radar::RadarApi, weather::FeedApi,
@@ -12,6 +12,7 @@ pub struct CoreServiceConfig {
     pub radar: Arc<dyn RadarApi>,
     pub notifier: Arc<NotifierService>,
     pub location: LocationConfig,
+    pub radar_state_dir: PathBuf,
 }
 
 pub struct CoreServices {
@@ -19,6 +20,7 @@ pub struct CoreServices {
     radar: Arc<dyn RadarApi>,
     notifier: Arc<NotifierService>,
     location: LocationConfig,
+    radar_state_dir: PathBuf,
 }
 
 impl CoreServices {
@@ -29,6 +31,7 @@ impl CoreServices {
             radar: config.radar,
             notifier: config.notifier,
             location: config.location,
+            radar_state_dir: config.radar_state_dir,
         }
     }
 
@@ -50,6 +53,11 @@ impl CoreServices {
     #[must_use]
     pub const fn location(&self) -> &LocationConfig {
         &self.location
+    }
+
+    #[must_use]
+    pub fn radar_state_dir(&self) -> &PathBuf {
+        &self.radar_state_dir
     }
 }
 

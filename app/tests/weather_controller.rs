@@ -11,7 +11,7 @@ use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
 use allesbuien_core::{
     config::LocationConfig,
     notify::{Notifier, NotifyError},
-    radar::{RadarApi, RadarFuture},
+    radar::{RadarApi, RadarError, RadarFuture},
     weather::{CurrentConditions, FeedApi, FeedFuture, ForecastDay, RainSoon, WeatherData},
 };
 use cxx_qt_lib::QModelIndex;
@@ -72,7 +72,11 @@ struct StubRadarApi;
 
 impl RadarApi for StubRadarApi {
     fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
-        Box::pin(async { unreachable!("weather test must not fetch radar metadata") })
+        Box::pin(async {
+            Err(RadarError::InvalidRunTimestamp {
+                timestamp: String::new(),
+            })
+        })
     }
 
     fn frame<'a>(&'a self, _url: &'a str) -> RadarFuture<'a, Vec<u8>> {
@@ -104,6 +108,7 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
             longitude: 4.84,
             label: String::from("Amsterdam-West"),
         },
+        radar_state_dir: PathBuf::from("/nonexistent/test-radar"),
     });
     let intervals = TimerIntervals {
         weather_refresh: Duration::from_secs(60),
