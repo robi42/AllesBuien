@@ -189,15 +189,17 @@ fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
         );
         let evidence_path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../.omo/evidence/task-18-omarchy-weather-app.png");
-        let evidence_path = QString::from(
-            evidence_path
-                .to_str()
-                .expect("evidence path should be valid UTF-8"),
-        );
-        let png = CString::new("PNG").expect("static image format is valid");
-        assert!(
-            save_image(&image, &evidence_path, png.as_ptr(), -1),
-            "offscreen window grab should save as PNG"
-        );
+        if evidence_path.parent().is_some_and(Path::exists) {
+            let evidence_path = QString::from(
+                evidence_path
+                    .to_str()
+                    .expect("evidence path should be valid UTF-8"),
+            );
+            let png = CString::new("PNG").expect("static image format is valid");
+            assert!(
+                save_image(&image, &evidence_path, png.as_ptr(), -1),
+                "offscreen window grab should save as PNG"
+            );
+        }
     }
 }

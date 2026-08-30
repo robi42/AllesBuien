@@ -167,8 +167,8 @@ ApplicationWindow {
                 spacing: 8
 
                 Label {
-                    text: model.day
-                    Layout.preferredWidth: 60
+                    text: Qt.formatDate(new Date(model.day), "ddd")
+                    Layout.preferredWidth: 44
                     font.bold: true
                     color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
                 }

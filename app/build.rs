@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use cxx_qt_build::{CxxQtBuilder, QmlModule};
+use cxx_qt_build::{CxxQtBuilder, QResource, QResources, QmlModule};
 
 fn main() {
     println!("cargo:rerun-if-env-changed=QMAKE");
@@ -12,6 +12,9 @@ fn main() {
     }
 
     CxxQtBuilder::new_qml_module(QmlModule::new("nl.allesbuien").qml_file("qml/Main.qml"))
+        .qrc_resources(
+            QResources::new().resource(QResource::new().files(["assets/basemap-nl.png"])),
+        )
         .qt_module("Quick")
         .qt_module("QuickControls2")
         .file("src/app_style.rs")
