@@ -91,6 +91,130 @@ ApplicationWindow {
         }
     }
 
+    component ConditionsView: Item {
+        SystemPalette { id: systemPalette }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 8
+
+            Label {
+                text: weatherController.stationName
+                font.pointSize: 14
+                font.bold: true
+                color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+            }
+
+            Label {
+                text: weatherController.temperature
+                font.pointSize: 24
+                font.bold: true
+                color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                Layout.fillWidth: true
+            }
+
+            Label {
+                text: weatherController.condition
+                font.pointSize: 12
+                color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+            }
+
+            Label {
+                text: weatherController.wind
+                font.pointSize: 12
+                color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                Layout.fillWidth: true
+            }
+
+            Label {
+                text: weatherController.rainSummary
+                font.pointSize: 12
+                color: themeController.themeAvailable ? themeController.themeAccent : systemPalette.highlight
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                visible: text.length > 0
+            }
+
+            Label {
+                objectName: "conditionsError"
+                text: weatherController.status
+                visible: text.length > 0
+                color: themeController.themeAvailable ? themeController.themeAccent : "red"
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+            }
+        }
+    }
+
+    component ForecastView: ListView {
+        id: forecastList
+        clip: true
+        model: weatherController
+
+        SystemPalette { id: systemPalette }
+
+        delegate: Item {
+            width: ListView.view.width
+            height: 40
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 4
+                spacing: 8
+
+                Label {
+                    text: model.day
+                    Layout.preferredWidth: 60
+                    font.bold: true
+                    color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                }
+
+                Label {
+                    text: model.minTemperature + "° / " + model.maxTemperature + "°"
+                    Layout.preferredWidth: 80
+                    color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                }
+
+                Label {
+                    text: model.rainChance > 0 ? (model.rainChance + "%") : ""
+                    Layout.preferredWidth: 40
+                    color: themeController.themeAvailable ? themeController.themeAccent : systemPalette.highlight
+                }
+
+                Label {
+                    text: model.condition
+                    Layout.fillWidth: true
+                    color: themeController.themeAvailable ? themeController.themeMuted : systemPalette.text
+                    elide: Text.ElideRight
+                }
+            }
+
+            Rectangle {
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 1
+                color: themeController.themeAvailable ? themeController.themeSelection : systemPalette.alternateBase
+                opacity: 0.5
+            }
+        }
+
+        Label {
+            objectName: "forecastError"
+            anchors.centerIn: parent
+            text: weatherController.status
+            visible: forecastList.count === 0 && text.length > 0
+            color: themeController.themeAvailable ? themeController.themeAccent : "red"
+            width: parent.width - 16
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignHCenter
+        }
+    }
+
     RowLayout {
         anchors.fill: parent
         anchors.margins: 16
@@ -108,13 +232,13 @@ ApplicationWindow {
             Layout.preferredWidth: 320
             spacing: 16
 
-            Item {
+            ConditionsView {
                 objectName: "conditionsView"
                 Layout.fillWidth: true
                 Layout.preferredHeight: 200
             }
 
-            Item {
+            ForecastView {
                 objectName: "forecastView"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
