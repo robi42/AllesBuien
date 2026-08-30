@@ -1,17 +1,26 @@
 use std::{path::PathBuf, sync::Arc};
 
-use allesbuien::{AppBuilder, CoreServices, TimerIntervals};
+use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
 use allesbuien_core::{
+    config::LocationConfig,
     notify::{Notifier, NotifyError},
     radar::{RadarApi, RadarFuture},
-    weather::{FeedApi, FeedFuture},
+    weather::{FeedApi, FeedFuture, WeatherData},
 };
 
 struct StubFeedApi;
 
 impl FeedApi for StubFeedApi {
     fn fetch(&self, _latitude: f64, _longitude: f64) -> FeedFuture<'_> {
-        Box::pin(async { unreachable!("bootstrap must not fetch weather") })
+        Box::pin(async {
+            Ok(WeatherData {
+                current: None,
+                forecast: Vec::new(),
+                now_line: String::from("Now: unavailable"),
+                rain_line: String::from("next 2h: dry"),
+                rain_soon: None,
+            })
+        })
     }
 }
 
@@ -38,11 +47,16 @@ impl Notifier for StubNotifier {
 #[test]
 fn creates_engine_and_window_when_booting_with_stub_services() {
     // Given: fake core boundaries and inert timer configuration.
-    let services = CoreServices::new(
-        Arc::new(StubFeedApi),
-        Arc::new(StubRadarApi),
-        Arc::new(StubNotifier),
-    );
+    let services = CoreServices::new(CoreServiceConfig {
+        feed: Arc::new(StubFeedApi),
+        radar: Arc::new(StubRadarApi),
+        notifier: Arc::new(StubNotifier),
+        location: LocationConfig {
+            latitude: 52.37,
+            longitude: 4.84,
+            label: String::from("Amsterdam-West"),
+        },
+    });
     let builder = AppBuilder::new(
         services,
         PathBuf::from("/nonexistent/test-theme"),

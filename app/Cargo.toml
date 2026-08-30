@@ -9,6 +9,7 @@ allesbuien-core = { path = "../core" }
 cxx = "1.0"
 cxx-qt = { workspace = true }
 cxx-qt-lib = { workspace = true, features = ["qt_gui", "qt_qml"] }
+tokio = { version = "1", features = ["net", "rt-multi-thread", "time"] }
 
 [build-dependencies]
 cxx-qt-build = { workspace = true }
