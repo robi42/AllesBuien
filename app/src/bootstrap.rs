@@ -18,6 +18,7 @@ use crate::{
     CoreServices, TimerIntervals, app_style, image_provider,
     radar_controller::{self, RadarControllerConfig},
     services::AppRuntime,
+    theme_controller::{self, ThemeControllerConfig},
     weather_controller::{self, WeatherControllerConfig},
 };
 
@@ -48,7 +49,6 @@ impl AppBuilder {
     /// # Errors
     /// Returns [`BootstrapError`] if Qt cannot create the application, engine, or root object.
     pub fn boot(self) -> Result<BootedApp, BootstrapError> {
-        let _future_controller_seams = (&self.theme_base_path, self.intervals);
         app_style::set_material_style();
         QGuiApplication::set_desktop_file_name(&QString::from("allesbuien"));
 
@@ -94,6 +94,16 @@ impl AppBuilder {
             return Err(BootstrapError::ControllerCreation);
         };
         radar_controller::ffi::set_radar_controller(engine_pin.as_mut(), radar_controller_pin);
+        let poll_interval_ms =
+            i32::try_from(self.intervals.theme_poll.as_millis()).unwrap_or(i32::MAX);
+        let mut theme_controller = theme_controller::create(ThemeControllerConfig {
+            theme_base_path: self.theme_base_path,
+            poll_interval_ms,
+        });
+        let Some(theme_controller_pin) = theme_controller.as_mut() else {
+            return Err(BootstrapError::ControllerCreation);
+        };
+        theme_controller::ffi::set_theme_controller(engine_pin.as_mut(), theme_controller_pin);
         let window_created = Arc::new(AtomicBool::new(false));
         let created_signal = Arc::clone(&window_created);
         let _object_created_guard = engine_pin.as_mut().on_object_created(move |_, object, _| {
@@ -116,6 +126,7 @@ impl AppBuilder {
             engine,
             weather_controller,
             radar_controller,
+            theme_controller,
             _runtime: runtime,
             application,
             window_created: true,
@@ -127,6 +138,7 @@ pub struct BootedApp {
     engine: cxx::UniquePtr<QQmlApplicationEngine>,
     weather_controller: cxx::UniquePtr<weather_controller::ffi::WeatherController>,
     radar_controller: cxx::UniquePtr<radar_controller::ffi::RadarController>,
+    theme_controller: cxx::UniquePtr<theme_controller::ffi::ThemeController>,
     _runtime: AppRuntime,
     application: cxx::UniquePtr<QGuiApplication>,
     window_created: bool,
@@ -153,6 +165,11 @@ impl BootedApp {
         self.radar_controller.as_ref()
     }
 
+    #[must_use]
+    pub fn theme_controller(&self) -> Option<&theme_controller::ffi::ThemeController> {
+        self.theme_controller.as_ref()
+    }
+
     pub fn process_events(&self) {
         if let Some(application) = self.application.as_ref() {
             application.process_events();
@@ -177,6 +194,12 @@ impl BootedApp {
         }
     }
 
+    pub fn poll_theme(&mut self) {
+        if let Some(controller) = self.theme_controller.as_mut() {
+            controller.poll();
+        }
+    }
+
     pub fn exec(mut self) -> i32 {
         self.application.as_mut().map_or(1, QGuiApplication::exec)
     }
@@ -197,7 +220,9 @@ impl Display for BootstrapError {
             Self::ApplicationCreation => formatter.write_str("failed to create QGuiApplication"),
             Self::EngineCreation => formatter.write_str("failed to create QQmlApplicationEngine"),
             Self::RuntimeCreation(error) => write!(formatter, "failed to create runtime: {error}"),
-            Self::ControllerCreation => formatter.write_str("failed to create WeatherController"),
+            Self::ControllerCreation => {
+                formatter.write_str("failed to create application controller")
+            }
             Self::RootWindowCreation => formatter.write_str("failed to create root QML window"),
         }
     }

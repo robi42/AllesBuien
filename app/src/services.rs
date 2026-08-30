@@ -75,7 +75,7 @@ impl Default for TimerIntervals {
             weather_refresh: Duration::from_secs(10 * 60),
             radar_refresh: Duration::from_secs(5 * 60),
             radar_playback: Duration::from_millis(400),
-            theme_poll: Duration::from_secs(1),
+            theme_poll: Duration::from_secs(2),
         }
     }
 }

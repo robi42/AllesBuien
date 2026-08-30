@@ -16,6 +16,7 @@ mod bootstrap;
 pub mod image_provider;
 pub mod radar_controller;
 mod services;
+pub mod theme_controller;
 pub mod weather_controller;
 
 pub const BASEMAP_PNG: &[u8] = include_bytes!("../assets/basemap-nl.png");
@@ -58,7 +59,7 @@ pub fn run() -> Result<(), RunError> {
     });
     let exit_code = AppBuilder::new(
         services,
-        home.join(".config/omarchy/current/theme"),
+        home.join(".local/state/omarchy/current/theme"),
         TimerIntervals::default(),
     )
     .boot()
