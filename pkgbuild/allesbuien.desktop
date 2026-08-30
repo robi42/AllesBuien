@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=AllesBuien
+Comment=Weather and rain radar for Omarchy
+Exec=allesbuien
+Icon=allesbuien
+Terminal=false
+StartupWMClass=allesbuien
+Categories=Utility;Science;
