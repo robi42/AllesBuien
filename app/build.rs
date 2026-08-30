@@ -17,9 +17,11 @@ fn main() {
         .file("src/app_style.rs")
         .file("src/image_provider.rs")
         .file("src/radar_controller.rs")
+        .file("src/theme_controller.rs")
         .file("src/weather_controller.rs")
         .cpp_file("src/image_provider.cpp")
         .cpp_file("src/radar_controller.cpp")
+        .cpp_file("src/theme_controller.cpp")
         .cpp_file("src/weather_controller.cpp")
         .build();
 }
