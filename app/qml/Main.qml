@@ -9,6 +9,9 @@ ApplicationWindow {
     height: 480
     visible: true
     title: "AllesBuien"
+    color: themeController.themeAvailable ? themeController.themeBackground : systemPalette.window
+
+    SystemPalette { id: systemPalette }
 
     Column {
         anchors.centerIn: parent
@@ -53,6 +56,13 @@ ApplicationWindow {
         repeat: true
         running: radarController.playing
         onTriggered: radarController.advanceFrame()
+    }
+
+    Timer {
+        interval: themeController.pollIntervalMs
+        repeat: true
+        running: true
+        onTriggered: themeController.poll()
     }
 
     Timer {
