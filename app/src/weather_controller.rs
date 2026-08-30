@@ -8,6 +8,8 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 use tokio::runtime::Handle;
 
+use crate::services::NotificationService;
+
 #[cxx_qt::bridge]
 pub mod ffi {
     unsafe extern "C++Qt" {
@@ -91,6 +93,7 @@ pub mod ffi {
 pub(crate) struct WeatherControllerConfig {
     pub(crate) feed: Arc<dyn FeedApi>,
     pub(crate) location: LocationConfig,
+    pub(crate) notifications: NotificationService,
     pub(crate) runtime: Handle,
     pub(crate) refresh_interval: Duration,
 }
@@ -107,6 +110,7 @@ pub struct WeatherControllerRust {
     feed: Option<Arc<dyn FeedApi>>,
     location: Option<LocationConfig>,
     runtime: Option<Handle>,
+    notifications: Option<NotificationService>,
 }
 
 impl Default for WeatherControllerRust {
@@ -123,6 +127,7 @@ impl Default for WeatherControllerRust {
             feed: None,
             location: None,
             runtime: None,
+            notifications: None,
         }
     }
 }
@@ -134,6 +139,7 @@ pub(crate) fn create(config: WeatherControllerConfig) -> cxx::UniquePtr<ffi::Wea
         let mut rust = pinned.as_mut().rust_mut();
         rust.feed = Some(config.feed);
         rust.location = Some(config.location);
+        rust.notifications = Some(config.notifications);
         rust.runtime = Some(config.runtime);
         pinned.as_mut().set_refresh_interval_ms(interval);
         pinned.refresh();
@@ -143,15 +149,28 @@ pub(crate) fn create(config: WeatherControllerConfig) -> cxx::UniquePtr<ffi::Wea
 
 impl ffi::WeatherController {
     pub fn refresh(self: Pin<&mut Self>) {
-        let (Some(feed), Some(location), Some(runtime)) =
-            (&self.feed, &self.location, &self.runtime)
-        else {
+        let (Some(feed), Some(location), Some(runtime), Some(notifications)) = (
+            &self.feed,
+            &self.location,
+            &self.runtime,
+            &self.notifications,
+        ) else {
             return;
         };
-        let (feed, location, runtime) = (Arc::clone(feed), location.clone(), runtime.clone());
+        let (feed, location, runtime, notifications) = (
+            Arc::clone(feed),
+            location.clone(),
+            runtime.clone(),
+            notifications.clone(),
+        );
         let qt_thread = self.qt_thread();
         drop(runtime.spawn(async move {
             let result = feed.fetch(location.latitude, location.longitude).await;
+            if let Ok(data) = &result
+                && let Err(error) = notifications.notify_rain(data.rain_soon.as_ref()).await
+            {
+                eprintln!("allesbuien: notification failed: {error}");
+            }
             let _queue_result = qt_thread.queue(move |controller| controller.apply_result(result));
         }));
     }

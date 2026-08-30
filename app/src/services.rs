@@ -1,7 +1,13 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use allesbuien_core::{
-    config::LocationConfig, notify::Notifier, radar::RadarApi, weather::FeedApi,
+    config::LocationConfig,
+    notify::{
+        NotificationInput, Notifier, NotifyConfig, NotifyError, NotifyState,
+        RainSoon as NotifyRainSoon, maybe_send_rain_notification,
+    },
+    radar::RadarApi,
+    weather::{FeedApi, RainSoon},
 };
 use tokio::runtime::{Builder, Handle, Runtime};
 
@@ -21,17 +27,31 @@ pub struct CoreServices {
     notifier: Arc<NotifierService>,
     location: LocationConfig,
     radar_state_dir: PathBuf,
+    notify_config: NotifyConfig,
 }
 
 impl CoreServices {
     #[must_use]
     pub fn new(config: CoreServiceConfig) -> Self {
+        Self::new_with_notify(
+            config,
+            NotifyConfig {
+                enabled: false,
+                threshold_minutes: 0,
+                cooldown: Duration::ZERO,
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn new_with_notify(config: CoreServiceConfig, notify_config: NotifyConfig) -> Self {
         Self {
             feed: config.feed,
             radar: config.radar,
             notifier: config.notifier,
             location: config.location,
             radar_state_dir: config.radar_state_dir,
+            notify_config,
         }
     }
 
@@ -51,6 +71,11 @@ impl CoreServices {
     }
 
     #[must_use]
+    pub const fn notify_config(&self) -> NotifyConfig {
+        self.notify_config
+    }
+
+    #[must_use]
     pub const fn location(&self) -> &LocationConfig {
         &self.location
     }
@@ -58,6 +83,56 @@ impl CoreServices {
     #[must_use]
     pub fn radar_state_dir(&self) -> &PathBuf {
         &self.radar_state_dir
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct NotificationService {
+    notifier: Arc<NotifierService>,
+    location_label: Arc<str>,
+    state: Arc<tokio::sync::Mutex<NotifyState>>,
+}
+
+impl NotificationService {
+    pub(crate) fn new(
+        notifier: Arc<NotifierService>,
+        location_label: String,
+        config: NotifyConfig,
+    ) -> Self {
+        Self {
+            notifier,
+            location_label: location_label.into(),
+            state: Arc::new(tokio::sync::Mutex::new(NotifyState {
+                config,
+                last_sent_at: None,
+                last_event_key: None,
+            })),
+        }
+    }
+
+    pub(crate) async fn notify_rain(&self, rain: Option<&RainSoon>) -> Result<(), NotifyError> {
+        let rain = rain.map(|rain| NotifyRainSoon {
+            minutes_until: rain.minutes_until,
+            time_label: &rain.time_label,
+            max_mmh: rain.max_mmh,
+        });
+        let mut state = self.state.lock().await;
+        maybe_send_rain_notification(
+            &NotifierAdapter(self.notifier.as_ref()),
+            NotificationInput {
+                rain: rain.as_ref(),
+                location_label: &self.location_label,
+            },
+            &mut state,
+        )
+    }
+}
+
+struct NotifierAdapter<'a>(&'a NotifierService);
+
+impl Notifier for NotifierAdapter<'_> {
+    fn send(&self, title: &str, body: &str) -> Result<(), NotifyError> {
+        self.0.send(title, body)
     }
 }
 

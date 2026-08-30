@@ -7,7 +7,7 @@ use std::{
 
 use allesbuien_core::{
     config::Config,
-    notify::NotifySend,
+    notify::{NotifyConfig, NotifySend},
     radar::{RadarError, ReqwestRadarApi},
     weather::{ReqwestFeedApi, WeatherError},
 };
@@ -50,13 +50,20 @@ pub fn run() -> Result<(), RunError> {
         .map_err(RunError::Weather)?;
     let radar = ReqwestRadarApi::new(&config.endpoints.radar_url).map_err(RunError::Radar)?;
     let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from);
-    let services = CoreServices::new(CoreServiceConfig {
-        feed: Arc::new(feed),
-        radar: Arc::new(radar),
-        notifier: Arc::new(NotifySend),
-        location: config.location,
-        radar_state_dir: config.state_dir,
-    });
+    let services = CoreServices::new_with_notify(
+        CoreServiceConfig {
+            feed: Arc::new(feed),
+            radar: Arc::new(radar),
+            notifier: Arc::new(NotifySend),
+            location: config.location,
+            radar_state_dir: config.state_dir,
+        },
+        NotifyConfig {
+            enabled: config.notify.enabled,
+            threshold_minutes: config.notify.threshold_minutes,
+            cooldown: config.notify.cooldown,
+        },
+    );
     let exit_code = AppBuilder::new(
         services,
         home.join(".local/state/omarchy/current/theme"),

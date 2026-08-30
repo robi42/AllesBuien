@@ -17,7 +17,7 @@ use cxx_qt_lib::{
 use crate::{
     CoreServices, TimerIntervals, app_style, image_provider,
     radar_controller::{self, RadarControllerConfig},
-    services::AppRuntime,
+    services::{AppRuntime, NotificationService},
     theme_controller::{self, ThemeControllerConfig},
     weather_controller::{self, WeatherControllerConfig},
 };
@@ -71,6 +71,11 @@ impl AppBuilder {
         let mut weather_controller = weather_controller::create(WeatherControllerConfig {
             feed: Arc::clone(self.services.feed()),
             location: self.services.location().clone(),
+            notifications: NotificationService::new(
+                Arc::clone(self.services.notifier()),
+                self.services.location().label.clone(),
+                self.services.notify_config(),
+            ),
             runtime: runtime.handle(),
             refresh_interval: self.intervals.weather_refresh,
         });
