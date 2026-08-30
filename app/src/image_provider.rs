@@ -104,10 +104,16 @@ impl cxx_qt::Constructor<(QQmlImageProviderBaseImageType,)> for ffi::ImageProvid
 }
 
 impl ffi::ImageProvider {
-    pub fn request_image(
+    /// Returns the generation-keyed radar frame requested by Qt.
+    ///
+    /// # Safety
+    ///
+    /// When `size` is non-null, Qt must provide a valid, writable `QSize`
+    /// output pointer for the duration of this call.
+    pub unsafe fn request_image(
         self: core::pin::Pin<&mut Self>,
         id: &QString,
-        _size: *mut QSize,
+        size: *mut QSize,
         _requested_size: &QSize,
     ) -> QImage {
         let id = id.to_string();
@@ -124,10 +130,16 @@ impl ffi::ImageProvider {
         if store.generation != generation {
             return QImage::default();
         }
-        store
+        let image = store
             .frames
             .get(index)
             .and_then(|frame| QImage::from_data(frame, Some("PNG")))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if !size.is_null() {
+            // SAFETY: Category 8 (FFI boundary): Qt's requestImage contract supplies
+            // a writable QSize output pointer when it is non-null for this call.
+            unsafe { size.write(image.size()) };
+        }
+        image
     }
 }
