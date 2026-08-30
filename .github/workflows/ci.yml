@@ -53,4 +53,11 @@ jobs:
         run: cargo llvm-cov -p allesbuien-core --fail-under-lines 85
 
       - name: Lint QML
-        run: qmllint --max-warnings 0 -I target/cxxqt/qml_modules app/qml/*.qml
+        shell: bash
+        run: |
+          if [[ -x /usr/lib/qt6/bin/qmllint ]]; then
+            qmllint=/usr/lib/qt6/bin/qmllint
+          else
+            qmllint=$(command -v qmllint)
+          fi
+          "$qmllint" --max-warnings 0 -I target/cxxqt/qml_modules app/qml/*.qml
