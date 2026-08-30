@@ -13,12 +13,90 @@ ApplicationWindow {
 
     SystemPalette { id: systemPalette }
 
+    component RadarPanel: Item {
+        SystemPalette { id: radarSystemPalette }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 8
+
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+
+                Image {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width, parent.height * (1058 / 915))
+                    height: width * (915 / 1058)
+                    source: "../assets/basemap-nl.png"
+                    fillMode: Image.Stretch
+
+                    Image {
+                        anchors.fill: parent
+                        source: radarController.currentFrameUrl
+                        fillMode: Image.Stretch
+                        visible: radarController.frameCount > 0
+                    }
+                }
+            }
+
+            Label {
+                objectName: "radarError"
+                text: radarController.status
+                visible: text.length > 0
+                color: themeController.themeAvailable ? themeController.themeAccent : "red"
+                Layout.alignment: Qt.AlignHCenter
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.margins: 8
+                spacing: 12
+
+                Button {
+                    text: radarController.playing ? "Pause" : "Play"
+                    enabled: radarController.frameCount > 1
+                    palette.button: themeController.themeAvailable ? themeController.themeLighterBackground : radarSystemPalette.button
+                    palette.buttonText: themeController.themeAvailable ? themeController.themeForeground : radarSystemPalette.buttonText
+                    onClicked: radarController.playing ? radarController.pause() : radarController.play()
+                }
+
+                Slider {
+                    Layout.fillWidth: true
+                    from: 0
+                    to: Math.max(0, radarController.frameCount - 1)
+                    value: radarController.currentFrameIndex
+                    stepSize: 1
+                    enabled: radarController.frameCount > 1
+
+                    onMoved: {
+                        if (radarController.playing) {
+                            radarController.pause()
+                        }
+                        radarController.currentFrameIndex = Math.round(value)
+                        radarController.currentFrameUrl = "image://radar/" + radarController.generation + "/" + Math.round(value)
+                        if (radarController.timestamps && Math.round(value) < radarController.timestamps.length) {
+                            radarController.currentFrameLabel = radarController.timestamps[Math.round(value)]
+                        }
+                    }
+                }
+
+                Label {
+                    text: radarController.currentFrameLabel
+                    color: themeController.themeAvailable ? themeController.themeForeground : radarSystemPalette.text
+                    Layout.minimumWidth: 120
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+        }
+    }
+
     RowLayout {
         anchors.fill: parent
         anchors.margins: 16
         spacing: 16
 
-        RadarView {
+        RadarPanel {
             objectName: "radarView"
             Layout.fillWidth: true
             Layout.fillHeight: true
