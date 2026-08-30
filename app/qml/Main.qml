@@ -1,39 +1,54 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 
-// Placeholder only; todo 17 replaces this root window.
 // qmllint disable unqualified
 ApplicationWindow {
     objectName: "rootWindow"
-    width: 640
-    height: 480
+    width: 980
+    height: 760
     visible: true
     title: "AllesBuien"
     color: themeController.themeAvailable ? themeController.themeBackground : systemPalette.window
 
     SystemPalette { id: systemPalette }
 
-    Column {
-        anchors.centerIn: parent
-        spacing: 8
+    RowLayout {
+        anchors.fill: parent
+        anchors.margins: 16
+        spacing: 16
 
-        Label { text: weatherController.stationName + " · " + weatherController.temperature }
-        Label { text: weatherController.condition + " · wind " + weatherController.wind }
-        Label { text: weatherController.rainSummary }
-        Label { text: weatherController.status; visible: text.length > 0 }
-        Image {
-            width: 320
-            height: 277
-            fillMode: Image.PreserveAspectFit
-            source: radarController.currentFrameUrl
-            visible: radarController.frameCount > 0
+        RadarView {
+            objectName: "radarView"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.minimumWidth: 400
         }
-        Label { text: radarController.currentFrameLabel }
-        Label { text: radarController.status; visible: text.length > 0 }
-        Button {
-            text: radarController.playing ? "Pause" : "Play"
-            enabled: radarController.frameCount > 1
-            onClicked: radarController.playing ? radarController.pause() : radarController.play()
+
+        ColumnLayout {
+            Layout.fillHeight: true
+            Layout.preferredWidth: 320
+            spacing: 16
+
+            Item {
+                objectName: "conditionsView"
+                Layout.fillWidth: true
+                Layout.preferredHeight: 200
+            }
+
+            Item {
+                objectName: "forecastView"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+            }
+
+            Label {
+                objectName: "attribution"
+                text: "Bron: Buienradar.nl"
+                font.pointSize: 10
+                color: themeController.themeAvailable ? themeController.themeMuted : systemPalette.text
+                Layout.alignment: Qt.AlignRight | Qt.AlignBottom
+            }
         }
     }
 
