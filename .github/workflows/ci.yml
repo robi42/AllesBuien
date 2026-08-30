@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    env:
+      QMAKE: /usr/bin/qmake6
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install system dependencies and Rust
+        run: pacman -Syu --noconfirm rustup qt6-base qt6-declarative && rustup default 1.98.0 && rustup component add llvm-tools-preview
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Read cargo-llvm-cov version
+        id: llvm-cov-version
+        shell: bash
+        run: echo "version=$(<.llvm-cov-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
+        with:
+          tool: cargo-llvm-cov@${{ steps.llvm-cov-version.outputs.version }}
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run workspace tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: cargo test --workspace
+
+      - name: Enforce core purity
+        shell: bash
+        run: cargo tree -p allesbuien-core | grep -qi cxx && exit 1 || true
+
+      - name: Enforce core coverage
+        run: cargo llvm-cov -p allesbuien-core --fail-under-lines 85
+
+      - name: Lint QML
+        run: qmllint --max-warnings 0 -I target/cxxqt/qml_modules app/qml/*.qml

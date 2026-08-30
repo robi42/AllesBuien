@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    env:
+      QMAKE: /usr/bin/qmake6
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install release dependencies
+        run: pacman -Syu --noconfirm rust base-devel qt6-base qt6-declarative
+
+      - name: Create source archive
+        run: git archive --format=tar.gz -o "allesbuien-${GITHUB_REF_NAME}-src.tar.gz" HEAD
+
+      - name: Create unprivileged builder
+        run: useradd -m builder && chown -R builder .
+
+      - name: Build package
+        run: su builder -c '(cd pkgbuild && makepkg -f)'
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          fail_on_unmatched_files: true
+          files: |
+            pkgbuild/*.pkg.tar.zst
+            allesbuien-${{ github.ref_name }}-src.tar.gz
