@@ -32,6 +32,7 @@ ApplicationWindow {
                     fillMode: Image.Stretch
 
                     Image {
+                        objectName: "radarOverlay"
                         anchors.fill: parent
                         source: radarController.currentFrameUrl
                         fillMode: Image.Stretch
