@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cargo --version | grep -q '1\.98' || {
-  printf 'error: expected Cargo 1.98, got %s\n' "$(cargo --version)" >&2
+cargo_version=$(cargo --version)
+grep -q '^cargo 1\.98\.0 ' <<<"$cargo_version" || {
+  printf 'error: expected Cargo 1.98.0, got %s\n' "$cargo_version" >&2
   exit 1
 }
 printf 'cargo: %s\n' "$(command -v cargo)"
+
+# Arch makepkg's C LTO flags produce incomplete ring archives for rust-lld.
+CFLAGS=${CFLAGS:-}
+CXXFLAGS=${CXXFLAGS:-}
+export CFLAGS="${CFLAGS//-flto=auto/}"
+export CXXFLAGS="${CXXFLAGS//-flto=auto/}"
 cargo build --release

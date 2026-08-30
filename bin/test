@@ -7,3 +7,10 @@ QT_QPA_PLATFORM=offscreen cargo test --workspace
 cargo tree -p allesbuien-core | grep -qi cxx && exit 1 || true
 cargo llvm-cov -p allesbuien-core --fail-under-lines 85
 cargo llvm-cov --version | grep -qF "$(cat .llvm-cov-version)"
+
+if [[ -x /usr/lib/qt6/bin/qmllint ]]; then
+  qmllint=/usr/lib/qt6/bin/qmllint
+else
+  qmllint=$(command -v qmllint)
+fi
+"$qmllint" --max-warnings 0 -I target/cxxqt/qml_modules app/qml/*.qml
