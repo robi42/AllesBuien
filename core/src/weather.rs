@@ -4,6 +4,14 @@ use std::{future::Future, pin::Pin, time::Duration};
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::{
+    condition,
+    datetime::{LocalTimestamp, clock_shift_minutes},
+    rain::{self, RainSeries},
+};
+
+pub use crate::rain::{RainPoint, RainSoon, code_to_mmh as rain_code_to_mmh};
+
 pub const DEFAULT_FEED_URL: &str = "https://data.buienradar.nl/2.0/feed/json";
 pub const DEFAULT_RAINTEXT_URL: &str = "https://gpsgadget.buienradar.nl/data/raintext";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
@@ -71,13 +79,14 @@ impl FeedApi for ReqwestFeedApi {
                 .await
                 .map_err(WeatherError::RaintextRequest)?;
             let parsed = parse_feed(&feed, latitude, longitude)?;
-            let rain = summarize_raintext_detail(&raintext);
+            let rain = summarize_raintext_detail(&raintext, clock_shift_minutes());
             Ok(WeatherData {
                 current: parsed.current,
                 forecast: parsed.forecast,
                 now_line: parsed.now_line,
                 rain_line: rain.line,
                 rain_soon: rain.rain_soon,
+                rain_series: rain.points,
             })
         })
     }
@@ -95,14 +104,7 @@ pub enum WeatherError {
     FeedDecode(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct RainSoon {
-    pub minutes_until: u32,
-    pub time_label: String,
-    pub max_mmh: f64,
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct CurrentConditions {
     pub station_name: String,
     pub temperature: Option<f64>,
@@ -110,10 +112,17 @@ pub struct CurrentConditions {
     pub wind_speed: Option<f64>,
     pub wind_bft: Option<i64>,
     pub humidity: Option<f64>,
+    /// Dutch `weatherdescription` exactly as published.
     pub condition: Option<String>,
+    /// Buienradar icon code, e.g. `q` or the night variant `qq`; empty when absent.
+    pub condition_code: String,
+    /// English description for [`Self::condition_code`], falling back to Dutch.
+    pub condition_english: String,
+    /// Observation time projected into the viewer's timezone.
+    pub observed_at: LocalTimestamp,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 pub struct ForecastDay {
     pub day: String,
     #[serde(rename = "mintemperatureMin")]
@@ -126,17 +135,32 @@ pub struct ForecastDay {
     pub max_temperature_max: i32,
     #[serde(rename = "rainChance", default)]
     pub rain_chance: u8,
+    /// Dutch `weatherdescription` exactly as published.
     #[serde(rename = "weatherdescription", default)]
     pub condition: String,
+    /// Icon URL exactly as published, e.g. `.../30x30/f.png`.
+    #[serde(rename = "iconurl", default)]
+    pub icon_url: String,
+    /// Buienradar icon code, e.g. `f`; empty when absent. Derived, never deserialized.
+    #[serde(skip)]
+    pub condition_code: String,
+    /// English description for [`Self::condition_code`], falling back to Dutch.
+    #[serde(skip)]
+    pub condition_english: String,
+    /// Forecast day projected into the viewer's timezone.
+    #[serde(skip)]
+    pub day_at: LocalTimestamp,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct WeatherData {
     pub current: Option<CurrentConditions>,
     pub forecast: Vec<ForecastDay>,
     pub now_line: String,
     pub rain_line: String,
     pub rain_soon: Option<RainSoon>,
+    /// Complete two-hour raintext window, oldest sample first.
+    pub rain_series: Vec<RainPoint>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -157,6 +181,10 @@ struct StationMeasurement {
     humidity: Option<f64>,
     #[serde(rename = "weatherdescription", default)]
     condition: Option<String>,
+    #[serde(rename = "iconurl", default)]
+    icon_url: String,
+    #[serde(default)]
+    timestamp: String,
 }
 
 #[derive(Deserialize)]
@@ -177,23 +205,24 @@ struct Forecast {
     fivedayforecast: Vec<ForecastDay>,
 }
 
-#[derive(Debug, PartialEq)]
-struct RainSummary {
-    line: String,
-    rain_soon: Option<RainSoon>,
-}
-
 fn parse_feed(feed: &str, latitude: f64, longitude: f64) -> Result<WeatherData, WeatherError> {
     let payload: FeedPayload = serde_json::from_str(feed)?;
     let station = nearest_station(&payload.actual.stationmeasurements, latitude, longitude);
-    let current = station.map(|value| CurrentConditions {
-        station_name: value.station_name.clone(),
-        temperature: value.temperature,
-        feel_temperature: value.feel_temperature,
-        wind_speed: value.wind_speed,
-        wind_bft: value.wind_bft,
-        humidity: value.humidity,
-        condition: value.condition.clone(),
+    let current = station.map(|value| {
+        let code = condition::code_from_icon_url(&value.icon_url).unwrap_or_default();
+        let dutch = value.condition.clone().unwrap_or_default();
+        CurrentConditions {
+            station_name: value.station_name.clone(),
+            temperature: value.temperature,
+            feel_temperature: value.feel_temperature,
+            wind_speed: value.wind_speed,
+            wind_bft: value.wind_bft,
+            humidity: value.humidity,
+            condition: value.condition.clone(),
+            condition_english: condition::describe(&code, &dutch),
+            condition_code: code,
+            observed_at: LocalTimestamp::from_feed(&value.timestamp),
+        }
     });
     let now_line = station.map_or_else(
         || String::from("Now: unavailable"),
@@ -209,12 +238,19 @@ fn parse_feed(feed: &str, latitude: f64, longitude: f64) -> Result<WeatherData, 
             )
         },
     );
+    let mut forecast = payload.forecast.fivedayforecast;
+    for day in &mut forecast {
+        day.condition_code = condition::code_from_icon_url(&day.icon_url).unwrap_or_default();
+        day.condition_english = condition::describe(&day.condition_code, &day.condition);
+        day.day_at = LocalTimestamp::from_feed(&day.day);
+    }
     Ok(WeatherData {
         current,
-        forecast: payload.forecast.fivedayforecast,
+        forecast,
         now_line,
         rain_line: String::new(),
         rain_soon: None,
+        rain_series: Vec::new(),
     })
 }
 
@@ -239,54 +275,8 @@ fn haversine_distance(station: &StationMeasurement, latitude: f64, longitude: f6
     2.0 * a.sqrt().asin()
 }
 
-fn summarize_raintext_detail(raw: &str) -> RainSummary {
-    let mut first_rain = None;
-    let mut first_rain_minutes = None;
-    let mut peak = (0, String::new());
-    for (index, line) in raw.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let mut parts = trimmed.split('|');
-        let code = parts.next().and_then(|part| part.parse::<i32>().ok());
-        let time = parts.next().unwrap_or("?").to_owned();
-        if let Some(code) = code {
-            if code > 0 && first_rain.is_none() {
-                first_rain = Some(time.clone());
-                first_rain_minutes = Some(
-                    u32::try_from(index).map_or(u32::MAX, |minutes| minutes.saturating_mul(5)),
-                );
-            }
-            if code > peak.0 {
-                peak = (code, time);
-            }
-        }
-    }
-    if peak.0 <= 0 {
-        return RainSummary {
-            line: String::from("next 2h: dry"),
-            rain_soon: None,
-        };
-    }
-    let max_mmh = rain_code_to_mmh(peak.0);
-    let first_label = first_rain.unwrap_or_else(|| String::from("soon"));
-    let peak_label = if peak.1.is_empty() { "?" } else { &peak.1 };
-    RainSummary {
-        line: format!(
-            "starts around {}, max {:.2} mm/h at {}",
-            first_label, max_mmh, peak_label
-        ),
-        rain_soon: Some(RainSoon {
-            minutes_until: first_rain_minutes.unwrap_or(0),
-            time_label: first_label,
-            max_mmh,
-        }),
-    }
-}
-
-fn rain_code_to_mmh(code: i32) -> f64 {
-    10_f64.powf((f64::from(code) - 109.0) / 32.0)
+fn summarize_raintext_detail(raw: &str, clock_shift_minutes: i32) -> RainSeries {
+    rain::parse_series(raw, clock_shift_minutes)
 }
 
 fn fmt_opt_f64(value: Option<f64>) -> String {
@@ -310,6 +300,8 @@ impl StationMeasurement {
             wind_bft: None,
             humidity: None,
             condition: None,
+            icon_url: String::new(),
+            timestamp: String::new(),
         }
     }
 }
@@ -336,7 +328,7 @@ mod tests {
         let raw = "000|12:00\n000|12:05\n";
 
         // When
-        let summary = summarize_raintext_detail(raw);
+        let summary = summarize_raintext_detail(raw, 0);
 
         // Then
         assert_eq!(summary.line, "next 2h: dry");
@@ -349,7 +341,7 @@ mod tests {
         let raw = "000|12:00\n050|12:05\n080|12:10\n060|12:15\n";
 
         // When
-        let summary = summarize_raintext_detail(raw);
+        let summary = summarize_raintext_detail(raw, 0);
 
         // Then
         let rain = summary.rain_soon.expect("expected rain_soon");
@@ -430,7 +422,7 @@ mod tests {
     fn live_fixtures_parse_offline() {
         // Given / When
         let weather = parse_feed(FEED_FIXTURE, 52.37, 4.84).expect("fixture should parse");
-        let rain = summarize_raintext_detail(RAINTEXT_FIXTURE);
+        let rain = summarize_raintext_detail(RAINTEXT_FIXTURE, 0);
 
         // Then
         assert_eq!(weather.forecast.len(), 5);
@@ -473,5 +465,87 @@ mod tests {
             weather.now_line,
             "Now (Sparse): n/aC feels n/aC, wind n/a m/s (n/a bft), RH n/a%"
         );
+    }
+
+    #[test]
+    fn current_conditions_carry_the_icon_code_and_english_text() {
+        // Given / When
+        let weather = parse_feed(FEED_FIXTURE, 52.07, 5.88).expect("fixture should parse");
+
+        // Then
+        let current = weather.current.expect("nearest station expected");
+        assert_eq!(current.station_name, "Meetstation Arnhem");
+        assert_eq!(current.condition_code, "qq");
+        assert_eq!(current.condition_english, "Heavily clouded with rain");
+        assert_eq!(current.condition.as_deref(), Some("Zwaar bewolkt en regen"));
+        assert_eq!(current.observed_at.source, "2026-08-29T23:10:00");
+        assert_eq!(current.observed_at.date_label.len(), 10);
+    }
+
+    #[test]
+    fn forecast_days_carry_the_icon_code_and_english_text() {
+        // Given / When
+        let weather = parse_feed(FEED_FIXTURE, 52.37, 4.84).expect("fixture should parse");
+
+        // Then
+        let first = &weather.forecast[0];
+        assert_eq!(first.condition_code, "f");
+        assert_eq!(first.condition_english, "Partly cloudy with light rain");
+        assert_eq!(first.day_at.source, "2026-08-30T00:00:00");
+        for day in &weather.forecast {
+            assert!(!day.condition_english.is_empty());
+        }
+    }
+
+    #[test]
+    fn unmapped_icon_code_falls_back_to_the_dutch_description() {
+        // Given
+        let feed = r#"{
+            "actual":{"stationmeasurements":[{
+                "stationname":"Onbekend","lat":52.37,"lon":4.84,
+                "timestamp":"2026-08-30T17:50:00",
+                "weatherdescription":"Zwaar bewolkt",
+                "iconurl":"https://cdn.buienradar.nl/resources/images/icons/weather/30x30/z.png"
+            }]},
+            "forecast":{"fivedayforecast":[]}
+        }"#;
+
+        // When
+        let weather = parse_feed(feed, 52.37, 4.84).expect("feed should parse");
+
+        // Then
+        let current = weather.current.expect("station expected");
+        assert_eq!(current.condition_code, "z");
+        assert_eq!(current.condition_english, "Zwaar bewolkt");
+    }
+
+    #[test]
+    fn missing_icon_and_description_yield_a_neutral_condition_label() {
+        // Given
+        let feed = r#"{
+            "actual":{"stationmeasurements":[{"stationname":"Kaal","lat":52.37,"lon":4.84}]},
+            "forecast":{"fivedayforecast":[]}
+        }"#;
+
+        // When
+        let weather = parse_feed(feed, 52.37, 4.84).expect("feed should parse");
+
+        // Then
+        let current = weather.current.expect("station expected");
+        assert!(current.condition_code.is_empty());
+        assert_eq!(current.condition_english, "Unknown");
+    }
+
+    #[test]
+    fn raintext_summary_exposes_the_whole_series_alongside_rain_soon() {
+        // Given / When
+        let summary = summarize_raintext_detail(RAINTEXT_FIXTURE, 0);
+
+        // Then
+        assert_eq!(summary.points.len(), 24);
+        assert_eq!(summary.points[0].source_time_label, "23:25");
+        assert_eq!(summary.points[1].mmh, rain_code_to_mmh(87));
+        let rain = summary.rain_soon.expect("expected rain_soon");
+        assert_eq!(rain.max_mmh, summary.peak_mmh);
     }
 }

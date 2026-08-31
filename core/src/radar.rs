@@ -9,7 +9,13 @@ use serde::Deserialize;
 
 pub const DEFAULT_RADAR_BASE_URL: &str = "https://image.buienradar.nl";
 pub const MAX_CACHED_RUNS: usize = 6;
-const METADATA_PATH: &str = "/2.0/metadata/sprite/RadarMapRainWebmercatorNL?width=1058&height=915&extension=png&renderBackground=false&renderText=false&renderBranding=false&history=1&forecast=2&skip=0";
+
+/// Buienradar emits one frame per 5 minutes, so `history=6&forecast=4` spans 30
+/// minutes back to 20 minutes ahead. The live endpoint returns 10 `times[]`
+/// entries for these parameters and returned 3 for the previous
+/// `history=1&forecast=2`. Worst case the cache holds [`MAX_CACHED_RUNS`] × 10
+/// frames of roughly 200 KiB, about 12 MiB, still bounded by [`prune_runs`].
+const METADATA_PATH: &str = "/2.0/metadata/sprite/RadarMapRainWebmercatorNL?width=1058&height=915&extension=png&renderBackground=false&renderText=false&renderBranding=false&history=6&forecast=4&skip=0";
 
 pub type RadarFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, RadarError>> + Send + 'a>>;
 

@@ -33,6 +33,7 @@ impl FeedApi for FakeFeedApi {
                     now_line: String::from("Now: unavailable"),
                     rain_line: String::from("next 2h: dry"),
                     rain_soon: None,
+                    rain_series: Vec::new(),
                 });
             }
             Ok(WeatherData {
@@ -44,6 +45,7 @@ impl FeedApi for FakeFeedApi {
                     wind_bft: Some(2),
                     humidity: Some(71.0),
                     condition: Some(String::from("Half bewolkt")),
+                    ..CurrentConditions::default()
                 }),
                 forecast: (1..=5)
                     .map(|day| ForecastDay {
@@ -54,6 +56,7 @@ impl FeedApi for FakeFeedApi {
                         max_temperature_max: 19 + day,
                         rain_chance: 20,
                         condition: String::from("Bewolkt"),
+                        ..ForecastDay::default()
                     })
                     .collect(),
                 now_line: String::from("Now: fixture"),
@@ -63,6 +66,7 @@ impl FeedApi for FakeFeedApi {
                     time_label: String::from("14:10"),
                     max_mmh: 1.5,
                 }),
+                rain_series: Vec::new(),
             })
         })
     }

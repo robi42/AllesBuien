@@ -10,6 +10,7 @@ serde_json = "1"
 toml = "0.9"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 thiserror = "2"
+jiff = { version = "0.2.35", features = ["tzdb-bundle-always"] }
 
 [dev-dependencies]
 tempfile = "3"

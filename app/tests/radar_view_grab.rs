@@ -60,6 +60,7 @@ impl FeedApi for StubFeedApi {
                 now_line: String::new(),
                 rain_line: String::new(),
                 rain_soon: None,
+                rain_series: Vec::new(),
             })
         })
     }

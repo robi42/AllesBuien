@@ -19,6 +19,7 @@ impl FeedApi for StubFeedApi {
                 now_line: String::from("Now: unavailable"),
                 rain_line: String::from("next 2h: dry"),
                 rain_soon: None,
+                rain_series: Vec::new(),
             })
         })
     }
