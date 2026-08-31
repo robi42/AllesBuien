@@ -5,7 +5,10 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use tokio::runtime::Handle;
 
-use crate::image_provider::{self, FrameBytes};
+use crate::{
+    image_provider::{self, FrameBytes},
+    radar_clock::frame_label,
+};
 
 #[cxx_qt::bridge]
 pub mod ffi {
@@ -43,6 +46,8 @@ pub mod ffi {
         #[qinvokable]
         #[cxx_name = "advanceFrame"]
         fn advance_frame(self: Pin<&mut RadarController>);
+        #[qinvokable]
+        fn seek(self: Pin<&mut RadarController>, index: i32);
     }
 
     impl cxx_qt::Threading for RadarController {}
@@ -190,7 +195,7 @@ impl ffi::RadarController {
                         .refresh
                         .frames
                         .into_iter()
-                        .map(|frame| frame.timestamp)
+                        .map(|frame| frame_label(&frame.timestamp))
                         .collect(),
                     frames: loaded.frames,
                 };
@@ -237,6 +242,16 @@ impl ffi::RadarController {
         }
         let next = (*self.current_frame_index() + 1) % *self.frame_count();
         self.as_mut().set_current_frame_index(next);
+        self.update_current_frame();
+    }
+
+    pub fn seek(mut self: Pin<&mut Self>, index: i32) {
+        let last = self.frame_count().saturating_sub(1);
+        if last < 0 {
+            return;
+        }
+        self.as_mut().set_playing(false);
+        self.as_mut().set_current_frame_index(index.clamp(0, last));
         self.update_current_frame();
     }
 

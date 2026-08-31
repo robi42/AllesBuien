@@ -13,15 +13,6 @@ ApplicationWindow {
 
     SystemPalette { id: systemPalette }
 
-    function formatTime(isoString) {
-        if (!isoString) return "";
-        var str = String(isoString);
-        if (str.length >= 16 && str.indexOf("T") === 10) {
-            return str.substring(11, 16);
-        }
-        return str;
-    }
-
     component RadarPanel: Item {
         SystemPalette { id: radarSystemPalette }
 
@@ -53,6 +44,11 @@ ApplicationWindow {
                 visible: text.length > 0
                 color: themeController.themeAvailable ? themeController.themeAccent : "red"
                 anchors.centerIn: parent
+                width: Math.min(implicitWidth, parent.width - 48)
+                wrapMode: Text.Wrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
                 font.pointSize: 14
                 font.bold: true
                 Rectangle {
@@ -140,20 +136,11 @@ ApplicationWindow {
                             color: themeController.themeAvailable ? themeController.themeAccent : radarSystemPalette.highlight
                         }
 
-                        onMoved: {
-                            if (radarController.playing) {
-                                radarController.pause()
-                            }
-                            radarController.currentFrameIndex = Math.round(value)
-                            radarController.currentFrameUrl = "image://radar/" + radarController.generation + "/" + Math.round(value)
-                            if (radarController.timestamps && Math.round(value) < radarController.timestamps.length) {
-                                radarController.currentFrameLabel = radarController.timestamps[Math.round(value)]
-                            }
-                        }
+                        onMoved: radarController.seek(Math.round(value))
                     }
 
                     Label {
-                        text: formatTime(radarController.currentFrameLabel)
+                        text: radarController.currentFrameLabel
                         color: themeController.themeAvailable ? themeController.themeForeground : radarSystemPalette.text
                         font.pointSize: 16
                         font.bold: true
@@ -164,34 +151,72 @@ ApplicationWindow {
             }
     }
 
+    component ConditionIcon: Item {
+        id: conditionIcon
+        property alias source: iconImage.source
+        property int slotSize: 34
+
+        implicitWidth: iconImage.status === Image.Ready ? conditionIcon.slotSize : 0
+        implicitHeight: conditionIcon.slotSize
+
+        Image {
+            id: iconImage
+            anchors.fill: parent
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
+            visible: status === Image.Ready
+        }
+    }
+
     component ConditionsView: ColumnLayout {
         SystemPalette { id: systemPalette }
-        spacing: 12
+        spacing: 10
 
-        Label {
-            text: weatherController.stationName
-            font.pointSize: 14
-            font.bold: true
-            font.letterSpacing: 0.5
-            color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+        RowLayout {
             Layout.fillWidth: true
-            wrapMode: Text.Wrap
+            spacing: 12
+
+            Label {
+                text: weatherController.stationName
+                font.pointSize: 14
+                font.bold: true
+                font.letterSpacing: 0.5
+                color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+            }
+
+            Label {
+                text: weatherController.observedLabel
+                visible: text.length > 0
+                font.pointSize: 10
+                font.bold: true
+                color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                opacity: 0.7
+            }
         }
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 16
+            spacing: 12
+
+            ConditionIcon {
+                source: weatherController.conditionIconUrl
+                slotSize: 56
+                Layout.preferredWidth: implicitWidth
+                Layout.preferredHeight: implicitHeight
+            }
 
             Label {
                 text: weatherController.temperature
-                font.pointSize: 42
+                font.pointSize: 38
                 font.bold: true
                 color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
             }
 
             Label {
                 text: weatherController.condition
-                font.pointSize: 14
+                font.pointSize: 13
                 color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
@@ -200,58 +225,32 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: windRainCol.implicitHeight + 20
+            Layout.preferredHeight: windRow.implicitHeight + 20
             color: themeController.themeAvailable ? themeController.themeBackground : systemPalette.base
             radius: 8
-            
-            ColumnLayout {
-                id: windRainCol
+
+            RowLayout {
+                id: windRow
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.top: parent.top
+                anchors.verticalCenter: parent.verticalCenter
                 anchors.margins: 10
-                spacing: 6
+                spacing: 12
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    Label {
-                        text: "Wind"
-                        font.pointSize: 11
-                        font.bold: true
-                        color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
-                        opacity: 0.7
-                        Layout.preferredWidth: 50
-                    }
-                    Label {
-                        text: weatherController.wind
-                        font.pointSize: 11
-                        font.bold: true
-                        color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
-                        Layout.fillWidth: true
-                    }
+                Label {
+                    text: "Wind"
+                    font.pointSize: 11
+                    font.bold: true
+                    color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                    opacity: 0.7
+                    Layout.preferredWidth: 50
                 }
-
-                RowLayout {
+                Label {
+                    text: weatherController.wind
+                    font.pointSize: 11
+                    font.bold: true
+                    color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
                     Layout.fillWidth: true
-                    spacing: 12
-                    visible: weatherController.rainSummary.length > 0
-                    Label {
-                        text: "Rain"
-                        font.pointSize: 11
-                        font.bold: true
-                        color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
-                        opacity: 0.7
-                        Layout.preferredWidth: 50
-                    }
-                    Label {
-                        text: weatherController.rainSummary
-                        font.pointSize: 11
-                        font.bold: true
-                        color: themeController.themeAvailable ? themeController.themeAccent : systemPalette.highlight
-                        Layout.fillWidth: true
-                        wrapMode: Text.Wrap
-                    }
                 }
             }
         }
@@ -276,28 +275,34 @@ ApplicationWindow {
 
         delegate: Item {
             width: ListView.view.width
-            height: Math.max(48, rowLayout.implicitHeight + 16)
+            height: Math.max(44, rowLayout.implicitHeight + 12)
 
             RowLayout {
                 id: rowLayout
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                anchors.leftMargin: 8
-                anchors.rightMargin: 8
-                spacing: 12
+                anchors.leftMargin: 4
+                anchors.rightMargin: 4
+                spacing: 10
 
                 Label {
-                    text: Qt.formatDate(new Date(model.day), "ddd")
-                    Layout.preferredWidth: 44
+                    text: model.weekday
+                    Layout.preferredWidth: 40
                     font.pointSize: 12
                     font.bold: true
                     color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
                 }
 
+                ConditionIcon {
+                    source: model.iconUrl
+                    Layout.preferredWidth: implicitWidth
+                    Layout.preferredHeight: implicitHeight
+                }
+
                 Label {
                     text: model.minTemperature + "° / " + model.maxTemperature + "°"
-                    Layout.preferredWidth: 72
+                    Layout.preferredWidth: 70
                     font.pointSize: 12
                     font.bold: true
                     color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
@@ -305,7 +310,7 @@ ApplicationWindow {
                 }
 
                 RowLayout {
-                    Layout.preferredWidth: 50
+                    Layout.preferredWidth: 46
                     spacing: 4
                     Rectangle {
                         Layout.preferredWidth: 8
@@ -353,59 +358,175 @@ ApplicationWindow {
         }
     }
 
-    RowLayout {
-        anchors.fill: parent
-        anchors.margins: 24
-        spacing: 32
+    component RainView: ColumnLayout {
+        id: rainView
+        spacing: 8
 
-        RadarPanel {
-            objectName: "radarView"
+        SystemPalette { id: systemPalette }
+
+        readonly property color textColor: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+        readonly property color barColor: themeController.themeAvailable ? themeController.themeAccent : systemPalette.highlight
+
+        RowLayout {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.minimumWidth: 400
+            spacing: 12
+
+            Label {
+                text: "Rain expectation"
+                font.pointSize: 11
+                font.bold: true
+                color: rainView.textColor
+                opacity: 0.7
+            }
+
+            Label {
+                text: weatherController.rainSummary
+                font.pointSize: 11
+                font.bold: true
+                color: weatherController.rainWet ? rainView.barColor : rainView.textColor
+                opacity: weatherController.rainWet ? 1.0 : 0.7
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignRight
+                elide: Text.ElideRight
+            }
         }
 
         Rectangle {
-            Layout.alignment: Qt.AlignTop
-            Layout.preferredWidth: 420
-            Layout.preferredHeight: rightCol.implicitHeight + 48
-            Layout.maximumHeight: parent.height
-            color: themeController.themeAvailable ? themeController.themeLighterBackground : systemPalette.alternateBase
-            radius: 16
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.minimumHeight: 48
+            color: themeController.themeAvailable ? themeController.themeBackground : systemPalette.base
+            radius: 8
 
-            ColumnLayout {
-                id: rightCol
+            Item {
+                id: plot
                 anchors.fill: parent
-                anchors.margins: 24
-                spacing: 24
+                anchors.margins: 8
 
-                ConditionsView {
-                    objectName: "conditionsView"
-                    Layout.fillWidth: true
+                readonly property int cellCount: Math.max(1, weatherController.rainLevels.length)
+                readonly property real cellWidth: plot.width / plot.cellCount
+
+                Repeater {
+                    model: weatherController.rainLevels
+
+                    Rectangle {
+                        x: index * plot.cellWidth
+                        width: Math.max(2, plot.cellWidth - 4)
+                        y: plot.height - height
+                        height: Math.max(2, plot.height * modelData)
+                        radius: 2
+                        color: rainView.barColor
+                        opacity: modelData > 0 ? 1.0 : 0.45
+                    }
                 }
 
                 Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 1
-                    color: themeController.themeAvailable ? themeController.themeSelection : systemPalette.mid
-                    opacity: 0.5
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 1
+                    color: rainView.textColor
+                    opacity: 0.4
                 }
+            }
+        }
 
-                ForecastView {
-                    objectName: "forecastView"
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: contentHeight
-                }
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 16
 
-                Label {
-                    objectName: "attribution"
-                    text: "Bron: Buienradar.nl"
-                    font.pointSize: 10
-                    font.bold: true
-                    color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
-                    opacity: 0.7
-                    Layout.alignment: Qt.AlignRight
+            Item {
+                id: axis
+                anchors.fill: parent
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+
+                Repeater {
+                    model: weatherController.rainAxisLabels
+
+                    Label {
+                        text: modelData
+                        visible: text.length > 0
+                        font.pointSize: 9
+                        color: rainView.textColor
+                        opacity: 0.7
+                        x: Math.max(0, Math.min(axis.width - width, (index + 0.5) * plot.cellWidth - width / 2))
+                    }
                 }
+            }
+        }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 24
+        spacing: 16
+
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 32
+
+            RadarPanel {
+                objectName: "radarView"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumWidth: 400
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 420
+                Layout.fillHeight: true
+                color: themeController.themeAvailable ? themeController.themeLighterBackground : systemPalette.alternateBase
+                radius: 16
+
+                ColumnLayout {
+                    id: rightCol
+                    anchors.fill: parent
+                    anchors.margins: 20
+                    spacing: 16
+
+                    ConditionsView {
+                        objectName: "conditionsView"
+                        Layout.fillWidth: true
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: themeController.themeAvailable ? themeController.themeSelection : systemPalette.mid
+                        opacity: 0.5
+                    }
+
+                    ForecastView {
+                        objectName: "forecastView"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.preferredHeight: contentHeight
+                    }
+
+                    Label {
+                        objectName: "attribution"
+                        text: "Bron: Buienradar.nl"
+                        font.pointSize: 10
+                        font.bold: true
+                        color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                        opacity: 0.7
+                        Layout.alignment: Qt.AlignRight
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 132
+            color: themeController.themeAvailable ? themeController.themeLighterBackground : systemPalette.alternateBase
+            radius: 16
+
+            RainView {
+                anchors.fill: parent
+                anchors.margins: 16
             }
         }
     }

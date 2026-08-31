@@ -199,6 +199,12 @@ impl BootedApp {
         }
     }
 
+    pub fn seek_radar(&mut self, index: i32) {
+        if let Some(controller) = self.radar_controller.as_mut() {
+            controller.seek(index);
+        }
+    }
+
     pub fn poll_theme(&mut self) {
         if let Some(controller) = self.theme_controller.as_mut() {
             controller.poll();

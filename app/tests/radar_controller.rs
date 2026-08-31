@@ -70,7 +70,10 @@ impl FakeRadarApi {
     fn metadata(run: &str, label: &str, count: usize) -> Vec<u8> {
         let times = (0..count)
             .map(|index| {
-                format!(r#"{{"timestamp":"{label}-{index}","url":"fake://{label}/{index}"}}"#)
+                let minute = 5 * index;
+                format!(
+                    r#"{{"timestamp":"2026-08-30T09:{minute:02}:00","url":"fake://{label}/{index}"}}"#
+                )
             })
             .collect::<Vec<_>>()
             .join(",");
@@ -130,6 +133,20 @@ impl Notifier for StubNotifier {
     }
 }
 
+/// Asserts the frame caption is a viewer-local `HH:MM` reading of the naive
+/// `09:MM:00` feed stamps, whatever whole-hour offset the host timezone applies.
+fn assert_local_clock_label(label: &str) {
+    assert_eq!(label.len(), 5, "expected a HH:MM label, got {label}");
+    assert!(
+        !label.contains('T'),
+        "raw feed timestamp leaked into the frame label: {label}"
+    );
+    assert!(
+        label.ends_with(":00"),
+        "conversion lost the source minutes: {label}"
+    );
+}
+
 #[test]
 fn ignores_stale_generation_frame_and_refresh_started_resets_state() {
     // Given: one GUI application, deterministic radar generations, and injected timer intervals.
@@ -184,7 +201,7 @@ fn ignores_stale_generation_frame_and_refresh_started_resets_state() {
     assert_eq!(*controller.refresh_interval_ms(), 300_000);
     assert_eq!(*controller.playback_interval_ms(), 400);
     assert_eq!(controller.timestamps().len(), 2);
-    assert_eq!(controller.current_frame_label().to_string(), "initial-0");
+    assert_local_clock_label(&controller.current_frame_label().to_string());
     assert_eq!(
         controller.current_frame_url().to_string(),
         "image://radar/1/0"
@@ -198,6 +215,25 @@ fn ignores_stale_generation_frame_and_refresh_started_resets_state() {
             .current_frame_index(),
         1
     );
+    booted.seek_radar(9);
+    {
+        let controller = booted.radar_controller().expect("controller should exist");
+        assert_eq!(*controller.current_frame_index(), 1);
+        assert!(!*controller.playing());
+        assert_eq!(
+            controller.current_frame_url().to_string(),
+            "image://radar/1/1"
+        );
+    }
+    booted.seek_radar(-3);
+    {
+        let controller = booted.radar_controller().expect("controller should exist");
+        assert_eq!(*controller.current_frame_index(), 0);
+        assert_eq!(
+            controller.current_frame_url().to_string(),
+            "image://radar/1/0"
+        );
+    }
     booted.refresh_radar();
     let controller = booted.radar_controller().expect("controller should exist");
     assert_eq!(*controller.generation(), 2);
@@ -240,7 +276,7 @@ fn ignores_stale_generation_frame_and_refresh_started_resets_state() {
     assert_eq!(*controller.generation(), 3);
     assert_eq!(*controller.frame_count(), 3);
     assert_eq!(controller.timestamps().len(), 3);
-    assert_eq!(controller.current_frame_label().to_string(), "fresh-0");
+    assert_local_clock_label(&controller.current_frame_label().to_string());
     assert_eq!(
         controller.current_frame_url().to_string(),
         "image://radar/3/0"

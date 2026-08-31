@@ -1,14 +1,21 @@
 use std::{pin::Pin, sync::Arc, time::Duration};
 
 use allesbuien_core::{
+    condition::describe,
     config::LocationConfig,
+    rain::RainPoint,
     weather::{FeedApi, ForecastDay, WeatherData, WeatherError},
 };
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
+use cxx_qt_lib::{
+    QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant,
+};
 use tokio::runtime::Handle;
 
-use crate::services::NotificationService;
+use crate::{
+    condition_icon, conditions_view::ConditionsView, rain_graph::RainGraph,
+    services::NotificationService,
+};
 
 #[cxx_qt::bridge]
 pub mod ffi {
@@ -25,6 +32,10 @@ pub mod ffi {
         type QModelIndex = cxx_qt_lib::QModelIndex;
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
+        include!("cxx-qt-lib/qlist.h");
+        type QList_f64 = cxx_qt_lib::QList<f64>;
         include!("cxx-qt-lib/qvariant.h");
         type QVariant = cxx_qt_lib::QVariant;
         include!("cxx-qt-lib/qqmlapplicationengine.h");
@@ -34,14 +45,16 @@ pub mod ffi {
     #[qenum(WeatherController)]
     enum ForecastRole {
         Day,
+        Weekday,
         MinTemperature,
         MaxTemperature,
         RainChance,
         Condition,
+        IconUrl,
     }
 
     #[auto_cxx_name]
-    extern "RustQt" {
+    unsafe extern "RustQt" {
         #[qobject]
         #[qml_element]
         #[base = QAbstractListModel]
@@ -49,7 +62,12 @@ pub mod ffi {
         #[qproperty(QString, temperature)]
         #[qproperty(QString, wind)]
         #[qproperty(QString, condition)]
+        #[qproperty(QString, condition_icon_url)]
+        #[qproperty(QString, observed_label)]
         #[qproperty(QString, rain_summary)]
+        #[qproperty(bool, rain_wet)]
+        #[qproperty(QList_f64, rain_levels)]
+        #[qproperty(QStringList, rain_axis_labels)]
         #[qproperty(QString, status)]
         #[qproperty(i32, refresh_interval_ms)]
         type WeatherController = super::WeatherControllerRust;
@@ -64,6 +82,13 @@ pub mod ffi {
         #[cxx_override]
         #[cxx_name = "roleNames"]
         fn role_names(self: &WeatherController) -> QHash_i32_QByteArray;
+        #[inherit]
+        fn index(
+            self: &WeatherController,
+            row: i32,
+            column: i32,
+            parent: &QModelIndex,
+        ) -> QModelIndex;
         #[inherit]
         #[cxx_name = "beginResetModel"]
         unsafe fn begin_reset_model(self: Pin<&mut WeatherController>);
@@ -104,7 +129,12 @@ pub struct WeatherControllerRust {
     temperature: QString,
     wind: QString,
     condition: QString,
+    condition_icon_url: QString,
+    observed_label: QString,
     rain_summary: QString,
+    rain_wet: bool,
+    rain_levels: QList<f64>,
+    rain_axis_labels: QStringList,
     status: QString,
     refresh_interval_ms: i32,
     forecast: Vec<ForecastDay>,
@@ -121,7 +151,12 @@ impl Default for WeatherControllerRust {
             temperature: "Unavailable".into(),
             wind: "Unavailable".into(),
             condition: "Unavailable".into(),
+            condition_icon_url: QString::default(),
+            observed_label: QString::default(),
             rain_summary: "Rain forecast unavailable".into(),
+            rain_wet: false,
+            rain_levels: QList::<f64>::default(),
+            rain_axis_labels: QStringList::default(),
             status: "Weather unavailable".into(),
             refresh_interval_ms: 600_000,
             forecast: Vec::new(),
@@ -177,41 +212,43 @@ impl ffi::WeatherController {
     }
 
     fn apply_result(mut self: Pin<&mut Self>, result: Result<WeatherData, WeatherError>) {
-        match result {
-            Ok(data) => {
-                self.as_mut().replace_forecast(data.forecast);
-                self.as_mut()
-                    .set_rain_summary(QString::from(if data.rain_line.is_empty() {
-                        "Rain forecast unavailable"
-                    } else {
-                        &data.rain_line
-                    }));
-                match data.current {
-                    Some(current) => {
-                        self.as_mut().set_station_name(current.station_name.into());
-                        self.as_mut().set_temperature(
-                            current.temperature.map_or_else(
-                                || "Unavailable".into(),
-                                |v| format!("{v:.1} °C").into(),
-                            ),
-                        );
-                        self.as_mut().set_wind(current.wind_speed.map_or_else(
-                            || "Unavailable".into(),
-                            |v| format!("{v:.1} m/s").into(),
-                        ));
-                        self.as_mut().set_condition(
-                            current
-                                .condition
-                                .unwrap_or_else(|| "Unavailable".into())
-                                .into(),
-                        );
-                        self.set_status(QString::default());
-                    }
-                    None => self.as_mut().set_unavailable(),
-                }
+        let data = match result {
+            Ok(data) => data,
+            Err(error) => {
+                self.set_status(format!("Weather unavailable: {error}").into());
+                return;
             }
-            Err(error) => self.set_status(format!("Weather unavailable: {error}").into()),
-        }
+        };
+        self.as_mut().replace_forecast(data.forecast);
+        self.as_mut().apply_rain(&data.rain_line, &data.rain_series);
+        self.apply_conditions(&ConditionsView::from_current(data.current.as_ref()));
+    }
+
+    fn apply_conditions(mut self: Pin<&mut Self>, view: &ConditionsView) {
+        self.as_mut().set_station_name((&view.station_name).into());
+        self.as_mut().set_temperature((&view.temperature).into());
+        self.as_mut().set_wind((&view.wind).into());
+        self.as_mut().set_condition((&view.condition).into());
+        self.as_mut()
+            .set_condition_icon_url((&view.icon_url).into());
+        self.as_mut()
+            .set_observed_label((&view.observed_label).into());
+        self.set_status((&view.status).into());
+    }
+
+    fn apply_rain(mut self: Pin<&mut Self>, line: &str, points: &[RainPoint]) {
+        let graph = RainGraph::build(points, line);
+        self.as_mut().set_rain_summary((&graph.summary).into());
+        self.as_mut().set_rain_wet(graph.wet);
+        self.as_mut()
+            .set_rain_levels(graph.levels.iter().collect::<QList<f64>>());
+        self.set_rain_axis_labels(
+            graph
+                .axis_labels
+                .iter()
+                .map(QString::from)
+                .collect::<QStringList>(),
+        );
     }
 
     fn replace_forecast(mut self: Pin<&mut Self>, forecast: Vec<ForecastDay>) {
@@ -221,14 +258,6 @@ impl ffi::WeatherController {
         self.as_mut().rust_mut().forecast = forecast;
         // SAFETY: Category 13 — this closes the immediately preceding model reset.
         unsafe { self.end_reset_model() };
-    }
-
-    fn set_unavailable(mut self: Pin<&mut Self>) {
-        self.as_mut().set_station_name("Unavailable".into());
-        self.as_mut().set_temperature("Unavailable".into());
-        self.as_mut().set_wind("Unavailable".into());
-        self.as_mut().set_condition("Unavailable".into());
-        self.set_status("Current conditions unavailable".into());
     }
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
@@ -244,10 +273,17 @@ impl ffi::WeatherController {
         };
         match (ffi::ForecastRole { repr: role }) {
             ffi::ForecastRole::Day => QVariant::from(&QString::from(&day.day)),
+            ffi::ForecastRole::Weekday => QVariant::from(&QString::from(&day.day_at.weekday_label)),
             ffi::ForecastRole::MinTemperature => QVariant::from(&day.min_temperature_min),
             ffi::ForecastRole::MaxTemperature => QVariant::from(&day.max_temperature_max),
             ffi::ForecastRole::RainChance => QVariant::from(&i32::from(day.rain_chance)),
-            ffi::ForecastRole::Condition => QVariant::from(&QString::from(&day.condition)),
+            ffi::ForecastRole::Condition => QVariant::from(&QString::from(&describe(
+                &day.condition_code,
+                &day.condition,
+            ))),
+            ffi::ForecastRole::IconUrl => QVariant::from(&QString::from(
+                &condition_icon::icon_url(&day.condition_code, &day.icon_url),
+            )),
             _ => QVariant::default(),
         }
     }
@@ -256,10 +292,12 @@ impl ffi::WeatherController {
         let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
         for (role, name) in [
             (ffi::ForecastRole::Day.repr, "day"),
+            (ffi::ForecastRole::Weekday.repr, "weekday"),
             (ffi::ForecastRole::MinTemperature.repr, "minTemperature"),
             (ffi::ForecastRole::MaxTemperature.repr, "maxTemperature"),
             (ffi::ForecastRole::RainChance.repr, "rainChance"),
             (ffi::ForecastRole::Condition.repr, "condition"),
+            (ffi::ForecastRole::IconUrl.repr, "iconUrl"),
         ] {
             roles.insert(role, QByteArray::from(name));
         }
