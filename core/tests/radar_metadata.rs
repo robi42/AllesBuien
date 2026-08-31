@@ -1,6 +1,6 @@
 //! Offline coverage for the radar metadata fields the app reads.
 //!
-//! The fixture is a verbatim capture of the live `history=6&forecast=4` sprite
+//! The fixture is a verbatim capture of the live `history=2&forecast=24` sprite
 //! metadata response, so a vendor schema change surfaces here rather than as a
 //! two-hour caption drift on someone's desktop.
 
@@ -57,15 +57,15 @@ fn refresh(metadata: &'static [u8]) -> allesbuien_core::radar::RadarRefresh {
 }
 
 #[test]
-fn the_live_capture_carries_the_vendor_utc_offset_and_ten_frames() {
+fn the_live_capture_carries_the_vendor_utc_offset_and_twenty_six_frames() {
     // Given / When
     let refreshed = refresh(LIVE_METADATA);
 
     // Then
     assert_eq!(refreshed.time_offset_hours, Some(2));
-    assert_eq!(refreshed.frames.len(), 10);
-    assert_eq!(refreshed.frames[0].timestamp, "2026-08-31T18:30:00");
-    assert_eq!(refreshed.frames[9].timestamp, "2026-08-31T19:15:00");
+    assert_eq!(refreshed.frames.len(), 26);
+    assert_eq!(refreshed.frames[0].timestamp, "2026-08-31T20:10:00");
+    assert_eq!(refreshed.frames[25].timestamp, "2026-08-31T22:15:00");
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn metadata_without_the_vendor_field_reports_no_offset() {
 }
 
 #[test]
-fn the_captured_run_splits_into_six_observations_and_four_predictions() {
+fn the_captured_run_splits_into_two_observations_and_twenty_four_predictions() {
     // Given: the instant the capture's own run timestamp names.
     let refreshed = refresh(LIVE_METADATA);
     let stamps: Vec<String> = refreshed
@@ -89,9 +89,9 @@ fn the_captured_run_splits_into_six_observations_and_four_predictions() {
         .collect();
 
     // When
-    let timeline = RadarTimeline::at(&stamps, "2026-08-31T18:55:00");
+    let timeline = RadarTimeline::at(&stamps, "2026-08-31T20:15:00");
 
     // Then
-    assert_eq!(timeline.first_forecast_index, 6);
-    assert_eq!(timeline.observed.len(), 10);
+    assert_eq!(timeline.first_forecast_index, 2);
+    assert_eq!(timeline.observed.len(), 26);
 }

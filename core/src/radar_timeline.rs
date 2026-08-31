@@ -72,7 +72,8 @@ fn instant(naive_utc: &str) -> Option<Timestamp> {
 mod tests {
     use super::RadarTimeline;
 
-    /// The ten frames the live endpoint published for `history=6&forecast=4`.
+    /// A ten-frame run at the endpoint's fixed 5-minute cadence. The split is
+    /// window-agnostic, so this stays smaller than the live 26-frame window.
     const RUN: [&str; 10] = [
         "2026-08-31T18:30:00",
         "2026-08-31T18:35:00",

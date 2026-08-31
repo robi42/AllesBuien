@@ -8,14 +8,19 @@ use std::{
 use serde::Deserialize;
 
 pub const DEFAULT_RADAR_BASE_URL: &str = "https://image.buienradar.nl";
-pub const MAX_CACHED_RUNS: usize = 6;
+pub const MAX_CACHED_RUNS: usize = 3;
 
-/// Buienradar emits one frame per 5 minutes, so `history=6&forecast=4` spans 30
-/// minutes back to 20 minutes ahead. The live endpoint returns 10 `times[]`
-/// entries for these parameters and returned 3 for the previous
-/// `history=1&forecast=2`. Worst case the cache holds [`MAX_CACHED_RUNS`] × 10
-/// frames of roughly 200 KiB, about 12 MiB, still bounded by [`prune_runs`].
-const METADATA_PATH: &str = "/2.0/metadata/sprite/RadarMapRainWebmercatorNL?width=1058&height=915&extension=png&renderBackground=false&renderText=false&renderBranding=false&history=6&forecast=4&skip=0";
+/// One frame per 5 minutes, so this window returns 26 frames spanning 5 minutes
+/// back to 2 hours ahead — the same horizon the raintext rain graph covers.
+///
+/// Future-weighted on purpose: a run timestamp trails the wall clock by about 10
+/// minutes, so the earlier `history=6&forecast=4` reached only 7 minutes past
+/// now. Raising `history` cannot help — it saturates at 16 frames, measured
+/// identical for 12 and 24.
+///
+/// Frames measure 94 KiB, so [`MAX_CACHED_RUNS`] × 26 is about 7 MiB; the run
+/// cap dropped 6 → 3 to stay near the previous window's 5.5 MiB.
+const METADATA_PATH: &str = "/2.0/metadata/sprite/RadarMapRainWebmercatorNL?width=1058&height=915&extension=png&renderBackground=false&renderText=false&renderBranding=false&history=2&forecast=24&skip=0";
 
 pub type RadarFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, RadarError>> + Send + 'a>>;
 
