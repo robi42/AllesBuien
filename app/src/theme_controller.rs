@@ -18,6 +18,7 @@ pub mod ffi {
         type QQmlApplicationEngine = cxx_qt_lib::QQmlApplicationEngine;
     }
 
+    #[auto_cxx_name]
     extern "RustQt" {
         #[qobject]
         #[qml_element]

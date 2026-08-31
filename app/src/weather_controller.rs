@@ -40,6 +40,7 @@ pub mod ffi {
         Condition,
     }
 
+    #[auto_cxx_name]
     extern "RustQt" {
         #[qobject]
         #[qml_element]
