@@ -5,13 +5,14 @@
 //! [`LocalTimestamp`] assumes the Amsterdam-naive convention, so reading a radar
 //! stamp through it alone renders every frame two hours behind in summer.
 //!
-//! Core exposes system-minus-Amsterdam and UTC-minus-Amsterdam; their difference
-//! is system-minus-UTC, which is the offset these stamps actually need. Composing
-//! them keeps the timezone database in core and out of the app layer.
+//! Reading such a stamp through [`LocalTimestamp::from_feed`] under-shifts it by
+//! exactly Amsterdam's UTC offset, because it resolved a UTC reading as if it
+//! were Dutch local time. Adding that offset back — core's UTC-minus-Amsterdam
+//! shift, negated — corrects it. Both terms are evaluated at the stamp's own
+//! instant, so the pair stays right across the CET/CEST transition, and the
+//! timezone database stays in core.
 
-use allesbuien_core::datetime::{
-    LocalTimestamp, SOURCE_TIMEZONE, clock_shift_minutes, clock_shift_minutes_in, shift_clock_label,
-};
+use allesbuien_core::datetime::{LocalTimestamp, clock_shift_minutes_in, shift_clock_label};
 
 /// IANA name of the zone radar metadata publishes its stamps in.
 const RADAR_TIMEZONE: &str = "UTC";
@@ -21,11 +22,10 @@ const RADAR_TIMEZONE: &str = "UTC";
 /// Unparsable input degrades to readable text rather than a blank caption.
 #[must_use]
 pub fn frame_label(utc_stamp: &str) -> String {
-    let utc_label = LocalTimestamp::from_feed_in(utc_stamp, SOURCE_TIMEZONE).time_label;
-    let to_local = clock_shift_minutes() - clock_shift_minutes_in(RADAR_TIMEZONE, utc_stamp);
-    shift_clock_label(&utc_label, to_local)
+    let read_as_dutch = LocalTimestamp::from_feed(utc_stamp).time_label;
+    let amsterdam_offset = -clock_shift_minutes_in(RADAR_TIMEZONE, utc_stamp);
+    shift_clock_label(&read_as_dutch, amsterdam_offset)
 }
-
 #[cfg(test)]
 mod tests {
     use allesbuien_core::datetime::LocalTimestamp;

@@ -133,18 +133,21 @@ impl Notifier for StubNotifier {
     }
 }
 
-/// Asserts the frame caption is a viewer-local `HH:MM` reading of the naive
-/// `09:MM:00` feed stamps, whatever whole-hour offset the host timezone applies.
+/// Asserts the frame caption is a wall-clock reading rather than the raw feed
+/// stamp. The exact digits depend on the host timezone — including half-hour
+/// zones — so only the shape is pinned here; `app/src/radar_clock.rs` owns the
+/// host-independent assertions about the offset itself.
 fn assert_local_clock_label(label: &str) {
-    assert_eq!(label.len(), 5, "expected a HH:MM label, got {label}");
     assert!(
         !label.contains('T'),
         "raw feed timestamp leaked into the frame label: {label}"
     );
-    assert!(
-        label.ends_with(":00"),
-        "conversion lost the source minutes: {label}"
-    );
+    let Some((hours, minutes)) = label.split_once(':').and_then(|(hours, minutes)| {
+        Some((hours.parse::<u32>().ok()?, minutes.parse::<u32>().ok()?))
+    }) else {
+        panic!("expected a HH:MM label, got {label}");
+    };
+    assert!(hours < 24 && minutes < 60, "not a wall clock: {label}");
 }
 
 #[test]
