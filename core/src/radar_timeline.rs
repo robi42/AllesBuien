@@ -68,9 +68,44 @@ fn instant(naive_utc: &str) -> Option<Timestamp> {
         .map(|zoned| zoned.timestamp())
 }
 
+/// Share of a scrubber track that is observation rather than prediction.
+///
+/// The slider spans frame `0` to `frame_count - 1`, so the transition sits half
+/// a step before the first predicted frame. A run with fewer than two frames has
+/// no track to divide and reads as fully observed, which is what the app shows
+/// while nothing has loaded.
+#[must_use]
+pub fn observed_fraction(first_forecast_index: usize, frame_count: usize) -> f64 {
+    let Some(last) = frame_count.checked_sub(1).filter(|last| *last > 0) else {
+        return 1.0;
+    };
+    if first_forecast_index == 0 {
+        return 0.0;
+    }
+    if first_forecast_index >= frame_count {
+        return 1.0;
+    }
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "frame counts are vendor-capped at 24 and lossless in f64"
+    )]
+    let fraction = (first_forecast_index as f64 - 0.5) / last as f64;
+    fraction.clamp(0.0, 1.0)
+}
+
+/// Whether the run actually contains both halves, so a divider means something.
+///
+/// A stale run (everything observed) and a run that has not started (everything
+/// predicted) both have their boundary outside the track; drawing a line on the
+/// rail's edge there would invent a split the data does not have.
+#[must_use]
+pub fn boundary_visible(first_forecast_index: usize, frame_count: usize) -> bool {
+    frame_count > 1 && first_forecast_index > 0 && first_forecast_index < frame_count
+}
+
 #[cfg(test)]
 mod tests {
-    use super::RadarTimeline;
+    use super::{RadarTimeline, boundary_visible, observed_fraction};
 
     /// A ten-frame run at the endpoint's fixed 5-minute cadence. The split is
     /// window-agnostic, so this stays smaller than the live 26-frame window.
@@ -169,5 +204,58 @@ mod tests {
         // Then
         assert_eq!(timeline.observed, [true, false]);
         assert_eq!(timeline.first_forecast_index, 1);
+    }
+    #[test]
+    fn a_live_run_puts_the_boundary_half_a_step_before_the_first_prediction() {
+        // Given: the shipped window — 2 observations, 24 predictions.
+        // When
+        let fraction = observed_fraction(2, 26);
+
+        // Then: 1.5 steps of 25, i.e. just inside the left edge.
+        assert!(
+            (fraction - 0.06).abs() < 1e-9,
+            "unexpected fraction {fraction}"
+        );
+        assert!(boundary_visible(2, 26));
+    }
+
+    #[test]
+    fn a_stale_run_is_wholly_observed_and_draws_no_divider() {
+        // Given / When: first_forecast_index == frame_count.
+        // Then
+        assert!((observed_fraction(26, 26) - 1.0).abs() < f64::EPSILON);
+        assert!(!boundary_visible(26, 26));
+    }
+
+    #[test]
+    fn a_run_that_has_not_started_is_wholly_predicted_and_draws_no_divider() {
+        // Given / When: first_forecast_index == 0.
+        // Then
+        assert!(observed_fraction(0, 26).abs() < f64::EPSILON);
+        assert!(!boundary_visible(0, 26));
+    }
+
+    #[test]
+    fn a_run_too_short_to_scrub_has_no_track_to_divide() {
+        // Given / When
+        // Then
+        assert!((observed_fraction(0, 1) - 1.0).abs() < f64::EPSILON);
+        assert!((observed_fraction(0, 0) - 1.0).abs() < f64::EPSILON);
+        assert!(!boundary_visible(0, 1));
+        assert!(!boundary_visible(1, 1));
+    }
+
+    #[test]
+    fn the_fraction_never_leaves_the_track() {
+        // Given / When / Then
+        for count in 2usize..40 {
+            for first in 0..=count {
+                let fraction = observed_fraction(first, count);
+                assert!(
+                    (0.0..=1.0).contains(&fraction),
+                    "fraction {fraction} escaped for {first}/{count}"
+                );
+            }
+        }
     }
 }

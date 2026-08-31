@@ -3,6 +3,7 @@ pub mod config;
 pub mod datetime;
 pub mod notify;
 pub mod radar;
+pub mod radar_legend;
 pub mod radar_timeline;
 pub mod rain;
 pub mod theme;

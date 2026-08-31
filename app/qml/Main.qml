@@ -38,6 +38,68 @@ ApplicationWindow {
                 }
             }
 
+            // Qualitative on purpose: Buienradar documents no colour-to-rate
+            // mapping for these sprites, so numeric ticks would assert a
+            // precision no source backs. Swatches and captions both come from
+            // Rust, which is what keeps this file free of hardcoded colours.
+            Item {
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                anchors.margins: 16
+                implicitWidth: legendColumn.implicitWidth
+                implicitHeight: legendColumn.implicitHeight
+                width: implicitWidth
+                height: implicitHeight
+                visible: radarController.frameCount > 0
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: -8
+                    radius: 6
+                    color: themeController.themeAvailable ? themeController.themeLighterBackground : radarSystemPalette.alternateBase
+                    opacity: 0.88
+                    z: -1
+                }
+
+                ColumnLayout {
+                    id: legendColumn
+                    width: legendColumn.implicitWidth
+                    height: legendColumn.implicitHeight
+                    spacing: 4
+
+                    Row {
+                        spacing: 0
+                        Repeater {
+                            model: radarController.legendSwatches
+
+                            Rectangle {
+                                width: 15
+                                height: 8
+                                color: modelData
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Repeater {
+                            model: radarController.legendBuckets
+
+                            Label {
+                                text: modelData
+                                font.pointSize: 8
+                                font.bold: true
+                                color: themeController.themeAvailable ? themeController.themeForeground : radarSystemPalette.text
+                                opacity: 0.85
+                                Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                    }
+                }
+            }
+
             Label {
                 objectName: "radarError"
                 text: radarController.status
@@ -126,6 +188,22 @@ ApplicationWindow {
                                 color: themeController.themeAvailable ? themeController.themeAccent : radarSystemPalette.highlight
                                 radius: 3
                             }
+
+                            // Where measurement stops and prediction starts. The
+                            // window is 2 observations against 24 predictions, so
+                            // this tick sits hard against the left edge on purpose:
+                            // almost everything on screen is a forecast. Rust hides
+                            // it for an all-observed or all-forecast run, where the
+                            // boundary falls outside the track entirely.
+                            Rectangle {
+                                x: radarController.observedFraction * parent.width - width / 2
+                                y: (parent.height - height) / 2
+                                width: 2
+                                height: 16
+                                radius: 1
+                                color: themeController.themeAvailable ? themeController.themeForeground : radarSystemPalette.text
+                                visible: radarController.forecastBoundaryVisible
+                            }
                         }
                         handle: Rectangle {
                             x: frameSlider.leftPadding + frameSlider.visualPosition * (frameSlider.availableWidth - width)
@@ -139,13 +217,34 @@ ApplicationWindow {
                         onMoved: radarController.seek(Math.round(value))
                     }
 
-                    Label {
-                        text: radarController.currentFrameLabel
-                        color: themeController.themeAvailable ? themeController.themeForeground : radarSystemPalette.text
-                        font.pointSize: 16
-                        font.bold: true
-                        Layout.minimumWidth: 60
-                        horizontalAlignment: Text.AlignRight
+                    ColumnLayout {
+                        spacing: 0
+                        Layout.minimumWidth: 84
+
+                        Label {
+                            text: radarController.currentFrameLabel
+                            color: themeController.themeAvailable ? themeController.themeForeground : radarSystemPalette.text
+                            font.pointSize: 16
+                            font.bold: true
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        // Most of the window is prediction, and nothing else on
+                        // screen says so. Full opacity marks the forecast case
+                        // because that is the one worth noticing; accent would
+                        // read at 3.7:1 here, which is too low for 9pt.
+                        Label {
+                            text: radarController.currentFrameObserved ? "OBSERVED" : "FORECAST"
+                            visible: radarController.frameCount > 0
+                            color: themeController.themeAvailable ? themeController.themeForeground : radarSystemPalette.text
+                            opacity: radarController.currentFrameObserved ? 0.7 : 1.0
+                            font.pointSize: 9
+                            font.bold: true
+                            font.letterSpacing: 0.8
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignRight
+                        }
                     }
                 }
             }
@@ -156,7 +255,11 @@ ApplicationWindow {
         property alias source: iconImage.source
         property int slotSize: 34
 
-        implicitWidth: iconImage.status === Image.Ready ? conditionIcon.slotSize : 0
+        // The slot is reserved unconditionally. Sizing it from the image status
+        // collapsed it to zero until the icon resolved, so every row it sat in
+        // snapped sideways the moment the icons arrived. An icon that never
+        // loads now leaves the reserved space empty instead of moving the text.
+        implicitWidth: conditionIcon.slotSize
         implicitHeight: conditionIcon.slotSize
 
         Image {
@@ -164,7 +267,41 @@ ApplicationWindow {
             anchors.fill: parent
             fillMode: Image.PreserveAspectFit
             asynchronous: true
-            visible: status === Image.Ready
+            // Hidden unless decoded, so a failed load is blank, never a broken-image box.
+            visible: iconImage.status === Image.Ready
+        }
+    }
+
+    // One labelled measurement. Collapses itself when the station omitted the
+    // value, so an absent reading leaves no stray label behind.
+    component MetricChip: ColumnLayout {
+        id: metricChip
+        property string label: ""
+        property string value: ""
+
+        SystemPalette { id: metricPalette }
+
+        spacing: 1
+        visible: metricChip.value.length > 0
+
+        Label {
+            text: metricChip.label
+            font.pointSize: 9
+            font.bold: true
+            font.letterSpacing: 0.8
+            color: themeController.themeAvailable ? themeController.themeForeground : metricPalette.text
+            opacity: 0.7
+            Layout.fillWidth: true
+            elide: Text.ElideRight
+        }
+
+        Label {
+            text: metricChip.value
+            font.pointSize: 12
+            font.bold: true
+            color: themeController.themeAvailable ? themeController.themeForeground : metricPalette.text
+            Layout.fillWidth: true
+            elide: Text.ElideRight
         }
     }
 
@@ -207,49 +344,63 @@ ApplicationWindow {
                 Layout.preferredHeight: implicitHeight
             }
 
-            Label {
-                text: weatherController.temperature
-                font.pointSize: 38
-                font.bold: true
-                color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
-            }
-
-            Label {
-                text: weatherController.condition
-                font.pointSize: 13
-                color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+            ColumnLayout {
+                spacing: 0
                 Layout.fillWidth: true
-                wrapMode: Text.Wrap
+
+                Label {
+                    text: weatherController.temperature
+                    font.pointSize: 38
+                    font.bold: true
+                    color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+
+                // Kept for the hero only, and kept to one line: at icon size the
+                // 22 Buienradar codes are genuinely ambiguous, so the words earn
+                // their space. It sits under the reading rather than beside it
+                // because the longest of them ("Partly cloudy with light rain")
+                // has no room left on that row without wrapping or eliding.
+                Label {
+                    text: weatherController.condition
+                    font.pointSize: 13
+                    color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                    Layout.fillWidth: true
+                    maximumLineCount: 1
+                    elide: Text.ElideRight
+                }
             }
         }
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: windRow.implicitHeight + 20
+            Layout.preferredHeight: metricsRow.implicitHeight + 20
             color: themeController.themeAvailable ? themeController.themeBackground : systemPalette.base
             radius: 8
 
             RowLayout {
-                id: windRow
+                id: metricsRow
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                anchors.margins: 10
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
                 spacing: 12
 
-                Label {
-                    text: "Wind"
-                    font.pointSize: 11
-                    font.bold: true
-                    color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
-                    opacity: 0.7
-                    Layout.preferredWidth: 50
+                MetricChip {
+                    label: "WIND"
+                    value: weatherController.wind
+                    Layout.fillWidth: true
                 }
-                Label {
-                    text: weatherController.wind
-                    font.pointSize: 11
-                    font.bold: true
-                    color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
+                MetricChip {
+                    label: "FEELS"
+                    value: weatherController.feelsLike
+                    Layout.fillWidth: true
+                }
+                MetricChip {
+                    label: "HUMID"
+                    value: weatherController.humidity
                     Layout.fillWidth: true
                 }
             }
@@ -300,17 +451,16 @@ ApplicationWindow {
                     Layout.preferredHeight: implicitHeight
                 }
 
-                Label {
-                    text: model.minTemperature + "° / " + model.maxTemperature + "°"
-                    Layout.preferredWidth: 70
-                    font.pointSize: 12
-                    font.bold: true
-                    color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
-                    horizontalAlignment: Text.AlignRight
+                // The condition sentence used to live here and was the widest
+                // column, wrapping most rows onto two lines. Icon, chance, and
+                // high/low carry the same meaning in one line; this spacer takes
+                // the width it freed and anchors both numeric columns right.
+                Item {
+                    Layout.fillWidth: true
                 }
 
                 RowLayout {
-                    Layout.preferredWidth: 46
+                    Layout.preferredWidth: 52
                     spacing: 4
                     Rectangle {
                         Layout.preferredWidth: 8
@@ -328,11 +478,12 @@ ApplicationWindow {
                 }
 
                 Label {
-                    text: model.condition
-                    Layout.fillWidth: true
-                    font.pointSize: 11
+                    text: model.minTemperature + "° / " + model.maxTemperature + "°"
+                    Layout.preferredWidth: 74
+                    font.pointSize: 12
+                    font.bold: true
                     color: themeController.themeAvailable ? themeController.themeForeground : systemPalette.text
-                    wrapMode: Text.Wrap
+                    horizontalAlignment: Text.AlignRight
                 }
             }
 

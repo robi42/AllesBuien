@@ -1,6 +1,10 @@
 use std::{path::PathBuf, pin::Pin, sync::Arc, time::Duration};
 
-use allesbuien_core::radar::{GenerationId, RadarApi, RadarClient, RadarError};
+use allesbuien_core::{
+    radar::{GenerationId, RadarApi, RadarClient, RadarError},
+    radar_legend::{BUCKETS, RAMP},
+    radar_timeline::{boundary_visible, observed_fraction},
+};
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use tokio::runtime::Handle;
@@ -34,6 +38,10 @@ pub mod ffi {
         #[qproperty(QString, current_frame_url)]
         #[qproperty(i32, first_forecast_index)]
         #[qproperty(bool, current_frame_observed)]
+        #[qproperty(f64, observed_fraction)]
+        #[qproperty(bool, forecast_boundary_visible)]
+        #[qproperty(QStringList, legend_swatches)]
+        #[qproperty(QStringList, legend_buckets)]
         #[qproperty(QString, status)]
         #[qproperty(i32, refresh_interval_ms)]
         #[qproperty(i32, playback_interval_ms)]
@@ -89,6 +97,10 @@ pub struct RadarControllerRust {
     current_frame_url: QString,
     first_forecast_index: i32,
     current_frame_observed: bool,
+    observed_fraction: f64,
+    forecast_boundary_visible: bool,
+    legend_swatches: QStringList,
+    legend_buckets: QStringList,
     status: QString,
     refresh_interval_ms: i32,
     playback_interval_ms: i32,
@@ -111,6 +123,10 @@ impl Default for RadarControllerRust {
             current_frame_url: QString::default(),
             first_forecast_index: 0,
             current_frame_observed: true,
+            observed_fraction: 1.0,
+            forecast_boundary_visible: false,
+            legend_swatches: RAMP.into_iter().map(QString::from).collect(),
+            legend_buckets: BUCKETS.into_iter().map(QString::from).collect(),
             status: "Radar unavailable".into(),
             refresh_interval_ms: 300_000,
             playback_interval_ms: 400,
@@ -204,9 +220,13 @@ impl ffi::RadarController {
     fn apply_frame_set(mut self: Pin<&mut Self>, generation: u64, set: &FrameSet) {
         image_provider::replace_frames(generation, set.frames.clone());
         let timeline = set.timeline();
-        self.as_mut().set_first_forecast_index(
-            i32::try_from(timeline.first_forecast_index).unwrap_or(i32::MAX),
-        );
+        let (first, count) = (timeline.first_forecast_index, set.timestamps.len());
+        self.as_mut()
+            .set_first_forecast_index(i32::try_from(first).unwrap_or(i32::MAX));
+        self.as_mut()
+            .set_observed_fraction(observed_fraction(first, count));
+        self.as_mut()
+            .set_forecast_boundary_visible(boundary_visible(first, count));
         self.as_mut().rust_mut().observed = timeline.observed;
         self.as_mut()
             .set_frame_count(i32::try_from(set.timestamps.len()).unwrap_or(i32::MAX));
