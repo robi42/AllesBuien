@@ -163,17 +163,16 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
         assert_eq!(feed.calls.load(Ordering::SeqCst), 1);
         assert_eq!(controller.station_name().to_string(), "Amsterdam-West");
         assert_eq!(controller.temperature().to_string(), "19.5 °C");
+        assert_eq!(controller.feels_like().to_string(), "18.8 °C");
+        assert_eq!(controller.wind().to_string(), "3.2 m/s");
+        assert_eq!(controller.humidity().to_string(), "71%");
         assert_eq!(
             controller.condition().to_string(),
             "Heavily clouded with rain"
         );
-        assert!(
-            controller
-                .condition_icon_url()
-                .to_string()
-                .ends_with("/96x96/QQ.png"),
-            "unexpected icon url {}",
-            controller.condition_icon_url()
+        assert_eq!(
+            controller.condition_icon_url().to_string(),
+            "image://condition/QQ"
         );
         assert_eq!(controller.observed_label().to_string(), "Observed 17:50");
         assert_eq!(controller.rain_summary().to_string(), "starts around 14:10");
@@ -218,7 +217,7 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
             .data(&first_row, ForecastRole::IconUrl.repr)
             .value::<QString>()
             .expect("icon role should carry a string");
-        assert!(icon.to_string().ends_with("/96x96/F.png"), "got {icon}");
+        assert_eq!(icon.to_string(), "image://condition/F");
     }
 
     feed.empty.store(true, Ordering::SeqCst);
@@ -242,6 +241,8 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
     assert_eq!(feed.calls.load(Ordering::SeqCst), 2);
     assert_eq!(controller.station_name().to_string(), "Unavailable");
     assert_eq!(controller.temperature().to_string(), "Unavailable");
+    assert!(controller.feels_like().is_empty());
+    assert!(controller.humidity().is_empty());
     assert_eq!(controller.row_count(&QModelIndex::default()), 0);
     assert!(controller.condition_icon_url().is_empty());
     assert!(controller.observed_label().is_empty());

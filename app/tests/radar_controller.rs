@@ -13,6 +13,7 @@ use std::{
 use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
 use allesbuien_core::{
     config::LocationConfig,
+    datetime::LocalTimestamp,
     notify::{Notifier, NotifyError},
     radar::{RadarApi, RadarFuture},
     weather::{FeedApi, FeedFuture, WeatherData},
@@ -77,7 +78,9 @@ impl FakeRadarApi {
             })
             .collect::<Vec<_>>()
             .join(",");
-        format!(r#"{{"timestamp":"{run}","times":[{times}]}}"#).into_bytes()
+        // A zero vendor offset is deliberately *not* what deriving these August
+        // stamps would produce, so an ignored `timeOffset` shifts the caption.
+        format!(r#"{{"timestamp":"{run}","timeOffset":0,"times":[{times}]}}"#).into_bytes()
     }
 
     fn record(&self, event: impl Into<String>) {
@@ -205,6 +208,16 @@ fn ignores_stale_generation_frame_and_refresh_started_resets_state() {
     assert_eq!(*controller.playback_interval_ms(), 400);
     assert_eq!(controller.timestamps().len(), 2);
     assert_local_clock_label(&controller.current_frame_label().to_string());
+    assert_eq!(
+        controller.current_frame_label().to_string(),
+        LocalTimestamp::from_feed("2026-08-30T09:00:00").time_label,
+        "the vendor's declared timeOffset was ignored in favour of a derivation"
+    );
+    assert_eq!(*controller.first_forecast_index(), 2);
+    assert!(
+        *controller.current_frame_observed(),
+        "a run whose every frame is in the past has nothing to forecast"
+    );
     assert_eq!(
         controller.current_frame_url().to_string(),
         "image://radar/1/0"

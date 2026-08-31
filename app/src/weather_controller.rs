@@ -1,19 +1,21 @@
 use std::{pin::Pin, sync::Arc, time::Duration};
 
 use allesbuien_core::{
-    condition::describe,
     config::LocationConfig,
     rain::RainPoint,
     weather::{FeedApi, ForecastDay, WeatherData, WeatherError},
 };
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{
-    QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant,
+    QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant,
 };
 use tokio::runtime::Handle;
 
 use crate::{
-    condition_icon, conditions_view::ConditionsView, rain_graph::RainGraph,
+    conditions_view::ConditionsView,
+    forecast_model,
+    icon_cache::{self, IconCache},
+    rain_graph::RainGraph,
     services::NotificationService,
 };
 
@@ -60,7 +62,9 @@ pub mod ffi {
         #[base = QAbstractListModel]
         #[qproperty(QString, station_name)]
         #[qproperty(QString, temperature)]
+        #[qproperty(QString, feels_like)]
         #[qproperty(QString, wind)]
+        #[qproperty(QString, humidity)]
         #[qproperty(QString, condition)]
         #[qproperty(QString, condition_icon_url)]
         #[qproperty(QString, observed_label)]
@@ -118,6 +122,7 @@ pub mod ffi {
 
 pub(crate) struct WeatherControllerConfig {
     pub(crate) feed: Arc<dyn FeedApi>,
+    pub(crate) icons: IconCache,
     pub(crate) location: LocationConfig,
     pub(crate) notifications: NotificationService,
     pub(crate) runtime: Handle,
@@ -127,7 +132,9 @@ pub(crate) struct WeatherControllerConfig {
 pub struct WeatherControllerRust {
     station_name: QString,
     temperature: QString,
+    feels_like: QString,
     wind: QString,
+    humidity: QString,
     condition: QString,
     condition_icon_url: QString,
     observed_label: QString,
@@ -139,6 +146,7 @@ pub struct WeatherControllerRust {
     refresh_interval_ms: i32,
     forecast: Vec<ForecastDay>,
     feed: Option<Arc<dyn FeedApi>>,
+    icons: IconCache,
     location: Option<LocationConfig>,
     runtime: Option<Handle>,
     notifications: Option<NotificationService>,
@@ -149,7 +157,9 @@ impl Default for WeatherControllerRust {
         Self {
             station_name: "Unavailable".into(),
             temperature: "Unavailable".into(),
+            feels_like: QString::default(),
             wind: "Unavailable".into(),
+            humidity: QString::default(),
             condition: "Unavailable".into(),
             condition_icon_url: QString::default(),
             observed_label: QString::default(),
@@ -161,6 +171,7 @@ impl Default for WeatherControllerRust {
             refresh_interval_ms: 600_000,
             forecast: Vec::new(),
             feed: None,
+            icons: IconCache::disabled(),
             location: None,
             runtime: None,
             notifications: None,
@@ -174,6 +185,7 @@ pub(crate) fn create(config: WeatherControllerConfig) -> cxx::UniquePtr<ffi::Wea
         let interval = i32::try_from(config.refresh_interval.as_millis()).unwrap_or(i32::MAX);
         let mut rust = pinned.as_mut().rust_mut();
         rust.feed = Some(config.feed);
+        rust.icons = config.icons;
         rust.location = Some(config.location);
         rust.notifications = Some(config.notifications);
         rust.runtime = Some(config.runtime);
@@ -193,8 +205,9 @@ impl ffi::WeatherController {
         ) else {
             return;
         };
-        let (feed, location, runtime, notifications) = (
+        let (feed, icons, location, runtime, notifications) = (
             Arc::clone(feed),
+            self.icons.clone(),
             location.clone(),
             runtime.clone(),
             notifications.clone(),
@@ -202,10 +215,13 @@ impl ffi::WeatherController {
         let qt_thread = self.qt_thread();
         drop(runtime.spawn(async move {
             let result = feed.fetch(location.latitude, location.longitude).await;
-            if let Ok(data) = &result
-                && let Err(error) = notifications.notify_rain(data.rain_soon.as_ref()).await
-            {
-                eprintln!("allesbuien: notification failed: {error}");
+            if let Ok(data) = &result {
+                // Warms the provider before the URLs reach QML, so the icons are
+                // already decodable when the bindings below fire.
+                icons.warm(&icon_cache::condition_codes(data)).await;
+                if let Err(error) = notifications.notify_rain(data.rain_soon.as_ref()).await {
+                    eprintln!("allesbuien: notification failed: {error}");
+                }
             }
             let _queue_result = qt_thread.queue(move |controller| controller.apply_result(result));
         }));
@@ -227,7 +243,9 @@ impl ffi::WeatherController {
     fn apply_conditions(mut self: Pin<&mut Self>, view: &ConditionsView) {
         self.as_mut().set_station_name((&view.station_name).into());
         self.as_mut().set_temperature((&view.temperature).into());
+        self.as_mut().set_feels_like((&view.feels_like).into());
         self.as_mut().set_wind((&view.wind).into());
+        self.as_mut().set_humidity((&view.humidity).into());
         self.as_mut().set_condition((&view.condition).into());
         self.as_mut()
             .set_condition_icon_url((&view.icon_url).into());
@@ -265,42 +283,10 @@ impl ffi::WeatherController {
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let Some(day) = usize::try_from(index.row())
-            .ok()
-            .and_then(|row| self.forecast.get(row))
-        else {
-            return QVariant::default();
-        };
-        match (ffi::ForecastRole { repr: role }) {
-            ffi::ForecastRole::Day => QVariant::from(&QString::from(&day.day)),
-            ffi::ForecastRole::Weekday => QVariant::from(&QString::from(&day.day_at.weekday_label)),
-            ffi::ForecastRole::MinTemperature => QVariant::from(&day.min_temperature_min),
-            ffi::ForecastRole::MaxTemperature => QVariant::from(&day.max_temperature_max),
-            ffi::ForecastRole::RainChance => QVariant::from(&i32::from(day.rain_chance)),
-            ffi::ForecastRole::Condition => QVariant::from(&QString::from(&describe(
-                &day.condition_code,
-                &day.condition,
-            ))),
-            ffi::ForecastRole::IconUrl => QVariant::from(&QString::from(
-                &condition_icon::icon_url(&day.condition_code, &day.icon_url),
-            )),
-            _ => QVariant::default(),
-        }
+        forecast_model::cell(&self.forecast, index.row(), role)
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
-        let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
-        for (role, name) in [
-            (ffi::ForecastRole::Day.repr, "day"),
-            (ffi::ForecastRole::Weekday.repr, "weekday"),
-            (ffi::ForecastRole::MinTemperature.repr, "minTemperature"),
-            (ffi::ForecastRole::MaxTemperature.repr, "maxTemperature"),
-            (ffi::ForecastRole::RainChance.repr, "rainChance"),
-            (ffi::ForecastRole::Condition.repr, "condition"),
-            (ffi::ForecastRole::IconUrl.repr, "iconUrl"),
-        ] {
-            roles.insert(role, QByteArray::from(name));
-        }
-        roles
+        forecast_model::role_names()
     }
 }

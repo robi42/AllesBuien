@@ -1,13 +1,13 @@
 use std::{path::PathBuf, pin::Pin, sync::Arc, time::Duration};
 
-use allesbuien_core::radar::{GenerationId, RadarApi, RadarClient, RadarError, RadarRefresh};
+use allesbuien_core::radar::{GenerationId, RadarApi, RadarClient, RadarError};
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use tokio::runtime::Handle;
 
 use crate::{
     image_provider::{self, FrameBytes},
-    radar_clock::frame_label,
+    radar_frames::{FrameSet, LoadedRefresh},
 };
 
 #[cxx_qt::bridge]
@@ -32,6 +32,8 @@ pub mod ffi {
         #[qproperty(QStringList, timestamps)]
         #[qproperty(QString, current_frame_label)]
         #[qproperty(QString, current_frame_url)]
+        #[qproperty(i32, first_forecast_index)]
+        #[qproperty(bool, current_frame_observed)]
         #[qproperty(QString, status)]
         #[qproperty(i32, refresh_interval_ms)]
         #[qproperty(i32, playback_interval_ms)]
@@ -77,17 +79,6 @@ pub(crate) struct RadarControllerConfig {
     pub(crate) playback_interval: Duration,
 }
 
-#[derive(Clone)]
-struct FrameSet {
-    timestamps: Vec<String>,
-    frames: Vec<FrameBytes>,
-}
-
-struct LoadedRefresh {
-    refresh: RadarRefresh,
-    frames: Vec<FrameBytes>,
-}
-
 pub struct RadarControllerRust {
     frame_count: i32,
     current_frame_index: i32,
@@ -96,12 +87,15 @@ pub struct RadarControllerRust {
     timestamps: QStringList,
     current_frame_label: QString,
     current_frame_url: QString,
+    first_forecast_index: i32,
+    current_frame_observed: bool,
     status: QString,
     refresh_interval_ms: i32,
     playback_interval_ms: i32,
     api: Option<Arc<dyn RadarApi>>,
     state_dir: PathBuf,
     runtime: Option<Handle>,
+    observed: Vec<bool>,
     last_good: Option<FrameSet>,
 }
 
@@ -115,12 +109,15 @@ impl Default for RadarControllerRust {
             timestamps: QStringList::default(),
             current_frame_label: QString::default(),
             current_frame_url: QString::default(),
+            first_forecast_index: 0,
+            current_frame_observed: true,
             status: "Radar unavailable".into(),
             refresh_interval_ms: 300_000,
             playback_interval_ms: 400,
             api: None,
             state_dir: PathBuf::new(),
             runtime: None,
+            observed: Vec::new(),
             last_good: None,
         }
     }
@@ -190,15 +187,7 @@ impl ffi::RadarController {
         }
         match result {
             Ok(loaded) => {
-                let set = FrameSet {
-                    timestamps: loaded
-                        .refresh
-                        .frames
-                        .into_iter()
-                        .map(|frame| frame_label(&frame.timestamp))
-                        .collect(),
-                    frames: loaded.frames,
-                };
+                let set = FrameSet::from_loaded(loaded);
                 self.as_mut().apply_frame_set(generation.0, &set);
                 self.as_mut().rust_mut().last_good = Some(set);
                 self.set_status(QString::default());
@@ -214,6 +203,11 @@ impl ffi::RadarController {
 
     fn apply_frame_set(mut self: Pin<&mut Self>, generation: u64, set: &FrameSet) {
         image_provider::replace_frames(generation, set.frames.clone());
+        let timeline = set.timeline();
+        self.as_mut().set_first_forecast_index(
+            i32::try_from(timeline.first_forecast_index).unwrap_or(i32::MAX),
+        );
+        self.as_mut().rust_mut().observed = timeline.observed;
         self.as_mut()
             .set_frame_count(i32::try_from(set.timestamps.len()).unwrap_or(i32::MAX));
         self.as_mut().set_current_frame_index(0);
@@ -266,6 +260,11 @@ impl ffi::RadarController {
             self.generation(),
             self.current_frame_index()
         );
+        let observed = usize::try_from(index)
+            .ok()
+            .and_then(|index| self.observed.get(index).copied())
+            .unwrap_or(true);
+        self.as_mut().set_current_frame_observed(observed);
         self.as_mut().set_current_frame_label(label);
         self.set_current_frame_url(url.into());
     }

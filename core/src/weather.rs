@@ -475,6 +475,8 @@ mod tests {
         // Then
         let current = weather.current.expect("nearest station expected");
         assert_eq!(current.station_name, "Meetstation Arnhem");
+        assert_eq!(current.feel_temperature, Some(18.0));
+        assert_eq!(current.humidity, Some(94.0));
         assert_eq!(current.condition_code, "qq");
         assert_eq!(current.condition_english, "Heavily clouded with rain");
         assert_eq!(current.condition.as_deref(), Some("Zwaar bewolkt en regen"));

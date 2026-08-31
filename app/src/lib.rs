@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::icon_cache::IconCache;
 use allesbuien_core::{
     config::Config,
     notify::{NotifyConfig, NotifySend},
@@ -15,9 +16,13 @@ mod app_style;
 mod bootstrap;
 pub mod condition_icon;
 pub mod conditions_view;
+pub mod forecast_model;
+pub mod icon_cache;
+pub mod icon_store;
 pub mod image_provider;
 pub mod radar_clock;
 pub mod radar_controller;
+mod radar_frames;
 pub mod rain_graph;
 mod services;
 pub mod theme_controller;
@@ -54,6 +59,17 @@ pub fn run() -> Result<(), RunError> {
         .map_err(RunError::Weather)?;
     let radar = ReqwestRadarApi::new(&config.endpoints.radar_url).map_err(RunError::Radar)?;
     let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from);
+    let icons = icon_cache::ReqwestIconSource::new().map_or_else(IconCache::disabled, |source| {
+        IconCache::new(
+            icon_store::cache_directory(
+                std::env::var_os("XDG_CACHE_HOME")
+                    .map(PathBuf::from)
+                    .as_deref(),
+                &home,
+            ),
+            Arc::new(source),
+        )
+    });
     let services = CoreServices::new_with_notify(
         CoreServiceConfig {
             feed: Arc::new(feed),
@@ -73,6 +89,7 @@ pub fn run() -> Result<(), RunError> {
         home.join(".local/state/omarchy/current/theme"),
         TimerIntervals::default(),
     )
+    .with_icons(icons)
     .boot()
     .map_err(RunError::Bootstrap)?
     .exec();

@@ -1,0 +1,53 @@
+{
+  "imagetype": "RadarMapRainWebmercatorNL",
+  "timeOffset": 2,
+  "ext": "png",
+  "width": 1058,
+  "height": 915,
+  "timestamp": "2026-08-31T18:55:00",
+  "still": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311855",
+  "stilltimestamp": "2026-08-31T18:55:00",
+  "sprite": "https://image.buienradar.nl/2.0/image/sprite/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&history=6&forecast=4&skip=0&timestamp=202608311855&runTimestamp=202608311855",
+  "times": [
+    {
+      "timestamp": "2026-08-31T18:30:00",
+      "url": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311830"
+    },
+    {
+      "timestamp": "2026-08-31T18:35:00",
+      "url": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311835"
+    },
+    {
+      "timestamp": "2026-08-31T18:40:00",
+      "url": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311840"
+    },
+    {
+      "timestamp": "2026-08-31T18:45:00",
+      "url": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311845"
+    },
+    {
+      "timestamp": "2026-08-31T18:50:00",
+      "url": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311850"
+    },
+    {
+      "timestamp": "2026-08-31T18:55:00",
+      "url": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311855"
+    },
+    {
+      "timestamp": "2026-08-31T19:00:00",
+      "url": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311900"
+    },
+    {
+      "timestamp": "2026-08-31T19:05:00",
+      "url": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311905"
+    },
+    {
+      "timestamp": "2026-08-31T19:10:00",
+      "url": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311910"
+    },
+    {
+      "timestamp": "2026-08-31T19:15:00",
+      "url": "https://image.buienradar.nl/2.0/image/single/RadarMapRainWebmercatorNL?extension=png&width=1058&height=915&renderText=False&renderBranding=False&renderBackground=False&runTimestamp=202608311855&timestamp=202608311915"
+    }
+  ]
+}

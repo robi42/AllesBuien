@@ -15,7 +15,9 @@ use cxx_qt_lib::{
 };
 
 use crate::{
-    CoreServices, TimerIntervals, app_style, image_provider,
+    CoreServices, TimerIntervals, app_style,
+    icon_cache::IconCache,
+    image_provider,
     radar_controller::{self, RadarControllerConfig},
     services::{AppRuntime, NotificationService},
     theme_controller::{self, ThemeControllerConfig},
@@ -28,6 +30,7 @@ pub struct AppBuilder {
     services: CoreServices,
     theme_base_path: PathBuf,
     intervals: TimerIntervals,
+    icons: IconCache,
 }
 
 impl AppBuilder {
@@ -41,7 +44,16 @@ impl AppBuilder {
             services,
             theme_base_path,
             intervals,
+            icons: IconCache::disabled(),
         }
+    }
+
+    /// Supplies the condition-icon cache. Callers that omit it — every test —
+    /// get a cache that never reads a directory and never reaches the network.
+    #[must_use]
+    pub fn with_icons(mut self, icons: IconCache) -> Self {
+        self.icons = icons;
+        self
     }
 
     /// Creates exactly one Qt application and loads the root QML window.
@@ -70,6 +82,7 @@ impl AppBuilder {
         let runtime = AppRuntime::new().map_err(BootstrapError::RuntimeCreation)?;
         let mut weather_controller = weather_controller::create(WeatherControllerConfig {
             feed: Arc::clone(self.services.feed()),
+            icons: self.icons,
             location: self.services.location().clone(),
             notifications: NotificationService::new(
                 Arc::clone(self.services.notifier()),
@@ -115,12 +128,14 @@ impl AppBuilder {
             created_signal.store(!object.is_null(), Ordering::Release);
         });
 
-        let provider =
-            image_provider::ffi::new_image_provider(QQmlImageProviderBaseImageType::Image);
-        let qml_engine: core::pin::Pin<&mut QQmlEngine> = engine_pin.as_mut().upcast_pin();
-        // SAFETY: Category 8 (FFI ownership): the C++ trampoline returns a fresh,
-        // non-null allocation and QQmlEngine takes its sole ownership by contract.
-        unsafe { qml_engine.add_image_provider(&QString::from("radar"), provider) };
+        for name in ["radar", "condition"] {
+            let provider =
+                image_provider::ffi::new_image_provider(QQmlImageProviderBaseImageType::Image);
+            let qml_engine: core::pin::Pin<&mut QQmlEngine> = engine_pin.as_mut().upcast_pin();
+            // SAFETY: Category 8 (FFI ownership): the C++ trampoline returns a fresh,
+            // non-null allocation and QQmlEngine takes its sole ownership by contract.
+            unsafe { qml_engine.add_image_provider(&QString::from(name), provider) };
+        }
         engine_pin.as_mut().load(&QUrl::from(MAIN_QML_URL));
 
         if !window_created.load(Ordering::Acquire) {

@@ -33,6 +33,9 @@ pub struct RadarFrame {
 pub struct RadarRefresh {
     pub generation: GenerationId,
     pub frames: Vec<RadarFrame>,
+    /// Buienradar's own `timeOffset`: the UTC offset in whole hours it publishes
+    /// its Dutch wall clock at, or [`None`] when the run's metadata omits it.
+    pub time_offset_hours: Option<i32>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -137,6 +140,7 @@ impl RadarClient {
 
         let run_dir = self.state_dir.join("runs").join(&run_id);
         std::fs::create_dir_all(&run_dir)?;
+        let time_offset_hours = metadata.time_offset;
         let mut frames = Vec::with_capacity(metadata.times.len());
         for (index, time) in metadata.times.into_iter().enumerate() {
             let path = run_dir.join(format!("frame-{index}.png"));
@@ -150,13 +154,19 @@ impl RadarClient {
             });
         }
         prune_runs(&self.state_dir)?;
-        Ok(RadarRefresh { generation, frames })
+        Ok(RadarRefresh {
+            generation,
+            frames,
+            time_offset_hours,
+        })
     }
 }
 
 #[derive(Deserialize)]
 struct Metadata {
     timestamp: String,
+    #[serde(rename = "timeOffset", default)]
+    time_offset: Option<i32>,
     times: Vec<MetadataTime>,
 }
 

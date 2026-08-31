@@ -1,4 +1,16 @@
-use std::sync::{Arc, OnceLock, RwLock};
+//! Delivers already-fetched PNG bytes to QML without composing them in Rust.
+//!
+//! One provider class answers two registered names because the ids cannot
+//! collide: a radar frame is addressed `image://radar/<generation>/<index>` and
+//! always carries a `/`, while a condition icon is addressed
+//! `image://condition/<CODE>` and is always a bare letter stem. [`ImageId`]
+//! makes that the only routing rule, so neither the C++ trampoline nor the
+//! constructor has to learn which name it was registered under.
+
+use std::{
+    collections::HashMap,
+    sync::{Arc, OnceLock, RwLock},
+};
 
 use cxx_qt_lib::{QImage, QQmlImageProviderBaseImageType, QSize, QString};
 
@@ -8,6 +20,26 @@ pub(crate) type FrameBytes = Arc<[u8]>;
 struct FrameStore {
     generation: u64,
     frames: Vec<FrameBytes>,
+    icons: HashMap<String, FrameBytes>,
+}
+
+/// What a QML `image://` id resolves to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ImageId {
+    RadarFrame { generation: u64, index: usize },
+    ConditionIcon(String),
+}
+
+impl ImageId {
+    fn parse(id: &str) -> Option<Self> {
+        match id.split_once('/') {
+            Some((generation, index)) => Some(Self::RadarFrame {
+                generation: generation.parse().ok()?,
+                index: index.parse().ok()?,
+            }),
+            None => crate::condition_icon::cache_key(id).map(Self::ConditionIcon),
+        }
+    }
 }
 
 static FRAME_STORE: OnceLock<RwLock<FrameStore>> = OnceLock::new();
@@ -29,6 +61,21 @@ pub(crate) fn replace_frames(generation: u64, frames: Vec<FrameBytes>) {
     {
         store.frames = frames;
     }
+}
+
+/// Publishes one condition icon under its cache key.
+pub(crate) fn store_icon(key: &str, bytes: FrameBytes) {
+    if let Ok(mut store) = frame_store().write() {
+        store.icons.insert(key.to_owned(), bytes);
+    }
+}
+
+/// Reports whether a code is already published, so warming can skip it.
+#[must_use]
+pub(crate) fn has_icon(key: &str) -> bool {
+    frame_store()
+        .read()
+        .is_ok_and(|store| store.icons.contains_key(key))
 }
 
 #[cxx_qt::bridge]
@@ -104,7 +151,7 @@ impl cxx_qt::Constructor<(QQmlImageProviderBaseImageType,)> for ffi::ImageProvid
 }
 
 impl ffi::ImageProvider {
-    /// Returns the generation-keyed radar frame requested by Qt.
+    /// Returns the radar frame or condition icon the QML id addresses.
     ///
     /// # Safety
     ///
@@ -116,24 +163,9 @@ impl ffi::ImageProvider {
         size: *mut QSize,
         _requested_size: &QSize,
     ) -> QImage {
-        let id = id.to_string();
-        let Some((generation, index)) = id.split_once('/') else {
-            return QImage::default();
-        };
-        let (Ok(generation), Ok(index)) = (generation.parse::<u64>(), index.parse::<usize>())
-        else {
-            return QImage::default();
-        };
-        let Ok(store) = frame_store().read() else {
-            return QImage::default();
-        };
-        if store.generation != generation {
-            return QImage::default();
-        }
-        let image = store
-            .frames
-            .get(index)
-            .and_then(|frame| QImage::from_data(frame, Some("PNG")))
+        let image = ImageId::parse(&id.to_string())
+            .and_then(published_bytes)
+            .and_then(|bytes| QImage::from_data(&bytes, Some("PNG")))
             .unwrap_or_default();
         if !size.is_null() {
             // SAFETY: Category 8 (FFI boundary): Qt's requestImage contract supplies
@@ -141,5 +173,94 @@ impl ffi::ImageProvider {
             unsafe { size.write(image.size()) };
         }
         image
+    }
+}
+
+/// Looks up the bytes already published for one id, if any.
+fn published_bytes(id: ImageId) -> Option<FrameBytes> {
+    let store = frame_store().read().ok()?;
+    match id {
+        ImageId::RadarFrame { generation, index } if store.generation == generation => {
+            store.frames.get(index).cloned()
+        }
+        ImageId::RadarFrame { .. } => None,
+        ImageId::ConditionIcon(key) => store.icons.get(&key).cloned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FrameBytes, ImageId, begin_generation, has_icon, published_bytes, store_icon};
+
+    #[test]
+    fn a_two_part_numeric_id_addresses_a_radar_frame() {
+        // Given / When / Then
+        assert_eq!(
+            ImageId::parse("7/3"),
+            Some(ImageId::RadarFrame {
+                generation: 7,
+                index: 3
+            })
+        );
+    }
+
+    #[test]
+    fn a_bare_letter_stem_addresses_a_condition_icon() {
+        // Given / When / Then
+        assert_eq!(
+            ImageId::parse("qq"),
+            Some(ImageId::ConditionIcon(String::from("QQ")))
+        );
+        assert_eq!(
+            ImageId::parse("F"),
+            Some(ImageId::ConditionIcon(String::from("F")))
+        );
+    }
+
+    #[test]
+    fn an_id_that_addresses_neither_resolves_to_nothing() {
+        // Given / When / Then
+        assert_eq!(ImageId::parse(""), None);
+        assert_eq!(ImageId::parse("7/not-a-number"), None);
+        assert_eq!(ImageId::parse("../../etc/passwd"), None);
+    }
+
+    #[test]
+    fn a_published_icon_is_served_while_an_unpublished_one_is_not() {
+        // Given
+        store_icon("ZZ", FrameBytes::from(b"icon".to_vec()));
+
+        // When / Then
+        assert!(has_icon("ZZ"));
+        assert!(!has_icon("ZY"));
+        assert_eq!(
+            published_bytes(ImageId::ConditionIcon(String::from("ZZ"))).as_deref(),
+            Some(b"icon".as_slice())
+        );
+        assert!(published_bytes(ImageId::ConditionIcon(String::from("ZY"))).is_none());
+    }
+
+    #[test]
+    fn a_stale_generation_is_never_served() {
+        // Given
+        begin_generation(41);
+        super::replace_frames(41, vec![FrameBytes::from(b"frame".to_vec())]);
+
+        // When / Then
+        assert_eq!(
+            published_bytes(ImageId::RadarFrame {
+                generation: 41,
+                index: 0
+            })
+            .as_deref(),
+            Some(b"frame".as_slice())
+        );
+        assert!(
+            published_bytes(ImageId::RadarFrame {
+                generation: 40,
+                index: 0
+            })
+            .is_none()
+        );
     }
 }
