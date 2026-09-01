@@ -1,9 +1,11 @@
 use std::{pin::Pin, sync::Arc};
 
 use allesbuien_core::{
+    error_chain,
     radar::{GenerationId, RadarClient, RadarError},
     radar_projection::marker_position,
     radar_timeline::{boundary_visible, observed_fraction},
+    retry,
 };
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
@@ -123,9 +125,16 @@ impl ffi::RadarController {
 
         let qt_thread = self.qt_thread();
         drop(runtime.spawn(async move {
-            let result = RadarClient::new(api, state_dir)
-                .refresh(GenerationId(generation))
-                .await;
+            let client = RadarClient::new(api, state_dir);
+            let mut result = client.refresh(GenerationId(generation)).await;
+            for attempt in 2..=retry::MAX_ATTEMPTS {
+                match &result {
+                    Err(error) if retry::is_retryable(error) => {}
+                    _ => break,
+                }
+                tokio::time::sleep(retry::backoff(attempt)).await;
+                result = client.refresh(GenerationId(generation)).await;
+            }
             let loaded = match result {
                 Ok(refresh) => refresh
                     .frames
@@ -161,7 +170,8 @@ impl ffi::RadarController {
                 if let Some(set) = self.last_good.clone() {
                     self.as_mut().apply_frame_set(generation.0, &set);
                 }
-                self.set_status(format!("Radar unavailable: {error}").into());
+                let described = error_chain::describe(&error);
+                self.set_status(format!("Radar unavailable: {described}").into());
             }
         }
     }
