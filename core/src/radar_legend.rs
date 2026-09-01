@@ -28,7 +28,12 @@ pub struct Bucket {
 }
 
 /// The unit every [`BUCKETS`] label is expressed in, stated once for the key.
-pub const UNIT: &str = "mm/u";
+///
+/// `mm/h`, not the vendor's `mm/u`: `uur` is the Dutch hour and the rest of
+/// this app's visible text is English. The module doc above quotes the vendor's
+/// own legend title verbatim, because that is a fact about their page; this is
+/// our copy, and it is written in the language the rest of the window is.
+pub const UNIT: &str = "mm/h";
 
 /// Buienradar's published scale, lightest rainfall first.
 pub const BUCKETS: [Bucket; 5] = [
@@ -83,7 +88,7 @@ mod tests {
     fn reproduces_the_vendor_published_buckets_in_order() {
         // Given / When / Then: exactly the scale printed on Buienradar's legend.
         assert_eq!(labels(), ["0-2", "2-5", "5-10", "10-100", "100+"]);
-        assert_eq!(UNIT, "mm/u");
+        assert_eq!(UNIT, "mm/h");
     }
 
     #[test]
@@ -124,7 +129,7 @@ mod tests {
 
     #[test]
     fn labels_omit_the_unit_because_the_key_states_it_once() {
-        // Given / When / Then: avoids "10-100 mm/u" repeated five times.
+        // Given / When / Then: avoids "10-100 mm/h" repeated five times.
         for bucket in &BUCKETS {
             assert!(
                 !bucket.label.to_ascii_lowercase().contains("mm"),
