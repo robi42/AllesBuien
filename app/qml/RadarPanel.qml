@@ -18,6 +18,14 @@ Item {
     // theme rather than being restated here.
     readonly property int handleSize: 18
 
+    // The five bucket ranges sit a step under the unit that governs them: they
+    // are the key's data, the unit is its title, and at one shared size the
+    // block read as six equal captions. One point is the whole difference —
+    // enough to rank them, not enough to make the digits work to read. A
+    // seventh entry in the type scale would mean two things competing at the
+    // same rank, so a size used in exactly one place stays local to that file.
+    readonly property int legendRangeSize: radarPanel.theme.fontCaption - 1
+
     Item {
         id: mapContainer
         anchors.top: parent.top
@@ -136,7 +144,7 @@ Item {
 
                             Label {
                                 text: radarPanel.radarController.legendBuckets[bucket.index]
-                                font.pointSize: radarPanel.theme.fontCaption
+                                font.pointSize: radarPanel.legendRangeSize
                                 font.features: ({ tnum: 1 })
                                 color: radarPanel.theme.text
                                 opacity: radarPanel.theme.emphasisMid
