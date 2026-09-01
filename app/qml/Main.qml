@@ -24,6 +24,19 @@ ApplicationWindow {
     objectName: "rootWindow"
     width: 980
     height: 760
+    // The radar's own floor plus the column beside it, the outer margins and
+    // the gap between them: 400 + 380 + 24 * 2 + 24. Below that the two panels
+    // start taking width from each other, and the first thing to go is the map,
+    // which is the one element here that gets worse the smaller it is.
+    //
+    // The height is measured, not derived: the forecast list clips rather than
+    // squashing its rows, so the floor is whatever makes all five of them fit.
+    // 640 renders four and slices the fifth, 660 still slices it, 664 lands the
+    // last row's icon on the clip edge, 668 is clean. 672 is that, taken up to
+    // the 4 px scale — the spare step is the margin for a themed font with
+    // taller metrics, since the window follows whichever theme Omarchy has on.
+    minimumWidth: 852
+    minimumHeight: 672
     visible: true
     title: "AllesBuien"
     color: appTheme.background
@@ -31,6 +44,15 @@ ApplicationWindow {
     Theme {
         id: appTheme
         themeController: root.themeSource
+    }
+
+    // A floating single-window utility that is opened from a keybind gets
+    // closed from the keyboard too. Escape only, and no wider keyboard
+    // navigation with it: tab order and arrow-key seek are a separate design
+    // question, and shipping half of one is worse than shipping none.
+    Shortcut {
+        sequences: ["Escape"]
+        onActivated: Qt.quit()
     }
 
     ColumnLayout {
