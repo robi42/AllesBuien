@@ -78,10 +78,24 @@ ListView {
                 // cell swallow the free space and strand the dot beside the
                 // icon. Fixed width is the whole point: the chance has to land
                 // on the same x in every row.
+                //
+                // The slack goes in front of the pair, not between it: a
+                // right-aligned fill-width Label kept its own leftover inside
+                // itself, so "30%" and "70%" pushed the dot a different
+                // distance away in every row and the mark stopped reading as
+                // attached to its number. A leading spacer takes the whole
+                // remainder instead, which leaves one `spaceXs` between dot and
+                // digits in all five rows while the right edge stays put. An
+                // invisible dot is skipped by RowLayout together with its
+                // spacing, so a zero-chance day still measures the same cell.
                 RowLayout {
                     Layout.fillWidth: false
                     Layout.preferredWidth: forecastView.rainWidth
                     spacing: forecastView.theme.spaceXs
+
+                    Item {
+                        Layout.fillWidth: true
+                    }
 
                     Rectangle {
                         visible: forecastRow.rainChance > 0
@@ -90,14 +104,13 @@ ListView {
                         Layout.preferredWidth: forecastView.theme.spaceSm
                         Layout.preferredHeight: forecastView.theme.spaceSm
                     }
+
                     Label {
                         text: forecastRow.rainChance > 0 ? (forecastRow.rainChance + "%") : ""
                         font.pointSize: forecastView.theme.fontLabel
                         font.bold: true
                         font.features: ({ tnum: 1 })
                         color: forecastView.theme.accent
-                        Layout.fillWidth: true
-                        horizontalAlignment: Text.AlignRight
                     }
                 }
 
