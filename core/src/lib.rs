@@ -10,5 +10,6 @@ pub mod radar_timeline;
 pub mod rain;
 pub mod rain_cursor;
 pub mod retry;
+pub mod status;
 pub mod theme;
 pub mod weather;

@@ -85,10 +85,10 @@ Item {
         // left because that corner is open sea and northern France — the one
         // part of this frame that never carries Dutch weather.
         //
-        // Qualitative on purpose: Buienradar documents no colour-to-rate mapping
-        // for these sprites, so numeric ticks would assert a precision no source
-        // backs. Swatches and captions both come from Rust, which is what keeps
-        // this file free of hardcoded colours.
+        // Reproduces the scale Buienradar prints on its own map. Buckets are
+        // uneven (2, 3, 5, 90, open-ended), so each gets an equal block rather
+        // than a proportional gradient. Swatches, captions, and unit all come
+        // from Rust, which keeps this file free of hardcoded colours.
         Rectangle {
             id: legend
             anchors.left: parent.left
@@ -106,43 +106,43 @@ Item {
                 anchors.margins: radarPanel.theme.spaceMd
                 spacing: radarPanel.theme.spaceXs
 
-                Row {
-                    spacing: 0
+                Label {
+                    text: radarPanel.radarController.legendUnit
+                    font.pointSize: radarPanel.theme.fontCaption
+                    font.bold: true
+                    font.letterSpacing: radarPanel.theme.capsTracking
+                    color: radarPanel.theme.text
+                    opacity: radarPanel.theme.emphasisMid
+                }
+
+                RowLayout {
+                    spacing: radarPanel.theme.spaceXs
                     Repeater {
                         model: radarPanel.radarController.legendSwatches
 
-                        Rectangle {
-                            id: swatch
+                        ColumnLayout {
+                            id: bucket
+                            required property int index
                             required property var modelData
 
-                            width: radarPanel.theme.spaceLg
-                            height: radarPanel.theme.spaceSm
-                            color: swatch.modelData
-                        }
-                    }
-                }
+                            spacing: 2
 
-                // Spaced, not butted: three tracked uppercase captions under a
-                // continuous ramp run together without a gap at least as wide
-                // as their own tracking.
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: radarPanel.theme.spaceSm
-                    Repeater {
-                        model: radarPanel.radarController.legendBuckets
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: radarPanel.theme.spaceSm
+                                radius: radarPanel.theme.radiusSm
+                                color: bucket.modelData
+                            }
 
-                        Label {
-                            id: bucketLabel
-                            required property var modelData
-
-                            text: bucketLabel.modelData.toUpperCase()
-                            font.pointSize: radarPanel.theme.fontCaption
-                            font.bold: true
-                            font.letterSpacing: radarPanel.theme.capsTracking
-                            color: radarPanel.theme.text
-                            opacity: radarPanel.theme.emphasisMid
-                            Layout.fillWidth: true
-                            horizontalAlignment: Text.AlignHCenter
+                            Label {
+                                text: radarPanel.radarController.legendBuckets[bucket.index]
+                                font.pointSize: radarPanel.theme.fontCaption
+                                font.features: ({ tnum: 1 })
+                                color: radarPanel.theme.text
+                                opacity: radarPanel.theme.emphasisMid
+                                Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
                         }
                     }
                 }

@@ -1,31 +1,74 @@
-//! Qualitative intensity ramp for the radar overlay.
+//! Rainfall intensity scale for the radar overlay.
 //!
-//! Buienradar publishes **no** RGB-to-rainfall mapping for these sprites. Its
-//! own legend page names two qualitative buckets and no numbers; Home Assistant
-//! and `python-buienradar` both consume the imagery without ever decoding a
-//! pixel. Printing `mm/h` or `dBZ` ticks would therefore assert a precision no
-//! source backs, so [`BUCKETS`] stays qualitative on purpose — that constraint
-//! is pinned by a test, not left to reviewer memory.
+//! Buienradar does not document an RGB-to-rainfall table for the sprite images,
+//! but it does publish the scale those images are drawn against: the legend on
+//! its own map, titled "Neerslag (mm/u)", names five buckets — 0-2, 2-5, 5-10,
+//! 10-100 and 100+ — and pairs each with a colour. Those colours run light
+//! lavender, blue, deep navy, red, magenta, which is the order the sprite's own
+//! ~100-step gradient runs in when its opaque pixels are sorted. The vendor's
+//! published buckets are therefore what the overlay means, and reproducing them
+//! is more honest than inventing qualitative words for a scale the vendor
+//! already quantifies.
 //!
-//! [`RAMP`] is a 12-swatch sample of the vendor's own ~100-step gradient,
-//! transcribed from opaque pixels of four live frames of the
-//! `RadarMapRainWebmercatorNL` sprite. It runs light lavender through saturated
-//! blue and violet into magenta and red, matching what the map actually draws.
-//! Keeping the values here rather than in QML is what lets `Main.qml` stay free
-//! of hardcoded colours.
+//! Each swatch is transcribed from opaque pixels of live
+//! `RadarMapRainWebmercatorNL` frames rather than from the legend artwork, so
+//! the key matches what the map actually paints. Keeping the values here rather
+//! than in QML is what lets the QML stay free of hardcoded colours.
+//!
+//! The buckets are not linear — they step 2, 3, 5, 90, then open-ended — so
+//! they are rendered as equal-width blocks, matching the vendor's own legend,
+//! rather than as a proportional gradient the scale would not support.
 
-/// Swatches sampled from the radar sprite ramp, lightest rainfall first.
-pub const RAMP: [&str; 12] = [
-    "#ecedfd", "#cbcfff", "#a8afff", "#858eff", "#5c6af8", "#3243e4", "#0b1bca", "#3a1aa2",
-    "#641a80", "#961957", "#c31732", "#fc1602",
+/// A published rainfall bucket and the sprite colour representing it.
+pub struct Bucket {
+    /// Vendor caption, e.g. `"10-100"`. Bare range; [`UNIT`] is stated once.
+    pub label: &'static str,
+    /// Six-digit hex sampled from the sprite ramp.
+    pub swatch: &'static str,
+}
+
+/// The unit every [`BUCKETS`] label is expressed in, stated once for the key.
+pub const UNIT: &str = "mm/u";
+
+/// Buienradar's published scale, lightest rainfall first.
+pub const BUCKETS: [Bucket; 5] = [
+    Bucket {
+        label: "0-2",
+        swatch: "#cbcfff",
+    },
+    Bucket {
+        label: "2-5",
+        swatch: "#7f88ff",
+    },
+    Bucket {
+        label: "5-10",
+        swatch: "#0c21d4",
+    },
+    Bucket {
+        label: "10-100",
+        swatch: "#fc1602",
+    },
+    Bucket {
+        label: "100+",
+        swatch: "#961957",
+    },
 ];
 
-/// Captions under the ramp, left to right. Qualitative by design — see module docs.
-pub const BUCKETS: [&str; 3] = ["Light", "Moderate", "Heavy"];
+/// Swatches alone, lightest first, for drawing the key as a ramp.
+#[must_use]
+pub fn ramp() -> Vec<&'static str> {
+    BUCKETS.iter().map(|bucket| bucket.swatch).collect()
+}
+
+/// Captions alone, lightest first, aligned index-for-index with [`ramp`].
+#[must_use]
+pub fn labels() -> Vec<&'static str> {
+    BUCKETS.iter().map(|bucket| bucket.label).collect()
+}
 
 #[cfg(test)]
 mod tests {
-    use super::{BUCKETS, RAMP};
+    use super::{BUCKETS, UNIT, labels, ramp};
 
     fn channels(swatch: &str) -> [u8; 3] {
         let digits = swatch.strip_prefix('#').expect("swatch needs a # prefix");
@@ -36,33 +79,20 @@ mod tests {
         })
     }
 
-    fn luminance(swatch: &str) -> f64 {
-        let [red, green, blue] = channels(swatch).map(f64::from);
-        0.2126f64.mul_add(red, 0.7152f64.mul_add(green, 0.0722 * blue))
-    }
-
     #[test]
-    fn the_ramp_runs_from_the_lightest_swatch_to_the_reddest() {
-        // Given: the sampled vendor ramp.
-        // When
-        let lightest = RAMP
-            .iter()
-            .copied()
-            .max_by(|left, right| luminance(left).total_cmp(&luminance(right)));
-        let reddest = RAMP
-            .iter()
-            .copied()
-            .max_by_key(|swatch| channels(swatch)[0]);
-
-        // Then: light rainfall reads first and the heavy red core reads last.
-        assert_eq!(lightest, Some(RAMP[0]));
-        assert_eq!(reddest, Some(RAMP[RAMP.len() - 1]));
+    fn reproduces_the_vendor_published_buckets_in_order() {
+        // Given / When / Then: exactly the scale printed on Buienradar's legend.
+        assert_eq!(labels(), ["0-2", "2-5", "5-10", "10-100", "100+"]);
+        assert_eq!(UNIT, "mm/u");
     }
 
     #[test]
     fn every_swatch_is_a_distinct_six_digit_hex_colour() {
         // Given / When
-        let mut seen: Vec<[u8; 3]> = RAMP.iter().map(|swatch| channels(swatch)).collect();
+        let mut seen: Vec<[u8; 3]> = BUCKETS
+            .iter()
+            .map(|bucket| channels(bucket.swatch))
+            .collect();
         let total = seen.len();
         seen.sort_unstable();
         seen.dedup();
@@ -72,18 +102,35 @@ mod tests {
     }
 
     #[test]
-    fn no_bucket_caption_claims_a_numeric_scale() {
-        // Given: settled research — the vendor documents no RGB-to-rate mapping.
+    fn darkens_through_the_blues_so_the_key_reads_as_rising_rainfall() {
+        // Given: the first three buckets are the blue run of the sprite ramp.
+        let luma = |swatch: &str| {
+            let [red, green, blue] = channels(swatch);
+            u32::from(red) + u32::from(green) + u32::from(blue)
+        };
+
         // When / Then
-        for caption in BUCKETS {
+        assert!(luma(BUCKETS[0].swatch) > luma(BUCKETS[1].swatch));
+        assert!(luma(BUCKETS[1].swatch) > luma(BUCKETS[2].swatch));
+    }
+
+    #[test]
+    fn ramp_and_labels_stay_index_aligned() {
+        // Given / When / Then
+        assert_eq!(ramp().len(), labels().len());
+        assert_eq!(ramp()[3], BUCKETS[3].swatch);
+        assert_eq!(labels()[3], BUCKETS[3].label);
+    }
+
+    #[test]
+    fn labels_omit_the_unit_because_the_key_states_it_once() {
+        // Given / When / Then: avoids "10-100 mm/u" repeated five times.
+        for bucket in &BUCKETS {
             assert!(
-                !caption.chars().any(|letter| letter.is_ascii_digit()),
-                "caption {caption} carries a number"
+                !bucket.label.to_ascii_lowercase().contains("mm"),
+                "label {} repeats the unit",
+                bucket.label
             );
-            let lowered = caption.to_ascii_lowercase();
-            for unit in ["mm", "dbz", "/h", "inch"] {
-                assert!(!lowered.contains(unit), "caption {caption} claims {unit}");
-            }
         }
     }
 }

@@ -27,6 +27,15 @@ pub const MAX_ATTEMPTS: u32 = 3;
 
 const BASE_DELAY: Duration = Duration::from_millis(400);
 
+/// How soon to refresh again once all attempts have failed.
+///
+/// The normal cadence is five minutes, which is right for a working feed and
+/// far too long for a broken one: a stall during startup would leave "Radar
+/// unavailable" on screen for five minutes with nothing else happening. Thirty
+/// seconds recovers from a passing outage quickly without hammering a service
+/// that is genuinely down.
+pub const RETRY_AFTER_FAILURE: Duration = Duration::from_secs(30);
+
 /// Whether `error` is worth another attempt.
 ///
 /// Transport faults and 5xx replies are treated as transient. A 4xx means the
@@ -98,6 +107,16 @@ mod tests {
         assert_eq!(backoff(1), Duration::ZERO);
         assert_eq!(backoff(2), Duration::from_millis(400));
         assert_eq!(backoff(3), Duration::from_millis(800));
+    }
+
+    #[test]
+    fn recovers_far_sooner_than_the_normal_cadence_after_a_failure() {
+        // Given: the configured cadence for a healthy feed.
+        let normal = Duration::from_secs(5 * 60);
+
+        // When / Then
+        assert!(super::RETRY_AFTER_FAILURE < normal);
+        assert!(super::RETRY_AFTER_FAILURE >= Duration::from_secs(15));
     }
 
     #[test]

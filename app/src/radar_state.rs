@@ -8,7 +8,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use allesbuien_core::{
     config::LocationConfig,
     radar::RadarApi,
-    radar_legend::{BUCKETS, RAMP},
+    radar_legend::{self, UNIT},
 };
 use cxx_qt_lib::{QString, QStringList};
 use tokio::runtime::Handle;
@@ -41,8 +41,11 @@ pub struct RadarControllerRust {
     pub(crate) marker_visible: bool,
     pub(crate) legend_swatches: QStringList,
     pub(crate) legend_buckets: QStringList,
+    pub(crate) legend_unit: QString,
     pub(crate) status: QString,
     pub(crate) refresh_interval_ms: i32,
+    /// The cadence from config, restored after a failure shortens it.
+    pub(crate) configured_refresh_ms: i32,
     pub(crate) playback_interval_ms: i32,
     pub(crate) api: Option<Arc<dyn RadarApi>>,
     pub(crate) state_dir: PathBuf,
@@ -68,10 +71,18 @@ impl Default for RadarControllerRust {
             marker_x_fraction: 0.0,
             marker_y_fraction: 0.0,
             marker_visible: false,
-            legend_swatches: RAMP.into_iter().map(QString::from).collect(),
-            legend_buckets: BUCKETS.into_iter().map(QString::from).collect(),
+            legend_swatches: radar_legend::ramp()
+                .into_iter()
+                .map(QString::from)
+                .collect(),
+            legend_buckets: radar_legend::labels()
+                .into_iter()
+                .map(QString::from)
+                .collect(),
+            legend_unit: UNIT.into(),
             status: "Radar unavailable".into(),
             refresh_interval_ms: 300_000,
+            configured_refresh_ms: 300_000,
             playback_interval_ms: 400,
             api: None,
             state_dir: PathBuf::new(),

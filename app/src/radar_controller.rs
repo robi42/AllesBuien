@@ -5,7 +5,7 @@ use allesbuien_core::{
     radar::{GenerationId, RadarClient, RadarError},
     radar_projection::marker_position,
     radar_timeline::{boundary_visible, observed_fraction},
-    retry,
+    retry, status,
 };
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
@@ -47,6 +47,7 @@ pub mod ffi {
         #[qproperty(bool, marker_visible)]
         #[qproperty(QStringList, legend_swatches)]
         #[qproperty(QStringList, legend_buckets)]
+        #[qproperty(QString, legend_unit)]
         #[qproperty(QString, status)]
         #[qproperty(i32, refresh_interval_ms)]
         #[qproperty(i32, playback_interval_ms)]
@@ -94,6 +95,7 @@ pub(crate) fn create(config: RadarControllerConfig) -> cxx::UniquePtr<ffi::Radar
         rust.api = Some(config.api);
         rust.state_dir = config.state_dir;
         rust.runtime = Some(config.runtime);
+        rust.configured_refresh_ms = refresh_ms;
         pinned.as_mut().set_refresh_interval_ms(refresh_ms);
         pinned.as_mut().set_playback_interval_ms(playback_ms);
         pinned.as_mut().set_marker_visible(marker.is_some());
@@ -162,16 +164,26 @@ impl ffi::RadarController {
         match result {
             Ok(loaded) => {
                 let set = FrameSet::from_loaded(loaded);
+                let configured = self.configured_refresh_ms;
                 self.as_mut().apply_frame_set(generation.0, &set);
                 self.as_mut().rust_mut().last_good = Some(set);
-                self.set_status(QString::default());
+                self.as_mut().set_status(QString::default());
+                self.set_refresh_interval_ms(configured);
             }
             Err(error) => {
+                let stale = self.last_good.is_some();
                 if let Some(set) = self.last_good.clone() {
                     self.as_mut().apply_frame_set(generation.0, &set);
                 }
-                let described = error_chain::describe(&error);
-                self.set_status(format!("Radar unavailable: {described}").into());
+                eprintln!(
+                    "allesbuien: radar refresh failed: {}",
+                    error_chain::describe(&error)
+                );
+                let retry_ms = i32::try_from(retry::RETRY_AFTER_FAILURE.as_millis())
+                    .unwrap_or(self.configured_refresh_ms);
+                self.as_mut()
+                    .set_status(status::radar_message(&error, stale).into());
+                self.set_refresh_interval_ms(retry_ms);
             }
         }
     }

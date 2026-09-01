@@ -1,8 +1,10 @@
 use std::{pin::Pin, sync::Arc};
 
 use allesbuien_core::{
+    error_chain,
     rain::RainPoint,
     rain_cursor::frame_cursor,
+    status,
     weather::{ForecastDay, WeatherData, WeatherError},
 };
 use cxx_qt::{CxxQtType, Threading};
@@ -177,7 +179,11 @@ impl ffi::WeatherController {
         let data = match result {
             Ok(data) => data,
             Err(error) => {
-                self.set_status(format!("Weather unavailable: {error}").into());
+                eprintln!(
+                    "allesbuien: weather refresh failed: {}",
+                    error_chain::describe(&error)
+                );
+                self.set_status(status::weather_message(&error, false).into());
                 return;
             }
         };

@@ -1,0 +1,139 @@
+//! Human-facing wording for the inline status lines.
+//!
+//! What a failure *is* and what a viewer should be *told* are different things.
+//! The technical rendering — reqwest's URL, the DNS or TLS cause, the JSON
+//! offset — belongs in the log, where a maintainer can act on it. On screen it
+//! is noise: a weather panel that prints
+//! `error sending request for url (https://image.buienradar.nl/2.0/metadata/...)`
+//! across three wrapped lines has told the viewer nothing they can use and
+//! buried the one fact that matters, which is whether the problem is theirs.
+//!
+//! So each message names the subject, says whether anything is still on screen,
+//! and points at the likely culprit — the viewer's own connection versus the
+//! upstream service — without ever quoting a URL, host, header, or file path.
+
+use crate::{radar::RadarError, weather::WeatherError};
+
+const CONNECTION_HINT: &str = "check your connection";
+const SERVICE_HINT: &str = "Buienradar is not responding";
+const DATA_HINT: &str = "unexpected data from Buienradar";
+
+fn compose(subject: &str, hint: &str, stale: bool) -> String {
+    if stale {
+        format!("{subject} may be out of date — {hint}")
+    } else {
+        format!("{subject} unavailable — {hint}")
+    }
+}
+
+/// Wording for a failed radar refresh.
+///
+/// `stale` says whether a previous run is still being shown, which changes the
+/// claim from "unavailable" to "may be out of date" — the frames on screen are
+/// real, just older than they look.
+#[must_use]
+pub fn radar_message(error: &RadarError, stale: bool) -> String {
+    let hint = match error {
+        RadarError::Request(_) => CONNECTION_HINT,
+        RadarError::HttpStatus { .. } => SERVICE_HINT,
+        RadarError::Metadata(_) | RadarError::InvalidRunTimestamp { .. } => DATA_HINT,
+        RadarError::Cache(_) => "could not write the radar cache",
+    };
+    compose("Radar", hint, stale)
+}
+
+/// Wording for a failed weather refresh.
+#[must_use]
+pub fn weather_message(error: &WeatherError, stale: bool) -> String {
+    let hint = match error {
+        WeatherError::ClientBuild(_)
+        | WeatherError::FeedRequest(_)
+        | WeatherError::RaintextRequest(_) => CONNECTION_HINT,
+        WeatherError::FeedDecode(_) => DATA_HINT,
+    };
+    compose("Weather", hint, stale)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use super::{radar_message, weather_message};
+    use crate::{radar::RadarError, weather::WeatherError};
+
+    fn radar_samples() -> Vec<RadarError> {
+        vec![
+            RadarError::HttpStatus { status: 502 },
+            RadarError::InvalidRunTimestamp {
+                timestamp: "https://image.buienradar.nl/nonsense".to_owned(),
+            },
+            RadarError::Cache(io::Error::other(
+                "/home/someone/.local/state/allesbuien denied",
+            )),
+        ]
+    }
+
+    #[test]
+    fn never_leaks_a_url_host_or_path_to_the_viewer() {
+        // Given: variants whose own Display would quote internals verbatim.
+        for error in radar_samples() {
+            for stale in [false, true] {
+                // When
+                let message = radar_message(&error, stale);
+
+                // Then
+                for leak in ["http", "://", "buienradar.nl", "/home/", ".local"] {
+                    assert!(
+                        !message.to_ascii_lowercase().contains(leak),
+                        "message {message:?} leaked {leak:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn blames_the_connection_for_transport_faults_and_the_service_for_5xx() {
+        // Given / When
+        let service = radar_message(&RadarError::HttpStatus { status: 502 }, false);
+        let data = radar_message(
+            &RadarError::InvalidRunTimestamp {
+                timestamp: "bad".to_owned(),
+            },
+            false,
+        );
+
+        // Then
+        assert!(service.contains("not responding"), "{service}");
+        assert!(data.contains("unexpected data"), "{data}");
+    }
+
+    #[test]
+    fn softens_the_claim_when_older_frames_are_still_on_screen() {
+        // Given
+        let error = RadarError::HttpStatus { status: 502 };
+
+        // When
+        let fresh = radar_message(&error, false);
+        let stale = radar_message(&error, true);
+
+        // Then
+        assert!(fresh.starts_with("Radar unavailable"), "{fresh}");
+        assert!(stale.starts_with("Radar may be out of date"), "{stale}");
+    }
+
+    #[test]
+    fn names_its_own_subject_so_the_two_panels_stay_distinguishable() {
+        // Given / When
+        let radar = radar_message(&RadarError::HttpStatus { status: 500 }, false);
+        let weather = weather_message(&WeatherError::FeedDecode(decode_error()), false);
+
+        // Then
+        assert!(radar.starts_with("Radar"), "{radar}");
+        assert!(weather.starts_with("Weather"), "{weather}");
+    }
+
+    fn decode_error() -> serde_json::Error {
+        serde_json::from_str::<u8>("nope").expect_err("invalid json")
+    }
+}

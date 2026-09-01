@@ -1,3 +1,7 @@
 #pragma once
+
 #include <QtQml/QQmlApplicationEngine>
-class RadarController; void setRadarController(QQmlApplicationEngine&, RadarController&);
+
+class RadarController;
+
+void setRadarController(QQmlApplicationEngine& engine, RadarController& controller);
