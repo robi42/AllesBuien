@@ -84,12 +84,19 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: conditionsView.theme.spaceMd
 
+        // Written out rather than left to the default: every other caption in
+        // this file is bold, and the station is the one that should not be. It
+        // is the longest string on the row and it names a place the reading did
+        // not come from, so bold made it the loudest tertiary line on screen.
+        // Regular weight is the whole correction — the opacity stays at
+        // `emphasisLow`, which `Theme.qml` documents as the measured AA floor
+        // for caption sizes, so there is nothing below it to reach for.
         Label {
             id: stationLabel
             text: conditionsView.weatherController.stationName.toUpperCase()
             visible: stationLabel.text.length > 0
             font.pointSize: conditionsView.theme.fontCaption
-            font.bold: true
+            font.bold: false
             font.letterSpacing: conditionsView.theme.capsTracking
             color: conditionsView.theme.text
             opacity: conditionsView.theme.emphasisLow
