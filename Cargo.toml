@@ -6,3 +6,20 @@ resolver = "2"
 cxx-qt = "=0.10.0"
 cxx-qt-lib = "=0.10.0"
 cxx-qt-build = "=0.10.0"
+
+# Lints live here rather than in bin/test's Clippy flags so that cargo check,
+# rust-analyzer, the pre-commit hook, CI, and a bare `cargo clippy` all read the
+# same rules from one place. `nursery` is deliberately absent: its lints are
+# renamed and removed between releases by design, so adopting it buys churn on
+# every toolchain bump in exchange for advice upstream itself marks unready.
+#
+# Group levels carry priority -1 so that individual lints below, which default
+# to priority 0, are applied after the group and can override it.
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+# Five duplicate crates — bitflags, getrandom, syn, windows-sys, winnow — reach
+# us only through reqwest, rustls, jiff, toml, and serde. Nothing in this
+# workspace picks either version, so the only lever here is a version bound on a
+# dependency we do not own; the fix belongs upstream and arrives with their bumps.
+multiple_crate_versions = "allow"

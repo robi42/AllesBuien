@@ -22,6 +22,13 @@ pub enum NotifyError {
 }
 
 pub trait Notifier {
+    /// Announces `title` and `body` to whatever the desktop uses for notices.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`NotifyError::Spawn`] when the adapter cannot reach that
+    /// surface at all. Delivery beyond the handover is not observable here, so
+    /// a notification the user never sees still reports success.
     fn send(&self, title: &str, body: &str) -> Result<(), NotifyError>;
 }
 
@@ -111,6 +118,17 @@ pub fn should_notify(rain: Option<&RainSoon<'_>>, notify_state: &NotifyState) ->
     Some(event_key)
 }
 
+/// Announces the coming rain if the rules allow it, and records that it went out.
+///
+/// Returns `Ok(())` for the withheld cases too — no rain, rain beyond the
+/// threshold, and a repeat inside the cooldown are all normal outcomes rather
+/// than failures, and only a dispatch that actually happened updates the state.
+///
+/// # Errors
+///
+/// Propagates the [`Notifier`]'s [`NotifyError`] when a dispatch was due and
+/// the adapter refused it. The cooldown and event key stay untouched in that
+/// case, so the next refresh retries the same announcement.
 pub fn maybe_send_rain_notification(
     notifier: &impl Notifier,
     input: NotificationInput<'_>,

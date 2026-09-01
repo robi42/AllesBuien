@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn recovers_far_sooner_than_the_normal_cadence_after_a_failure() {
         // Given: the configured cadence for a healthy feed.
-        let normal = Duration::from_secs(5 * 60);
+        let normal = Duration::from_mins(5);
 
         // When / Then
         assert!(super::RETRY_AFTER_FAILURE < normal);

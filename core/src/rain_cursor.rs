@@ -67,6 +67,10 @@ mod tests {
     use super::frame_cursor;
 
     /// The shipped window: 24 dry samples at the five-minute cadence.
+    #[expect(
+        clippy::format_collect,
+        reason = "the suggested fold trades a legible one-expression fixture for a mutable accumulator and a swallowed write! result, to save one allocation of a 24-row string"
+    )]
     fn window(first_hour: u32, first_minute: u32) -> Vec<RainPoint> {
         let raw: String = (0..24)
             .map(|step| {

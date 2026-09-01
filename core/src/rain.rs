@@ -65,6 +65,10 @@ pub fn code_to_mmh(code: i32) -> f64 {
 /// malformed rows are skipped rather than treated as dry, so a partially broken
 /// payload still produces a usable graph.
 #[must_use]
+#[expect(
+    clippy::missing_panics_doc,
+    reason = "the only expect here is unreachable: the peak filter above has already proved a positive-code sample exists, so documenting a panic would promise callers a failure mode this cannot reach"
+)]
 pub fn parse_series(raw: &str, clock_shift_minutes: i32) -> RainSeries {
     let mut points: Vec<RainPoint> = Vec::new();
     for line in raw.lines() {
@@ -137,6 +141,10 @@ mod tests {
     ));
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "the dry path assigns the literal 0.0, and exactly zero is the contract; an epsilon window would pass on a near-zero intensity that is not dry"
+    )]
     fn dry_window_still_exposes_every_sample() {
         // Given
         let raw = "000|12:00\n000|12:05\n";
@@ -177,6 +185,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "both sides come from the same deterministic conversion applied to the same code, so they are bit-identical; an epsilon window would also accept the neighbouring sample this test exists to rule out"
+    )]
     fn peak_is_the_maximum_intensity_not_the_last_wet_sample() {
         // Given
         let raw = "000|12:00\n050|12:05\n080|12:10\n060|12:15\n";
@@ -225,6 +237,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "clamping is the behaviour under test and it returns the literal 0.0; the neighbouring assertion already uses a tolerance where the value really is computed"
+    )]
     fn conversion_is_monotonic_and_clamps_dry_codes_to_zero() {
         // Given / When / Then
         assert!(code_to_mmh(90) > code_to_mmh(70));

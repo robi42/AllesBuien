@@ -260,6 +260,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "the summary must carry the conversion's own result and its own peak through unchanged, so identity is the assertion; a tolerance would let a rounded or recomputed value pass"
+    )]
     fn raintext_summary_exposes_the_whole_series_alongside_rain_soon() {
         // Given / When
         let summary = summarize_raintext_detail(RAINTEXT_FIXTURE, 0);
