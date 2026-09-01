@@ -1,17 +1,17 @@
-use std::{path::PathBuf, pin::Pin, sync::Arc, time::Duration};
+use std::{pin::Pin, sync::Arc};
 
 use allesbuien_core::{
-    radar::{GenerationId, RadarApi, RadarClient, RadarError},
-    radar_legend::{BUCKETS, RAMP},
+    radar::{GenerationId, RadarClient, RadarError},
+    radar_projection::marker_position,
     radar_timeline::{boundary_visible, observed_fraction},
 };
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
-use tokio::runtime::Handle;
 
 use crate::{
     image_provider::{self, FrameBytes},
     radar_frames::{FrameSet, LoadedRefresh},
+    radar_state::{RadarControllerConfig, RadarControllerRust},
 };
 
 #[cxx_qt::bridge]
@@ -40,6 +40,9 @@ pub mod ffi {
         #[qproperty(bool, current_frame_observed)]
         #[qproperty(f64, observed_fraction)]
         #[qproperty(bool, forecast_boundary_visible)]
+        #[qproperty(f64, marker_x_fraction)]
+        #[qproperty(f64, marker_y_fraction)]
+        #[qproperty(bool, marker_visible)]
         #[qproperty(QStringList, legend_swatches)]
         #[qproperty(QStringList, legend_buckets)]
         #[qproperty(QString, status)]
@@ -79,77 +82,23 @@ pub mod ffi {
     }
 }
 
-pub(crate) struct RadarControllerConfig {
-    pub(crate) api: Arc<dyn RadarApi>,
-    pub(crate) state_dir: PathBuf,
-    pub(crate) runtime: Handle,
-    pub(crate) refresh_interval: Duration,
-    pub(crate) playback_interval: Duration,
-}
-
-pub struct RadarControllerRust {
-    frame_count: i32,
-    current_frame_index: i32,
-    playing: bool,
-    generation: u64,
-    timestamps: QStringList,
-    current_frame_label: QString,
-    current_frame_url: QString,
-    first_forecast_index: i32,
-    current_frame_observed: bool,
-    observed_fraction: f64,
-    forecast_boundary_visible: bool,
-    legend_swatches: QStringList,
-    legend_buckets: QStringList,
-    status: QString,
-    refresh_interval_ms: i32,
-    playback_interval_ms: i32,
-    api: Option<Arc<dyn RadarApi>>,
-    state_dir: PathBuf,
-    runtime: Option<Handle>,
-    observed: Vec<bool>,
-    last_good: Option<FrameSet>,
-}
-
-impl Default for RadarControllerRust {
-    fn default() -> Self {
-        Self {
-            frame_count: 0,
-            current_frame_index: 0,
-            playing: false,
-            generation: 0,
-            timestamps: QStringList::default(),
-            current_frame_label: QString::default(),
-            current_frame_url: QString::default(),
-            first_forecast_index: 0,
-            current_frame_observed: true,
-            observed_fraction: 1.0,
-            forecast_boundary_visible: false,
-            legend_swatches: RAMP.into_iter().map(QString::from).collect(),
-            legend_buckets: BUCKETS.into_iter().map(QString::from).collect(),
-            status: "Radar unavailable".into(),
-            refresh_interval_ms: 300_000,
-            playback_interval_ms: 400,
-            api: None,
-            state_dir: PathBuf::new(),
-            runtime: None,
-            observed: Vec::new(),
-            last_good: None,
-        }
-    }
-}
-
 pub(crate) fn create(config: RadarControllerConfig) -> cxx::UniquePtr<ffi::RadarController> {
     let mut controller = ffi::new_radar_controller();
     if let Some(mut pinned) = controller.as_mut() {
         let refresh_ms = i32::try_from(config.refresh_interval.as_millis()).unwrap_or(i32::MAX);
         let playback_ms = i32::try_from(config.playback_interval.as_millis()).unwrap_or(i32::MAX);
+        let marker = marker_position(config.location.latitude, config.location.longitude);
         let mut rust = pinned.as_mut().rust_mut();
         rust.api = Some(config.api);
         rust.state_dir = config.state_dir;
         rust.runtime = Some(config.runtime);
         pinned.as_mut().set_refresh_interval_ms(refresh_ms);
         pinned.as_mut().set_playback_interval_ms(playback_ms);
+        pinned.as_mut().set_marker_visible(marker.is_some());
+        if let Some(marker) = marker {
+            pinned.as_mut().set_marker_x_fraction(marker.x);
+            pinned.as_mut().set_marker_y_fraction(marker.y);
+        }
         pinned.refresh();
     }
     controller

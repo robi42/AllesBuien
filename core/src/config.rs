@@ -8,6 +8,8 @@ const DEFAULT_FEED_URL: &str = "https://data.buienradar.nl/2.0/feed/json";
 const DEFAULT_RAINTEXT_URL: &str = "https://gpsgadget.buienradar.nl/data/raintext";
 const DEFAULT_RADAR_URL: &str = "https://image.buienradar.nl";
 const DEFAULT_LABEL: &str = "Amsterdam-West";
+/// Shown instead of an empty header when a caller supplies a nameless location.
+const UNNAMED_LABEL: &str = "Your location";
 const DEFAULT_LATITUDE: f64 = 52.37;
 const DEFAULT_LONGITUDE: f64 = 4.84;
 const DEFAULT_NOTIFY_THRESHOLD_MINUTES: u32 = 30;
@@ -31,6 +33,23 @@ pub struct LocationConfig {
     pub latitude: f64,
     pub longitude: f64,
     pub label: String,
+}
+
+impl LocationConfig {
+    /// The place name to show for this location; never blank.
+    ///
+    /// [`Config::resolve`] cannot produce an empty label, but `LocationConfig` is
+    /// a public value other callers construct, and a blank header reads as a
+    /// rendering bug rather than as missing configuration.
+    #[must_use]
+    pub fn display_label(&self) -> &str {
+        let trimmed = self.label.trim();
+        if trimmed.is_empty() {
+            UNNAMED_LABEL
+        } else {
+            trimmed
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,7 +205,10 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    use super::{Config, DEFAULT_FEED_URL, DEFAULT_RADAR_URL, DEFAULT_RAINTEXT_URL, EnvSource};
+    use super::{
+        Config, DEFAULT_FEED_URL, DEFAULT_RADAR_URL, DEFAULT_RAINTEXT_URL, EnvSource,
+        LocationConfig,
+    };
 
     struct FakeEnv<const N: usize>([(&'static str, &'static str); N]);
 
@@ -316,6 +338,26 @@ mod tests {
             ),
             (30, 3_600)
         );
+    }
+
+    #[test]
+    fn the_resolved_location_always_has_a_name_to_display() {
+        // Given
+        let home = tempfile::tempdir().expect("temporary home");
+        let resolved = Config::resolve(&FakeEnv([]), home.path()).location;
+        let padded = LocationConfig {
+            label: String::from("  Utrecht  "),
+            ..resolved.clone()
+        };
+        let nameless = LocationConfig {
+            label: String::from("   "),
+            ..resolved.clone()
+        };
+
+        // When / Then
+        assert_eq!(resolved.display_label(), "Amsterdam-West");
+        assert_eq!(padded.display_label(), "Utrecht");
+        assert_eq!(nameless.display_label(), "Your location");
     }
 
     #[test]

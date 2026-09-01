@@ -17,11 +17,12 @@ use cxx_qt_lib::{
 use crate::{
     CoreServices, TimerIntervals, app_style,
     icon_cache::IconCache,
-    image_provider,
-    radar_controller::{self, RadarControllerConfig},
+    image_provider, radar_controller,
+    radar_state::RadarControllerConfig,
     services::{AppRuntime, NotificationService},
     theme_controller::{self, ThemeControllerConfig},
-    weather_controller::{self, WeatherControllerConfig},
+    weather_controller,
+    weather_state::WeatherControllerConfig,
 };
 
 const MAIN_QML_URL: &str = "qrc:/qt/qml/nl/allesbuien/qml/Main.qml";
@@ -104,6 +105,7 @@ impl AppBuilder {
         let mut radar_controller = radar_controller::create(RadarControllerConfig {
             api: Arc::clone(self.services.radar()),
             state_dir: self.services.radar_state_dir().clone(),
+            location: self.services.location().clone(),
             runtime: runtime.handle(),
             refresh_interval: self.intervals.radar_refresh,
             playback_interval: self.intervals.radar_playback,
@@ -211,6 +213,12 @@ impl BootedApp {
     pub fn tick_radar(&mut self) {
         if let Some(controller) = self.radar_controller.as_mut() {
             controller.advance_frame();
+        }
+    }
+
+    pub fn track_radar_frame(&mut self, label: &str) {
+        if let Some(controller) = self.weather_controller.as_mut() {
+            controller.track_radar_frame(&QString::from(label));
         }
     }
 

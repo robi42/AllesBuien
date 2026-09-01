@@ -213,6 +213,19 @@ fn ignores_stale_generation_frame_and_refresh_started_resets_state() {
         LocalTimestamp::from_feed("2026-08-30T09:00:00").time_label,
         "the vendor's declared timeOffset was ignored in favour of a derivation"
     );
+    // The configured 52.37N/4.84E projects onto pixel (512.07, 433.11) of the
+    // 1058x915 raster, measured against a live vendor background render.
+    assert!(*controller.marker_visible());
+    assert!(
+        (*controller.marker_x_fraction() * 1058.0 - 512.07).abs() < 0.05,
+        "marker x {}",
+        *controller.marker_x_fraction() * 1058.0
+    );
+    assert!(
+        (*controller.marker_y_fraction() * 915.0 - 433.11).abs() < 0.05,
+        "marker y {}",
+        *controller.marker_y_fraction() * 915.0
+    );
     assert_eq!(*controller.first_forecast_index(), 2);
     assert!(
         *controller.current_frame_observed(),

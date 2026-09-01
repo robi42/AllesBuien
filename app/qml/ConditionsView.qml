@@ -10,12 +10,16 @@ ColumnLayout {
 
     spacing: 10
 
-    RowLayout {
+    // The configured location leads because it is what the user asked the app
+    // about; the station is where the numbers below actually came from, which
+    // can be tens of kilometres away, so it reads as provenance beneath them
+    // alongside the time they were taken.
+    ColumnLayout {
         Layout.fillWidth: true
-        spacing: 12
+        spacing: 2
 
         Label {
-            text: conditionsView.weatherController.stationName
+            text: conditionsView.weatherController.locationName
             font.pointSize: 14
             font.bold: true
             font.letterSpacing: 0.5
@@ -24,14 +28,30 @@ ColumnLayout {
             elide: Text.ElideRight
         }
 
-        Label {
-            id: observedLabel
-            text: conditionsView.weatherController.observedLabel
-            visible: observedLabel.text.length > 0
-            font.pointSize: 10
-            font.bold: true
-            color: conditionsView.theme.text
-            opacity: 0.7
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
+
+            Label {
+                id: stationLabel
+                text: conditionsView.weatherController.stationName
+                visible: stationLabel.text.length > 0
+                font.pointSize: 10
+                color: conditionsView.theme.text
+                opacity: 0.6
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+            }
+
+            Label {
+                id: observedLabel
+                text: conditionsView.weatherController.observedLabel
+                visible: observedLabel.text.length > 0
+                font.pointSize: 10
+                font.bold: true
+                color: conditionsView.theme.text
+                opacity: 0.7
+            }
         }
     }
 

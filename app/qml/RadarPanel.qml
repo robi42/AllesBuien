@@ -22,9 +22,21 @@ Item {
         anchors.bottomMargin: 12
 
         Image {
+            id: basemap
             anchors.fill: parent
             source: "../assets/basemap-nl.png"
             fillMode: Image.PreserveAspectCrop
+            // The marker below is positioned in the raster's own coordinates, and
+            // PreserveAspectCrop scales the raster past the item on one axis, so a
+            // location outside the visible crop has to be cut off with it.
+            clip: true
+
+            // PreserveAspectCrop paints the source scaled by max(w/sw, h/sh) and
+            // centred, so paintedWidth/paintedHeight are the on-screen size of the
+            // whole raster and these offsets are its top-left corner. Anchoring the
+            // marker to them is what keeps it on its coastline as the window resizes.
+            readonly property real rasterOriginX: (basemap.width - basemap.paintedWidth) / 2
+            readonly property real rasterOriginY: (basemap.height - basemap.paintedHeight) / 2
 
             Image {
                 objectName: "radarOverlay"
@@ -32,6 +44,34 @@ Item {
                 source: radarPanel.radarController.currentFrameUrl
                 fillMode: Image.PreserveAspectCrop
                 visible: radarPanel.radarController.frameCount > 0
+            }
+
+            // Rust projects the configured latitude/longitude onto the radar
+            // raster and hands QML two fractions; everything here is geometry.
+            Item {
+                id: locationMarker
+                width: 16
+                height: 16
+                x: basemap.rasterOriginX + radarPanel.radarController.markerXFraction * basemap.paintedWidth - locationMarker.width / 2
+                y: basemap.rasterOriginY + radarPanel.radarController.markerYFraction * basemap.paintedHeight - locationMarker.height / 2
+                visible: radarPanel.radarController.markerVisible && basemap.status === Image.Ready
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: radarPanel.theme.background
+                    opacity: 0.55
+                }
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 8
+                    height: 8
+                    radius: width / 2
+                    color: radarPanel.theme.accent
+                    border.width: 2
+                    border.color: radarPanel.theme.buttonText
+                }
             }
         }
 

@@ -1,0 +1,83 @@
+//! Construction inputs and stored state for the radar bridge.
+//!
+//! Split out of `radar_controller` so that file stays the QML property surface
+//! and the behaviour behind it, rather than also carrying the field list.
+
+use std::{path::PathBuf, sync::Arc, time::Duration};
+
+use allesbuien_core::{
+    config::LocationConfig,
+    radar::RadarApi,
+    radar_legend::{BUCKETS, RAMP},
+};
+use cxx_qt_lib::{QString, QStringList};
+use tokio::runtime::Handle;
+
+use crate::radar_frames::FrameSet;
+
+pub(crate) struct RadarControllerConfig {
+    pub(crate) api: Arc<dyn RadarApi>,
+    pub(crate) state_dir: PathBuf,
+    pub(crate) location: LocationConfig,
+    pub(crate) runtime: Handle,
+    pub(crate) refresh_interval: Duration,
+    pub(crate) playback_interval: Duration,
+}
+
+pub struct RadarControllerRust {
+    pub(crate) frame_count: i32,
+    pub(crate) current_frame_index: i32,
+    pub(crate) playing: bool,
+    pub(crate) generation: u64,
+    pub(crate) timestamps: QStringList,
+    pub(crate) current_frame_label: QString,
+    pub(crate) current_frame_url: QString,
+    pub(crate) first_forecast_index: i32,
+    pub(crate) current_frame_observed: bool,
+    pub(crate) observed_fraction: f64,
+    pub(crate) forecast_boundary_visible: bool,
+    pub(crate) marker_x_fraction: f64,
+    pub(crate) marker_y_fraction: f64,
+    pub(crate) marker_visible: bool,
+    pub(crate) legend_swatches: QStringList,
+    pub(crate) legend_buckets: QStringList,
+    pub(crate) status: QString,
+    pub(crate) refresh_interval_ms: i32,
+    pub(crate) playback_interval_ms: i32,
+    pub(crate) api: Option<Arc<dyn RadarApi>>,
+    pub(crate) state_dir: PathBuf,
+    pub(crate) runtime: Option<Handle>,
+    pub(crate) observed: Vec<bool>,
+    pub(crate) last_good: Option<FrameSet>,
+}
+
+impl Default for RadarControllerRust {
+    fn default() -> Self {
+        Self {
+            frame_count: 0,
+            current_frame_index: 0,
+            playing: false,
+            generation: 0,
+            timestamps: QStringList::default(),
+            current_frame_label: QString::default(),
+            current_frame_url: QString::default(),
+            first_forecast_index: 0,
+            current_frame_observed: true,
+            observed_fraction: 1.0,
+            forecast_boundary_visible: false,
+            marker_x_fraction: 0.0,
+            marker_y_fraction: 0.0,
+            marker_visible: false,
+            legend_swatches: RAMP.into_iter().map(QString::from).collect(),
+            legend_buckets: BUCKETS.into_iter().map(QString::from).collect(),
+            status: "Radar unavailable".into(),
+            refresh_interval_ms: 300_000,
+            playback_interval_ms: 400,
+            api: None,
+            state_dir: PathBuf::new(),
+            runtime: None,
+            observed: Vec::new(),
+            last_good: None,
+        }
+    }
+}

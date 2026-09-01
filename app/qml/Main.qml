@@ -15,6 +15,12 @@ ApplicationWindow {
     readonly property var radarSource: radarController // qmllint disable unqualified
     readonly property var themeSource: themeController // qmllint disable unqualified
 
+    // The radar frames and the rain graph are separate feeds whose only shared
+    // basis is the viewer's wall clock. Rust maps one onto the other; this pair
+    // is the single point in the tree where the two controllers meet.
+    readonly property string radarFrameLabel: root.radarSource.currentFrameLabel
+    onRadarFrameLabelChanged: root.weatherSource.trackRadarFrame(root.radarFrameLabel)
+
     objectName: "rootWindow"
     width: 980
     height: 760

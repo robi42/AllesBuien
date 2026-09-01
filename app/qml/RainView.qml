@@ -80,6 +80,21 @@ ColumnLayout {
                 color: rainView.theme.text
                 opacity: 0.4
             }
+
+            // The moment the radar is showing, so the map and the graph read as
+            // one timeline. Rust returns no fraction for a frame outside the
+            // series — the observed frames before it starts and the predictions
+            // that outrun it — and the cursor hides rather than lying at an edge.
+            Rectangle {
+                id: radarCursor
+                x: rainView.weatherController.rainCursorFraction * plot.width - radarCursor.width / 2
+                y: 0
+                width: 2
+                height: plot.height
+                color: rainView.theme.text
+                opacity: 0.75
+                visible: rainView.weatherController.rainCursorVisible
+            }
         }
     }
 

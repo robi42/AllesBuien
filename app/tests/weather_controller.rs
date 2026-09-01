@@ -43,7 +43,9 @@ impl FeedApi for FakeFeedApi {
             }
             Ok(WeatherData {
                 current: Some(CurrentConditions {
-                    station_name: String::from("Amsterdam-West"),
+                    // Deliberately unequal to the configured location label, so
+                    // the header assertions below fail if the two are swapped.
+                    station_name: String::from("Meetstation Schiphol"),
                     temperature: Some(19.5),
                     feel_temperature: Some(18.8),
                     wind_speed: Some(3.2),
@@ -161,7 +163,11 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
             .weather_controller()
             .expect("controller should exist");
         assert_eq!(feed.calls.load(Ordering::SeqCst), 1);
-        assert_eq!(controller.station_name().to_string(), "Amsterdam-West");
+        assert_eq!(controller.location_name().to_string(), "Amsterdam-West");
+        assert_eq!(
+            controller.station_name().to_string(),
+            "Meetstation Schiphol"
+        );
         assert_eq!(controller.temperature().to_string(), "19.5 °C");
         assert_eq!(controller.feels_like().to_string(), "18.8 °C");
         assert_eq!(controller.wind().to_string(), "3.2 m/s");
@@ -219,6 +225,29 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
             .expect("icon role should carry a string");
         assert_eq!(icon.to_string(), "image://condition/F");
     }
+
+    // The rain cursor tracks the radar frame QML is showing, and reports itself
+    // absent for frames the four-sample fixture window does not cover.
+    booted.track_radar_frame("14:05");
+    {
+        let controller = booted
+            .weather_controller()
+            .expect("controller should exist");
+        assert!(*controller.rain_cursor_visible());
+        assert!(
+            (*controller.rain_cursor_fraction() - 1.5 / 4.0).abs() < 1e-9,
+            "cursor at {}",
+            *controller.rain_cursor_fraction()
+        );
+    }
+    booted.track_radar_frame("13:55");
+    assert!(
+        !*booted
+            .weather_controller()
+            .expect("controller should exist")
+            .rain_cursor_visible(),
+        "an observed frame before the series must hide the cursor"
+    );
 
     feed.empty.store(true, Ordering::SeqCst);
     booted.refresh_weather();

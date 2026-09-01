@@ -1,22 +1,20 @@
-use std::{pin::Pin, sync::Arc, time::Duration};
+use std::{pin::Pin, sync::Arc};
 
 use allesbuien_core::{
-    config::LocationConfig,
     rain::RainPoint,
-    weather::{FeedApi, ForecastDay, WeatherData, WeatherError},
+    rain_cursor::frame_cursor,
+    weather::{ForecastDay, WeatherData, WeatherError},
 };
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{
     QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant,
 };
-use tokio::runtime::Handle;
 
 use crate::{
     conditions_view::ConditionsView,
-    forecast_model,
-    icon_cache::{self, IconCache},
+    forecast_model, icon_cache,
     rain_graph::RainGraph,
-    services::NotificationService,
+    weather_state::{WeatherControllerConfig, WeatherControllerRust},
 };
 
 #[cxx_qt::bridge]
@@ -60,6 +58,7 @@ pub mod ffi {
         #[qobject]
         #[qml_element]
         #[base = QAbstractListModel]
+        #[qproperty(QString, location_name)]
         #[qproperty(QString, station_name)]
         #[qproperty(QString, temperature)]
         #[qproperty(QString, feels_like)]
@@ -72,12 +71,16 @@ pub mod ffi {
         #[qproperty(bool, rain_wet)]
         #[qproperty(QList_f64, rain_levels)]
         #[qproperty(QStringList, rain_axis_labels)]
+        #[qproperty(f64, rain_cursor_fraction)]
+        #[qproperty(bool, rain_cursor_visible)]
         #[qproperty(QString, status)]
         #[qproperty(i32, refresh_interval_ms)]
         type WeatherController = super::WeatherControllerRust;
 
         #[qinvokable]
         fn refresh(self: Pin<&mut WeatherController>);
+        #[qinvokable]
+        fn track_radar_frame(self: Pin<&mut WeatherController>, label: &QString);
         #[cxx_override]
         #[cxx_name = "rowCount"]
         fn row_count(self: &WeatherController, parent: &QModelIndex) -> i32;
@@ -120,75 +123,18 @@ pub mod ffi {
     }
 }
 
-pub(crate) struct WeatherControllerConfig {
-    pub(crate) feed: Arc<dyn FeedApi>,
-    pub(crate) icons: IconCache,
-    pub(crate) location: LocationConfig,
-    pub(crate) notifications: NotificationService,
-    pub(crate) runtime: Handle,
-    pub(crate) refresh_interval: Duration,
-}
-
-pub struct WeatherControllerRust {
-    station_name: QString,
-    temperature: QString,
-    feels_like: QString,
-    wind: QString,
-    humidity: QString,
-    condition: QString,
-    condition_icon_url: QString,
-    observed_label: QString,
-    rain_summary: QString,
-    rain_wet: bool,
-    rain_levels: QList<f64>,
-    rain_axis_labels: QStringList,
-    status: QString,
-    refresh_interval_ms: i32,
-    forecast: Vec<ForecastDay>,
-    feed: Option<Arc<dyn FeedApi>>,
-    icons: IconCache,
-    location: Option<LocationConfig>,
-    runtime: Option<Handle>,
-    notifications: Option<NotificationService>,
-}
-
-impl Default for WeatherControllerRust {
-    fn default() -> Self {
-        Self {
-            station_name: "Unavailable".into(),
-            temperature: "Unavailable".into(),
-            feels_like: QString::default(),
-            wind: "Unavailable".into(),
-            humidity: QString::default(),
-            condition: "Unavailable".into(),
-            condition_icon_url: QString::default(),
-            observed_label: QString::default(),
-            rain_summary: "Rain forecast unavailable".into(),
-            rain_wet: false,
-            rain_levels: QList::<f64>::default(),
-            rain_axis_labels: QStringList::default(),
-            status: "Weather unavailable".into(),
-            refresh_interval_ms: 600_000,
-            forecast: Vec::new(),
-            feed: None,
-            icons: IconCache::disabled(),
-            location: None,
-            runtime: None,
-            notifications: None,
-        }
-    }
-}
-
 pub(crate) fn create(config: WeatherControllerConfig) -> cxx::UniquePtr<ffi::WeatherController> {
     let mut controller = ffi::new_weather_controller();
     if let Some(mut pinned) = controller.as_mut() {
         let interval = i32::try_from(config.refresh_interval.as_millis()).unwrap_or(i32::MAX);
+        let location_name = QString::from(config.location.display_label());
         let mut rust = pinned.as_mut().rust_mut();
         rust.feed = Some(config.feed);
         rust.icons = config.icons;
         rust.location = Some(config.location);
         rust.notifications = Some(config.notifications);
         rust.runtime = Some(config.runtime);
+        pinned.as_mut().set_location_name(location_name);
         pinned.as_mut().set_refresh_interval_ms(interval);
         pinned.refresh();
     }
@@ -254,19 +200,35 @@ impl ffi::WeatherController {
         self.set_status((&view.status).into());
     }
 
+    /// Points the rain graph's cursor at the radar frame QML is currently showing.
+    pub fn track_radar_frame(mut self: Pin<&mut Self>, label: &QString) {
+        self.as_mut().rust_mut().radar_frame_label = label.to_string();
+        self.update_rain_cursor();
+    }
+
     fn apply_rain(mut self: Pin<&mut Self>, line: &str, points: &[RainPoint]) {
         let graph = RainGraph::build(points, line);
         self.as_mut().set_rain_summary((&graph.summary).into());
         self.as_mut().set_rain_wet(graph.wet);
         self.as_mut()
             .set_rain_levels(graph.levels.iter().collect::<QList<f64>>());
-        self.set_rain_axis_labels(
+        self.as_mut().set_rain_axis_labels(
             graph
                 .axis_labels
                 .iter()
                 .map(QString::from)
                 .collect::<QStringList>(),
         );
+        self.as_mut().rust_mut().rain_points = points.to_vec();
+        self.update_rain_cursor();
+    }
+
+    fn update_rain_cursor(mut self: Pin<&mut Self>) {
+        let cursor = frame_cursor(&self.rain_points, &self.radar_frame_label);
+        self.as_mut().set_rain_cursor_visible(cursor.is_some());
+        if let Some(fraction) = cursor {
+            self.set_rain_cursor_fraction(fraction);
+        }
     }
 
     fn replace_forecast(mut self: Pin<&mut Self>, forecast: Vec<ForecastDay>) {

@@ -23,10 +23,12 @@ pub mod image_provider;
 pub mod radar_clock;
 pub mod radar_controller;
 mod radar_frames;
+mod radar_state;
 pub mod rain_graph;
 mod services;
 pub mod theme_controller;
 pub mod weather_controller;
+mod weather_state;
 
 pub const BASEMAP_PNG: &[u8] = include_bytes!("../assets/basemap-nl.png");
 pub use bootstrap::{AppBuilder, BootedApp, BootstrapError};
