@@ -34,7 +34,17 @@ fi
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 QT_QPA_PLATFORM=offscreen cargo test --workspace
-cargo tree -p allesbuien-core | grep -qi cxx && exit 1 || true
+# Core purity. Piping into `grep -q` cannot express this safely: grep exits at
+# the first match, the producer takes SIGPIPE, `pipefail` turns the pipeline's
+# status into 141, and `&& exit 1` never fires while `|| true` swallows it - so
+# the guard reports success precisely when it should fail. It only appeared to
+# work because cargo tree's output fits the pipe buffer. Capture, then match.
+core_tree=$(cargo tree -p allesbuien-core)
+if grep -qi cxx <<<"$core_tree"; then
+  echo "allesbuien-core gained a CXX/Qt dependency:" >&2
+  grep -in cxx <<<"$core_tree" >&2
+  exit 1
+fi
 cargo llvm-cov -p allesbuien-core --fail-under-lines 85
 cargo llvm-cov --version | grep -qF "$(cat .llvm-cov-version)"
 
