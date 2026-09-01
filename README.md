@@ -4,7 +4,7 @@ AllesBuien is a native weather app for the Omarchy desktop. It combines current 
 
 ![AllesBuien showing current conditions, forecast, and Dutch rain radar](assets/screenshot.png)
 
-Bron: Buienradar.nl
+[Buienradar.nl](https://www.buienradar.nl)
 
 > Buienradar's free weather data is available for non-commercial use with attribution. AllesBuien is intended for personal, non-commercial use.
 

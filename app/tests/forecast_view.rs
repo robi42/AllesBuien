@@ -173,9 +173,15 @@ fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
         ))
         .expect("attribution should exist");
 
-        // Then: the rendered object tree exposes five rows and visible attribution.
+        // Then: the rendered object tree exposes five rows, and the attribution
+        // carries what Buienradar's free-data terms actually require — the
+        // visible domain, hyperlinked to the root domain. Reading both off the
+        // rendered Label is what makes this a licence check rather than a pin
+        // on whatever sentence the UI happens to word it with today.
         let count_name = CString::new("count").expect("static property name is valid");
         let visible_name = CString::new("visible").expect("static property name is valid");
+        let text_name = CString::new("text").expect("static property name is valid");
+        let link_name = CString::new("link").expect("static property name is valid");
         assert_eq!(
             object_property(forecast.as_ptr(), count_name.as_ptr()).value::<i32>(),
             Some(5)
@@ -183,6 +189,20 @@ fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
         assert_eq!(
             object_property(attribution.as_ptr(), visible_name.as_ptr()).value::<bool>(),
             Some(true)
+        );
+        assert_eq!(
+            object_property(attribution.as_ptr(), text_name.as_ptr())
+                .value::<QString>()
+                .map(|text| text.to_string())
+                .as_deref(),
+            Some("Buienradar.nl")
+        );
+        assert_eq!(
+            object_property(attribution.as_ptr(), link_name.as_ptr())
+                .value::<QString>()
+                .map(|link| link.to_string())
+                .as_deref(),
+            Some("https://www.buienradar.nl")
         );
 
         let image = grab_window(window.as_ptr());

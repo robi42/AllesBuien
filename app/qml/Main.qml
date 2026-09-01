@@ -93,9 +93,23 @@ ApplicationWindow {
                         Layout.fillHeight: true
                     }
 
+                    // Buienradar's free-data terms ask for three things: the use
+                    // stays non-commercial, the words `Buienradar.nl` are
+                    // visible, and they link to the root domain. `Bron:` was
+                    // ours, not theirs — a Dutch source label on an otherwise
+                    // English surface, naming what the domain already names.
+                    //
+                    // The URL is a property rather than a literal inside the
+                    // handler so the GUI test can read the licence's actual
+                    // invariant off the rendered object — visible domain text
+                    // plus a root-domain link — instead of pinning a sentence.
                     Label {
+                        id: attribution
                         objectName: "attribution"
-                        text: "Bron: Buienradar.nl"
+
+                        readonly property string link: "https://www.buienradar.nl"
+
+                        text: "Buienradar.nl"
                         font.pointSize: appTheme.fontCaption
                         font.bold: true
                         font.underline: attributionHover.hovered
@@ -109,7 +123,7 @@ ApplicationWindow {
                         }
 
                         TapHandler {
-                            onTapped: Qt.openUrlExternally("https://www.buienradar.nl")
+                            onTapped: Qt.openUrlExternally(attribution.link)
                         }
                     }
                 }

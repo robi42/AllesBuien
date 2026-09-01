@@ -61,7 +61,7 @@ lefthook run pre-commit
 - **Module size:** No tracked `.rs` file exceeds **250 pure lines** — non-blank, non-comment, measured by `grep -cvE '^[[:space:]]*(//|$)' <file>` and enforced by `bin/test`. Past that a module has outgrown one reviewer's working memory and is doing more than one thing. GUI harnesses under `app/tests/` get **350**, because the one-GUI-test-per-file rule above makes them indivisible; their extra budget is for test doubles, not for a second scenario. The number is a symptom and cohesion is the goal: the only sanctioned fix is extracting a module with a name describing one responsibility, its own module doc, and its own tests.
 - **Toolchain and gates:** Use pinned Rust 1.98.0. `bin/test` is the source of truth for workspace verification and keeps core coverage at or above 85%.
 - **Packaging:** `pkgver` is static. The canonical package build is exactly `(cd pkgbuild && makepkg -f)` as invoked by `bin/install` and automation.
-- **Attribution:** Keep the visible and documented literal `Bron: Buienradar.nl`; Buienradar free data is for non-commercial use with attribution.
+- **Attribution:** Buienradar free data is for non-commercial use with attribution, and the terms name exactly two visible obligations: the words `Buienradar.nl` are shown, and they link to the root domain `https://www.buienradar.nl`. Keep both in the app and in the README. Any label wrapped around them is ours to word or drop; the GUI test asserts the domain text and the link, not a sentence.
 
 ## Anti-Patterns
 
@@ -75,7 +75,7 @@ lefthook run pre-commit
 - Do NOT use a file/inode watcher for the Omarchy theme directory, fabricate fallback palette values, hard-fail on missing theme keys, or add custom C++ watcher bindings.
 - Do NOT hardcode colors in QML; bind controller theme properties or `SystemPalette` fallback values.
 - Do NOT add toast/retry frameworks or notification spam; keep one inline error status per view and preserve cooldown/event dedup.
-- Do NOT replace Buienradar with wttr.in/Open-Meteo, expand beyond Dutch radar, or remove the required `Bron: Buienradar.nl` attribution.
+- Do NOT replace Buienradar with wttr.in/Open-Meteo, expand beyond Dutch radar, or remove the required attribution: the visible `Buienradar.nl` and its link to `https://www.buienradar.nl` both have to stay.
 - Do NOT copy the donor `map-nl-*` image, any unlicensed basemap, or OSM tile-server imagery. Basemaps come only from the pinned Natural Earth public-domain sources through `assets/gen-basemap`.
 - Do NOT write to `/home/robi42/Projects/buienradar`, add AllesBuien to the parent `/home/robi42/Projects` repository, or modify `/usr/share/omarchy`.
 - Do NOT turn this into a Quickshell widget, touch built-in `omarchy.weather`, add a server/deploy/Docker surface, or publish to the AUR.
