@@ -1,7 +1,16 @@
+//! The injected side effects: HTTP, the Tokio runtime, and notification dispatch.
+//!
+//! Nothing here is global, and that is the point: [`CoreServiceConfig`] is the
+//! single seam every test substitutes at, so a fake feed or a fake notifier is
+//! a constructor argument rather than a patched module.
+//!
+//! [`AppRuntime`] owns the Tokio runtime the controllers spawn onto, which is
+//! what keeps HTTP, file reads, and `notify-send` off the Qt thread.
+
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use allesbuien_core::{
-    config::LocationConfig,
+    location::LocationConfig,
     notify::{
         NotificationInput, Notifier, NotifyConfig, NotifyError, NotifyState,
         RainSoon as NotifyRainSoon, maybe_send_rain_notification,

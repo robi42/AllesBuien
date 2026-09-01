@@ -1,3 +1,13 @@
+//! Qt-side construction: one application, one engine, three bound controllers.
+//!
+//! Every controller is created with its ports already injected and is published
+//! to the engine *before* QML loads, because a context property that appears
+//! afterwards is not seen by bindings that already resolved.
+//!
+//! [`BootedApp`] exposes the same entry points the QML timers call — refresh,
+//! tick, seek, poll — so a GUI test can drive a real window deterministically
+//! instead of waiting on real timers.
+
 use std::{
     error::Error,
     fmt::{Display, Formatter},

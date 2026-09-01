@@ -12,8 +12,8 @@ use allesbuien::{
     weather_controller::ffi::ForecastRole,
 };
 use allesbuien_core::{
-    config::LocationConfig,
     datetime::{LocalTimestamp, SOURCE_TIMEZONE},
+    location::LocationConfig,
     notify::{Notifier, NotifyError},
     radar::{RadarApi, RadarError, RadarFuture},
     rain::parse_series,

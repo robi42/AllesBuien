@@ -1,3 +1,16 @@
+//! Whether rain is worth interrupting someone for, and how it is announced.
+//!
+//! A weather app that pops a notification on every refresh is a weather app
+//! people mute. Two rules keep this one quiet: rain further out than the
+//! configured threshold is not news yet, and the same rain re-reported minute
+//! after minute is not news again. `last_event_key` is what separates those —
+//! a cooldown on its own would also swallow a genuinely new front that arrives
+//! inside it.
+//!
+//! [`Notifier`] is the process boundary. `notify-send` is a subprocess, so it is
+//! the one thing here a test must not actually do; [`FakeNotifier`] records the
+//! calls instead, and it is what the wiring tests assert against.
+
 use std::cell::RefCell;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -150,31 +163,43 @@ mod tests {
     }
 
     #[test]
-    fn no_notify_when_disabled() {
+    fn imminent_rain_is_still_withheld_when_notifications_are_switched_off() {
+        // Given
         let mut state = base_state();
         state.config.enabled = false;
+
+        // When / Then
         assert!(should_notify(Some(&rain(10, "12:10", 0.8)), &state).is_none());
     }
 
     #[test]
-    fn no_notify_when_outside_threshold() {
+    fn rain_further_out_than_the_threshold_is_not_announced_yet() {
+        // Given
         let state = base_state();
+
+        // When / Then
         assert!(should_notify(Some(&rain(45, "12:45", 0.8)), &state).is_none());
     }
 
     #[test]
-    fn no_notify_for_same_event_within_cooldown() {
+    fn the_same_event_inside_the_cooldown_is_not_announced_twice() {
+        // Given
         let mut state = base_state();
         state.last_event_key = Some(String::from("12:10-80"));
         state.last_sent_at = Some(Instant::now());
+
+        // When / Then
         assert!(should_notify(Some(&rain(10, "12:10", 0.8)), &state).is_none());
     }
 
     #[test]
-    fn notify_when_event_changes() {
+    fn a_different_event_is_announced_even_inside_the_cooldown() {
+        // Given
         let mut state = base_state();
         state.last_event_key = Some(String::from("12:10-80"));
         state.last_sent_at = Some(Instant::now());
+
+        // When / Then
         assert_eq!(
             should_notify(Some(&rain(10, "12:15", 0.8)), &state),
             Some(String::from("12:15-80"))
@@ -183,6 +208,7 @@ mod tests {
 
     #[test]
     fn event_change_dispatches_once_and_same_event_does_not_dispatch_again() {
+        // Given
         let notifier = FakeNotifier::default();
         let mut state = base_state();
         state.last_event_key = Some(String::from("12:10-80"));
@@ -193,9 +219,11 @@ mod tests {
             location_label: "Home",
         };
 
+        // When
         maybe_send_rain_notification(&notifier, input, &mut state).expect("fake send succeeds");
         maybe_send_rain_notification(&notifier, input, &mut state).expect("dedup succeeds");
 
+        // Then
         assert_eq!(
             notifier.calls(),
             [(

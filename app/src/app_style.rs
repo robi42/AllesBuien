@@ -1,3 +1,9 @@
+//! Picks the Qt Quick Controls style for the process.
+//!
+//! `QQuickStyle::setStyle` is process-global and only takes effect before the
+//! engine instantiates its first control, which is why this is the first thing
+//! `boot` does rather than something QML configures.
+
 use cxx_qt_lib::QString;
 
 #[cxx_qt::bridge]

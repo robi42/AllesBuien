@@ -1,3 +1,12 @@
+//! The application, assembled: configuration in, exit status out.
+//!
+//! [`run`] is the whole program — read the config, build the real HTTP, cache,
+//! and notification services, hand them to [`AppBuilder`], and enter Qt's event
+//! loop. It lives in a library rather than in `main.rs` because the GUI tests
+//! link this crate and drive the same construction path with fakes substituted
+//! at the [`CoreServiceConfig`] seam; a `main.rs` that wired things up itself
+//! would be a second, untested assembly of the same app.
+
 use std::{
     error::Error,
     fmt::{Display, Formatter},
@@ -9,7 +18,8 @@ use crate::icon_cache::IconCache;
 use allesbuien_core::{
     config::Config,
     notify::{NotifyConfig, NotifySend},
-    radar::{RadarError, ReqwestRadarApi},
+    radar::RadarError,
+    radar_transport::ReqwestRadarApi,
     weather::{ReqwestFeedApi, WeatherError},
 };
 mod app_style;

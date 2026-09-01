@@ -58,6 +58,7 @@ lefthook run pre-commit
 - **Radar delivery:** Metadata `times[]` determines frame order and cadence. Transparent frame PNGs are served without Rust-side composition through generation-keyed `image://radar/<generation>/<index>` URLs.
 - **Error UX:** Retain last-good data and expose one minimal inline status per view. Malformed or missing optional input must not panic.
 - **GUI tests:** Every file directly under `app/tests/` contains exactly one GUI test and constructs exactly one `QGuiApplication`, giving each Qt application its own process.
+- **Module size:** No tracked `.rs` file exceeds **250 pure lines** — non-blank, non-comment, measured by `grep -cvE '^[[:space:]]*(//|$)' <file>` and enforced by `bin/test`. Past that a module has outgrown one reviewer's working memory and is doing more than one thing. GUI harnesses under `app/tests/` get **350**, because the one-GUI-test-per-file rule above makes them indivisible; their extra budget is for test doubles, not for a second scenario. The number is a symptom and cohesion is the goal: the only sanctioned fix is extracting a module with a name describing one responsibility, its own module doc, and its own tests.
 - **Toolchain and gates:** Use pinned Rust 1.98.0. `bin/test` is the source of truth for workspace verification and keeps core coverage at or above 85%.
 - **Packaging:** `pkgver` is static. The canonical package build is exactly `(cd pkgbuild && makepkg -f)` as invoked by `bin/install` and automation.
 - **Attribution:** Keep the visible and documented literal `Bron: Buienradar.nl`; Buienradar free data is for non-commercial use with attribution.
@@ -81,6 +82,7 @@ lefthook run pre-commit
 - Do NOT create `.SRCINFO`, an AUR remote, a dynamic `pkgver()` function, network-backed PKGBUILD sources, or alternative package-build invocations.
 - Do NOT run `makepkg -s`, `makepkg -i`, `makepkg -si`, or `makepkg -fsi`; only `(cd pkgbuild && makepkg -f)` is sanctioned.
 - Do NOT invoke bare `sudo` or any command that can wait for a password. Live install mode is user-scope Mode B unless the recorded decision is explicitly changed by its capability probe.
+- Do NOT meet the module-size budget by compressing formatting: joining statements onto one line, deleting blank lines, or removing doc comments to get under the number is a defect, not a fix. Comments and blank lines are not counted precisely so that explaining the code is always free. If a file has no honest cohesive seam, leave it over budget, raise its documented limit deliberately, and write down why.
 - Do NOT write build outputs or package artifacts outside ignored paths.
 - Do NOT use mutable GitHub Action references such as tags or branches; pin every third-party action to a full 40-character commit SHA and record the release tag in a comment.
 - Do NOT use pre-release Qt Rust bridges, qmetaobject-rs, or mix CXX-Qt family versions; the workspace pins the complete 0.10.0 family.

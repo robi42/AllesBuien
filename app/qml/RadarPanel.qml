@@ -154,15 +154,16 @@ Item {
             objectName: "radarError"
             text: radarPanel.radarController.status
             visible: radarError.text.length > 0
-            color: radarPanel.theme.error
             anchors.centerIn: parent
             width: Math.min(radarError.implicitWidth, parent.width - radarPanel.theme.spaceXl * 2)
+            font.pointSize: radarPanel.theme.fontBody
+            font.bold: true
+            color: radarPanel.theme.error
             wrapMode: Text.Wrap
             maximumLineCount: 3
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
-            font.pointSize: radarPanel.theme.fontBody
-            font.bold: true
+
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: -radarPanel.theme.spaceSm

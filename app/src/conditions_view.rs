@@ -3,11 +3,13 @@
 //! Formatting and the English-first condition ladder live here rather than in
 //! the controller so they can be asserted without a `QGuiApplication`.
 
-use allesbuien_core::{condition::describe, weather::CurrentConditions};
+use allesbuien_core::{
+    condition::describe,
+    status::{CONDITIONS_UNAVAILABLE, UNAVAILABLE},
+    weather::CurrentConditions,
+};
 
 use crate::condition_icon;
-
-const UNAVAILABLE: &str = "Unavailable";
 
 /// Every value the conditions panel renders, already formatted for display.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,7 +38,7 @@ impl Default for ConditionsView {
             condition: UNAVAILABLE.to_owned(),
             icon_url: String::new(),
             observed_label: String::new(),
-            status: String::from("Current conditions unavailable"),
+            status: CONDITIONS_UNAVAILABLE.to_owned(),
         }
     }
 }

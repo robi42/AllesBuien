@@ -1,3 +1,14 @@
+//! Weather bridge: the conditions properties and the forecast list model.
+//!
+//! One refresh fills two shapes at once — scalar properties the conditions
+//! panel binds directly, and the `QAbstractListModel` rows the forecast view
+//! iterates — because they come from a single feed response and must never
+//! disagree about which observation they are showing.
+//!
+//! `#[auto_cxx_name]` on the `extern "RustQt"` block is load-bearing: without
+//! it, each multi-word `#[qproperty]` is exported under its snake_case Rust
+//! name and the camelCase binding in QML silently resolves to `undefined`.
+
 use std::{pin::Pin, sync::Arc};
 
 use allesbuien_core::{

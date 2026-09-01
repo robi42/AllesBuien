@@ -6,9 +6,10 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use allesbuien_core::{
-    config::LocationConfig,
+    location::LocationConfig,
     radar::RadarApi,
     radar_legend::{self, UNIT},
+    status::RADAR_UNAVAILABLE,
 };
 use cxx_qt_lib::{QString, QStringList};
 use tokio::runtime::Handle;
@@ -80,7 +81,7 @@ impl Default for RadarControllerRust {
                 .map(QString::from)
                 .collect(),
             legend_unit: UNIT.into(),
-            status: "Radar unavailable".into(),
+            status: RADAR_UNAVAILABLE.into(),
             refresh_interval_ms: 300_000,
             configured_refresh_ms: 300_000,
             playback_interval_ms: 400,

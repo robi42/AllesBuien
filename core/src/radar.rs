@@ -1,3 +1,18 @@
+//! A radar run: the frames Buienradar published together, and the cache holding them.
+//!
+//! Buienradar publishes the animation as metadata plus one PNG per timestamp, so
+//! a "refresh" is a small download storm rather than a single request. Frames are
+//! written under a directory named for the run, which makes the cache trivially
+//! resumable — a second refresh of the same run downloads nothing — and makes
+//! pruning a matter of dropping whole directories rather than tracking files.
+//!
+//! [`GenerationId`] is the app's answer to the other half of that: a refresh
+//! carries the generation it was started for, so a reply that arrives after the
+//! viewer has moved on can be recognised and dropped instead of repainting the
+//! window with frames from a run nobody is looking at any more.
+//!
+//! The network itself lives in [`crate::radar_transport`], behind [`RadarApi`].
+
 use std::{
     future::Future,
     path::{Path, PathBuf},
@@ -7,20 +22,9 @@ use std::{
 
 use serde::Deserialize;
 
-pub const DEFAULT_RADAR_BASE_URL: &str = "https://image.buienradar.nl";
+/// Runs kept on disk. Frames measure 94 KiB and a run holds 26 of them, so this
+/// bounds the cache at roughly 5.5 MiB.
 pub const MAX_CACHED_RUNS: usize = 3;
-
-/// One frame per 5 minutes, so this window returns 26 frames spanning 5 minutes
-/// back to 2 hours ahead — the same horizon the raintext rain graph covers.
-///
-/// Future-weighted on purpose: a run timestamp trails the wall clock by about 10
-/// minutes, so the earlier `history=6&forecast=4` reached only 7 minutes past
-/// now. Raising `history` cannot help — it saturates at 16 frames, measured
-/// identical for 12 and 24.
-///
-/// Frames measure 94 KiB, so [`MAX_CACHED_RUNS`] × 26 is about 7 MiB; the run
-/// cap dropped 6 → 3 to stay near the previous window's 5.5 MiB.
-const METADATA_PATH: &str = "/2.0/metadata/sprite/RadarMapRainWebmercatorNL?width=1058&height=915&extension=png&renderBackground=false&renderText=false&renderBranding=false&history=2&forecast=24&skip=0";
 
 pub type RadarFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, RadarError>> + Send + 'a>>;
 
@@ -61,57 +65,6 @@ pub enum RadarError {
 pub trait RadarApi: Send + Sync {
     fn metadata(&self) -> RadarFuture<'_, Vec<u8>>;
     fn frame<'a>(&'a self, url: &'a str) -> RadarFuture<'a, Vec<u8>>;
-}
-
-/// Async Buienradar transport.
-///
-/// Reqwest's default redirect policy (up to ten hops) is deliberately retained:
-/// metadata frame URLs return 302 responses to `image-cdn.buienradar.nl`.
-pub struct ReqwestRadarApi {
-    client: reqwest::Client,
-    metadata_url: String,
-}
-
-impl ReqwestRadarApi {
-    /// Builds a transport for the supplied base URL.
-    ///
-    /// # Errors
-    /// Returns [`RadarError::Request`] if the HTTP client cannot be built.
-    pub fn new(base_url: &str) -> Result<Self, RadarError> {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "/",
-                env!("CARGO_PKG_VERSION")
-            ))
-            .build()?;
-        Ok(Self {
-            client,
-            metadata_url: format!("{}{METADATA_PATH}", base_url.trim_end_matches('/')),
-        })
-    }
-
-    async fn get(&self, url: &str) -> Result<Vec<u8>, RadarError> {
-        let response = self.client.get(url).send().await?;
-        let status = response.status();
-        if !status.is_success() {
-            return Err(RadarError::HttpStatus {
-                status: status.as_u16(),
-            });
-        }
-        Ok(response.bytes().await?.to_vec())
-    }
-}
-
-impl RadarApi for ReqwestRadarApi {
-    fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
-        Box::pin(self.get(&self.metadata_url))
-    }
-
-    fn frame<'a>(&'a self, url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-        Box::pin(self.get(url))
-    }
 }
 
 pub struct RadarClient {

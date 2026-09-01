@@ -8,7 +8,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 ListView {
-    id: forecastList
+    id: forecastView
 
     required property var weatherController
     required property Theme theme
@@ -27,7 +27,7 @@ ListView {
     readonly property int rowMinHeight: 40
 
     clip: true
-    model: forecastList.weatherController
+    model: forecastView.weatherController
     interactive: false
 
     delegate: Item {
@@ -39,28 +39,28 @@ ListView {
         required property var minTemperature
         required property var maxTemperature
 
-        width: forecastList.width
-        height: Math.max(forecastList.rowMinHeight, forecastList.height / Math.max(1, forecastList.count))
+        width: forecastView.width
+        height: Math.max(forecastView.rowMinHeight, forecastView.height / Math.max(1, forecastView.count))
 
         RowLayout {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            spacing: forecastList.theme.spaceMd
+            spacing: forecastView.theme.spaceMd
 
             Label {
                 text: forecastRow.weekday
-                Layout.preferredWidth: forecastList.dayWidth
-                font.pointSize: forecastList.theme.fontValue
+                font.pointSize: forecastView.theme.fontValue
                 font.bold: true
-                color: forecastList.theme.text
+                color: forecastView.theme.text
+                Layout.preferredWidth: forecastView.dayWidth
             }
 
             // The elastic column. Its content has a fixed width, so the icon and
             // the chance sit at the same x in all five rows.
             RowLayout {
                 Layout.fillWidth: true
-                spacing: forecastList.theme.spaceSm
+                spacing: forecastView.theme.spaceSm
 
                 Item {
                     Layout.fillWidth: true
@@ -69,7 +69,7 @@ ListView {
                 ConditionIcon {
                     id: rowIcon
                     source: forecastRow.iconUrl
-                    slotSize: forecastList.theme.iconRow
+                    slotSize: forecastView.theme.iconRow
                     Layout.preferredWidth: rowIcon.implicitWidth
                     Layout.preferredHeight: rowIcon.implicitHeight
                 }
@@ -80,22 +80,22 @@ ListView {
                 // on the same x in every row.
                 RowLayout {
                     Layout.fillWidth: false
-                    Layout.preferredWidth: forecastList.rainWidth
-                    spacing: forecastList.theme.spaceXs
+                    Layout.preferredWidth: forecastView.rainWidth
+                    spacing: forecastView.theme.spaceXs
 
                     Rectangle {
-                        Layout.preferredWidth: forecastList.theme.spaceSm
-                        Layout.preferredHeight: forecastList.theme.spaceSm
-                        radius: forecastList.theme.spaceXs
-                        color: forecastList.theme.accent
                         visible: forecastRow.rainChance > 0
+                        radius: forecastView.theme.radiusSm
+                        color: forecastView.theme.accent
+                        Layout.preferredWidth: forecastView.theme.spaceSm
+                        Layout.preferredHeight: forecastView.theme.spaceSm
                     }
                     Label {
                         text: forecastRow.rainChance > 0 ? (forecastRow.rainChance + "%") : ""
-                        font.pointSize: forecastList.theme.fontLabel
+                        font.pointSize: forecastView.theme.fontLabel
                         font.bold: true
                         font.features: ({ tnum: 1 })
-                        color: forecastList.theme.accent
+                        color: forecastView.theme.accent
                         Layout.fillWidth: true
                         horizontalAlignment: Text.AlignRight
                     }
@@ -110,11 +110,11 @@ ListView {
             // down the column, whatever digits a day happens to carry.
             Label {
                 text: forecastRow.minTemperature + "° / " + forecastRow.maxTemperature + "°"
-                Layout.preferredWidth: forecastList.temperatureWidth
-                font.pointSize: forecastList.theme.fontValue
+                font.pointSize: forecastView.theme.fontValue
                 font.bold: true
                 font.features: ({ tnum: 1 })
-                color: forecastList.theme.text
+                color: forecastView.theme.text
+                Layout.preferredWidth: forecastView.temperatureWidth
                 horizontalAlignment: Text.AlignRight
             }
         }
@@ -127,8 +127,8 @@ ListView {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            height: forecastList.theme.hairline
-            color: forecastList.theme.rowSeparator
+            height: forecastView.theme.hairline
+            color: forecastView.theme.rowSeparator
             opacity: 0.6
         }
     }
@@ -136,11 +136,11 @@ ListView {
     Label {
         id: forecastError
         objectName: "forecastError"
+        text: forecastView.weatherController.status
+        visible: forecastView.count === 0 && forecastError.text.length > 0
         anchors.centerIn: parent
-        text: forecastList.weatherController.status
-        visible: forecastList.count === 0 && forecastError.text.length > 0
-        color: forecastList.theme.error
-        width: parent.width - forecastList.theme.spaceLg
+        width: parent.width - forecastView.theme.spaceLg
+        color: forecastView.theme.error
         wrapMode: Text.Wrap
         horizontalAlignment: Text.AlignHCenter
     }

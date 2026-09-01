@@ -1,3 +1,13 @@
+//! Radar bridge: playback state and frame URLs for QML.
+//!
+//! Every refresh carries a [`GenerationId`], so a reply that lands after the
+//! viewer has moved on is recognised and dropped rather than repainting the
+//! window with frames from a run nobody is watching.
+//!
+//! `#[auto_cxx_name]` on the `extern "RustQt"` block is load-bearing: without
+//! it, each multi-word `#[qproperty]` is exported under its snake_case Rust
+//! name and the camelCase binding in QML silently resolves to `undefined`.
+
 use std::{pin::Pin, sync::Arc};
 
 use allesbuien_core::{
@@ -122,7 +132,7 @@ impl ffi::RadarController {
         self.as_mut().set_timestamps(QStringList::default());
         self.as_mut().set_current_frame_label(QString::default());
         self.as_mut().set_current_frame_url(QString::default());
-        self.as_mut().set_status("Loading radar frames".into());
+        self.as_mut().set_status(status::RADAR_LOADING.into());
         image_provider::begin_generation(generation);
 
         let qt_thread = self.qt_thread();

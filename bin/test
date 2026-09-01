@@ -1,6 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Module size. A Rust file past 250 pure lines - non-blank, non-comment - has
+# outgrown one reviewer's working memory and is doing more than one thing. The
+# fix is extracting a cohesive module with its own doc and its own tests; never
+# reflowing code, joining lines, or dropping comments to get under the number.
+# Comments and blank lines are free on purpose, so the budget only counts
+# behaviour and can never argue against explaining it.
+#
+# Files under app/tests/ are GUI harnesses, and AGENTS.md pins each to exactly
+# one GUI test and one QGuiApplication: they cannot be split by responsibility
+# without booting a second Qt process to assert half of one narrative. They get
+# the module budget plus a 100-line allowance for the test doubles that budget
+# assumes live somewhere else.
+module_loc_limit=250
+harness_loc_limit=350
+oversized=$(git ls-files '*.rs' | while read -r source_file; do
+  case "$source_file" in
+    app/tests/*) loc_limit=$harness_loc_limit ;;
+    *) loc_limit=$module_loc_limit ;;
+  esac
+  pure_loc=$(grep -cvE '^[[:space:]]*(//|$)' "$source_file" || true)
+  if [[ "$pure_loc" -gt "$loc_limit" ]]; then
+    printf '  %5s  (limit %s)  %s\n' "$pure_loc" "$loc_limit" "$source_file"
+  fi
+done)
+if [[ -n "$oversized" ]]; then
+  echo "Rust files over their pure-LOC budget:" >&2
+  echo "$oversized" >&2
+  exit 1
+fi
+
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 QT_QPA_PLATFORM=offscreen cargo test --workspace

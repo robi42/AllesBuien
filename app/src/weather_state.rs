@@ -6,8 +6,9 @@
 use std::{sync::Arc, time::Duration};
 
 use allesbuien_core::{
-    config::LocationConfig,
+    location::LocationConfig,
     rain::RainPoint,
+    status::{RAIN_UNAVAILABLE, UNAVAILABLE, WEATHER_UNAVAILABLE},
     weather::{FeedApi, ForecastDay},
 };
 use cxx_qt_lib::{QList, QString, QStringList};
@@ -57,21 +58,21 @@ impl Default for WeatherControllerRust {
     fn default() -> Self {
         Self {
             location_name: QString::default(),
-            station_name: "Unavailable".into(),
-            temperature: "Unavailable".into(),
+            station_name: UNAVAILABLE.into(),
+            temperature: UNAVAILABLE.into(),
             feels_like: QString::default(),
-            wind: "Unavailable".into(),
+            wind: UNAVAILABLE.into(),
             humidity: QString::default(),
-            condition: "Unavailable".into(),
+            condition: UNAVAILABLE.into(),
             condition_icon_url: QString::default(),
             observed_label: QString::default(),
-            rain_summary: "Rain forecast unavailable".into(),
+            rain_summary: RAIN_UNAVAILABLE.into(),
             rain_wet: false,
             rain_levels: QList::<f64>::default(),
             rain_axis_labels: QStringList::default(),
             rain_cursor_fraction: 0.0,
             rain_cursor_visible: false,
-            status: "Weather unavailable".into(),
+            status: WEATHER_UNAVAILABLE.into(),
             refresh_interval_ms: 600_000,
             forecast: Vec::new(),
             rain_points: Vec::new(),

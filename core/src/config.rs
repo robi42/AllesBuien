@@ -1,17 +1,24 @@
-// allow: SIZE_OK — plan acceptance requires comprehensive inline config tests.
+//! Everything the process has to settle before it can ask anyone anything.
+//!
+//! One [`Config`] is resolved at startup and injected from there on; nothing
+//! reads the environment again. [`EnvSource`] is the seam that makes that
+//! testable — a test hands it a fixed table instead of mutating the real
+//! environment, which two tests sharing a process could not do safely.
+//!
+//! Overrides exist for the three endpoints and for the notification thresholds
+//! so the app can be pointed at a local stub, and each one falls back to the
+//! shipped value rather than to an empty string: an override that is present but
+//! blank is a mistake, not an instruction. The viewer's location is the single
+//! setting with a precedence rule of its own, and [`crate::location`] owns it.
+
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use serde::Deserialize;
+use crate::location::{self, LocationConfig};
 
 const DEFAULT_FEED_URL: &str = "https://data.buienradar.nl/2.0/feed/json";
 const DEFAULT_RAINTEXT_URL: &str = "https://gpsgadget.buienradar.nl/data/raintext";
 const DEFAULT_RADAR_URL: &str = "https://image.buienradar.nl";
-const DEFAULT_LABEL: &str = "Amsterdam-West";
-/// Shown instead of an empty header when a caller supplies a nameless location.
-const UNNAMED_LABEL: &str = "Your location";
-const DEFAULT_LATITUDE: f64 = 52.37;
-const DEFAULT_LONGITUDE: f64 = 4.84;
 const DEFAULT_NOTIFY_THRESHOLD_MINUTES: u32 = 30;
 const DEFAULT_NOTIFY_COOLDOWN_MINUTES: u64 = 60;
 
@@ -25,30 +32,6 @@ pub struct StdEnv;
 impl EnvSource for StdEnv {
     fn var(&self, key: &str) -> Option<String> {
         std::env::var(key).ok()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct LocationConfig {
-    pub latitude: f64,
-    pub longitude: f64,
-    pub label: String,
-}
-
-impl LocationConfig {
-    /// The place name to show for this location; never blank.
-    ///
-    /// [`Config::resolve`] cannot produce an empty label, but `LocationConfig` is
-    /// a public value other callers construct, and a blank header reads as a
-    /// rendering bug rather than as missing configuration.
-    #[must_use]
-    pub fn display_label(&self) -> &str {
-        let trimmed = self.label.trim();
-        if trimmed.is_empty() {
-            UNNAMED_LABEL
-        } else {
-            trimmed
-        }
     }
 }
 
@@ -75,6 +58,7 @@ pub struct Config {
 }
 
 impl Config {
+    /// Resolves the configuration from the real process environment.
     #[must_use]
     pub fn load() -> Self {
         let env = StdEnv;
@@ -84,12 +68,11 @@ impl Config {
         Self::resolve(&env, &home)
     }
 
+    /// Resolves the configuration from an arbitrary environment and home directory.
     #[must_use]
     pub fn resolve(env: &impl EnvSource, home: &Path) -> Self {
         Self {
-            location: location_from_env(env)
-                .or_else(|| location_from_file(home))
-                .unwrap_or_else(default_location),
+            location: location::resolve(env, home),
             endpoints: EndpointConfig {
                 feed_url: value_or_default(env, "ALLESBUIEN_FEED_URL", DEFAULT_FEED_URL),
                 raintext_url: value_or_default(
@@ -107,61 +90,6 @@ impl Config {
                 .join("allesbuien"),
         }
     }
-}
-
-#[derive(Deserialize)]
-struct WeatherLocation {
-    #[serde(alias = "label")]
-    name: Option<String>,
-    #[serde(alias = "lat")]
-    latitude: Option<serde_json::Value>,
-    #[serde(alias = "lon", alias = "lng")]
-    longitude: Option<serde_json::Value>,
-}
-
-fn location_from_env(env: &impl EnvSource) -> Option<LocationConfig> {
-    let latitude = parse_coordinate(&env.var("ALLESBUIEN_LAT")?, -90.0, 90.0)?;
-    let longitude = parse_coordinate(&env.var("ALLESBUIEN_LON")?, -180.0, 180.0)?;
-    let label = env
-        .var("ALLESBUIEN_LOCATION_LABEL")
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| String::from("Custom"));
-    Some(LocationConfig {
-        latitude,
-        longitude,
-        label,
-    })
-}
-
-fn location_from_file(home: &Path) -> Option<LocationConfig> {
-    let contents =
-        std::fs::read_to_string(home.join(".local/state/omarchy/settings/weather.json")).ok()?;
-    let weather: WeatherLocation = serde_json::from_str(&contents).ok()?;
-    let latitude = parse_json_coordinate(weather.latitude?, -90.0, 90.0)?;
-    let longitude = parse_json_coordinate(weather.longitude?, -180.0, 180.0)?;
-    Some(LocationConfig {
-        latitude,
-        longitude,
-        label: weather.name.filter(|value| !value.trim().is_empty())?,
-    })
-}
-
-fn parse_json_coordinate(value: serde_json::Value, minimum: f64, maximum: f64) -> Option<f64> {
-    match value {
-        serde_json::Value::Number(number) => number
-            .as_f64()
-            .filter(|v| (*v >= minimum) && (*v <= maximum)),
-        serde_json::Value::String(text) => parse_coordinate(&text, minimum, maximum),
-        _ => None,
-    }
-}
-
-fn parse_coordinate(value: &str, minimum: f64, maximum: f64) -> Option<f64> {
-    value
-        .trim()
-        .parse::<f64>()
-        .ok()
-        .filter(|parsed| parsed.is_finite() && (*parsed >= minimum) && (*parsed <= maximum))
 }
 
 fn resolve_notify(env: &impl EnvSource) -> NotifyConfig {
@@ -192,23 +120,12 @@ fn value_or_default(env: &impl EnvSource, key: &str, default: &str) -> String {
         .unwrap_or_else(|| default.to_owned())
 }
 
-fn default_location() -> LocationConfig {
-    LocationConfig {
-        latitude: DEFAULT_LATITUDE,
-        longitude: DEFAULT_LONGITUDE,
-        label: DEFAULT_LABEL.to_owned(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
     use std::path::Path;
 
-    use super::{
-        Config, DEFAULT_FEED_URL, DEFAULT_RADAR_URL, DEFAULT_RAINTEXT_URL, EnvSource,
-        LocationConfig,
-    };
+    use super::{Config, DEFAULT_FEED_URL, DEFAULT_RADAR_URL, DEFAULT_RAINTEXT_URL, EnvSource};
 
     struct FakeEnv<const N: usize>([(&'static str, &'static str); N]);
 
@@ -256,27 +173,6 @@ mod tests {
             (51.9, 4.5, "Rotterdam", 12, 2_040)
         );
         assert_eq!(config.state_dir, Path::new("/tmp/state/allesbuien"));
-    }
-
-    #[test]
-    fn file_location_wins_when_environment_is_absent() {
-        // Given
-        let home = tempfile::tempdir().expect("temporary home");
-        write_weather(
-            home.path(),
-            r#"{"name":"Utrecht","latitude":"52.09","longitude":5.12,"extra":true}"#,
-        );
-        // When
-        let config = Config::resolve(&FakeEnv([]), home.path());
-        // Then
-        assert_eq!(
-            (
-                config.location.latitude,
-                config.location.longitude,
-                config.location.label.as_str()
-            ),
-            (52.09, 5.12, "Utrecht")
-        );
     }
 
     #[test]
@@ -341,26 +237,6 @@ mod tests {
     }
 
     #[test]
-    fn the_resolved_location_always_has_a_name_to_display() {
-        // Given
-        let home = tempfile::tempdir().expect("temporary home");
-        let resolved = Config::resolve(&FakeEnv([]), home.path()).location;
-        let padded = LocationConfig {
-            label: String::from("  Utrecht  "),
-            ..resolved.clone()
-        };
-        let nameless = LocationConfig {
-            label: String::from("   "),
-            ..resolved.clone()
-        };
-
-        // When / Then
-        assert_eq!(resolved.display_label(), "Amsterdam-West");
-        assert_eq!(padded.display_label(), "Utrecht");
-        assert_eq!(nameless.display_label(), "Your location");
-    }
-
-    #[test]
     fn feed_endpoint_override_wins() {
         // Given
         let home = tempfile::tempdir().expect("temporary home");
@@ -391,5 +267,16 @@ mod tests {
         let config = Config::resolve(&env, home.path());
         // Then
         assert_eq!(config.endpoints.radar_url, "https://radar.test");
+    }
+
+    #[test]
+    fn a_blank_endpoint_override_is_ignored_rather_than_obeyed() {
+        // Given: a variable that is set but empty, as an unset shell var expands to.
+        let home = tempfile::tempdir().expect("temporary home");
+        let env = FakeEnv([("ALLESBUIEN_RADAR_URL", "   ")]);
+        // When
+        let config = Config::resolve(&env, home.path());
+        // Then
+        assert_eq!(config.endpoints.radar_url, DEFAULT_RADAR_URL);
     }
 }

@@ -12,8 +12,8 @@ use std::{
 
 use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
 use allesbuien_core::{
-    config::LocationConfig,
     datetime::LocalTimestamp,
+    location::LocationConfig,
     notify::{Notifier, NotifyError},
     radar::{RadarApi, RadarFuture},
     weather::{FeedApi, FeedFuture, WeatherData},

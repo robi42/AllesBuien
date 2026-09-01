@@ -11,8 +11,24 @@
 //! So each message names the subject, says whether anything is still on screen,
 //! and points at the likely culprit — the viewer's own connection versus the
 //! upstream service — without ever quoting a URL, host, header, or file path.
+//!
+//! The placeholders below belong here for the same reason the failure wording
+//! does: a caption the viewer reads is a product decision, and one shown before
+//! the first refresh has to agree word for word with the one shown after a
+//! failure. Spread across the bridges, the same sentence drifted into two
+//! spellings in two files.
 
 use crate::{radar::RadarError, weather::WeatherError};
+
+/// Stands in for a single reading the station did not publish.
+pub const UNAVAILABLE: &str = "Unavailable";
+/// Inline status lines shown before the first successful refresh.
+pub const CONDITIONS_UNAVAILABLE: &str = "Current conditions unavailable";
+pub const WEATHER_UNAVAILABLE: &str = "Weather unavailable";
+pub const RADAR_UNAVAILABLE: &str = "Radar unavailable";
+pub const RAIN_UNAVAILABLE: &str = "Rain forecast unavailable";
+/// Shown while the first radar run is still downloading its frames.
+pub const RADAR_LOADING: &str = "Loading radar frames";
 
 const CONNECTION_HINT: &str = "check your connection";
 const SERVICE_HINT: &str = "Buienradar is not responding";

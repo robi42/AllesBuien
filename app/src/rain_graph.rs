@@ -6,14 +6,12 @@
 //! observed peak only when that peak exceeds the reference. A dry window keeps
 //! every bar at zero, which the panel renders as a flat baseline.
 
-use allesbuien_core::rain::RainPoint;
+use allesbuien_core::{rain::RainPoint, status::RAIN_UNAVAILABLE};
 
 /// Intensity that fills the plot when nothing wetter is expected, in mm/h.
 const FULL_SCALE_MMH: f64 = 5.0;
 /// Minutes between two captioned ticks on the time axis.
 const AXIS_TICK_MINUTES: u32 = 30;
-/// Caption used when the feed produced no rain sentence at all.
-const UNAVAILABLE_SUMMARY: &str = "Rain forecast unavailable";
 
 /// Presentation-ready rain series: one bar per sample, plus its axis and caption.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -34,7 +32,7 @@ impl RainGraph {
     pub fn build(points: &[RainPoint], line: &str) -> Self {
         let line = line.trim();
         let summary = if line.is_empty() {
-            UNAVAILABLE_SUMMARY
+            RAIN_UNAVAILABLE
         } else {
             line
         }
