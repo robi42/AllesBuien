@@ -1,6 +1,10 @@
 min_version: "2.0.0"
 
+# Formatting only. Clippy belongs to bin/test and CI, not to every commit:
+# clippy and test invalidate each other's cxx-qt build fingerprints, so running
+# it here costs a full ~22-minute C++ regeneration before a commit can land.
+# A hook that expensive teaches --no-verify, which then loses the fmt check too.
 pre-commit:
   jobs:
-    - name: cargo-checks
-      run: cargo fmt --all --check && cargo clippy --all-targets -- -D warnings
+    - name: cargo-fmt
+      run: cargo fmt --all --check
