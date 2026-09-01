@@ -1,0 +1,5 @@
+# Mozilla is what KDAB uses for cxx-qt's own bridge glue, which is the same
+# kind of code as app/src/*.{h,cpp}: thin, generated-adjacent C++ that exists
+# only to hand Qt objects to Rust. Matching it keeps our carve-out reading like
+# the upstream it mirrors.
+BasedOnStyle: Mozilla

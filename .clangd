@@ -1,0 +1,33 @@
+# clangd cannot build a compile database for this project: neither cxx nor
+# cxx-qt emits compile_commands.json, and nothing in a pure-Cargo build does it
+# for them. Without the flags below every bridge file reports "file not found"
+# and "unknown type name", which buries any real diagnostic under noise.
+#
+# target/cxxqt-clangd/{include,gen} are symlinks app/build.rs refreshes on every
+# build. They stand in for cxx-qt-build's generated C++ tree, which lives under
+# a hashed OUT_DIR that rotates on toolchain, feature, and dependency-graph
+# changes. CompileFlags.Add takes literal strings - it cannot glob - so the
+# symlinks are the only way to name that tree.
+#
+# Paths are relative to the compile command's directory, which clangd sets to
+# the directory of the file being checked. Every bridge file lives in app/src/,
+# so ../../ reaches the repository root.
+#
+# The standard and the include set below mirror the c++ invocation cxx-qt-build
+# actually issues; read one off a live build with `cargo build -p allesbuien -vv`
+# or from the process table. Re-derive the Qt root with
+# `qmake6 -query QT_INSTALL_HEADERS` if a Qt release ever moves it.
+CompileFlags:
+  Add:
+    - -xc++
+    - -std=c++17
+    - -I../../target/cxxqt-clangd/include
+    - -I../../target/cxxqt-clangd/include/allesbuien
+    - -I../../target/cxxqt-clangd/include/allesbuien/src
+    - -I../../target/cxxqt-clangd/gen
+    - -I/usr/include/qt6
+    - -I/usr/include/qt6/QtCore
+    - -I/usr/include/qt6/QtGui
+    - -I/usr/include/qt6/QtQml
+    - -I/usr/include/qt6/QtQuick
+    - -I/usr/include/qt6/QtQuickControls2
