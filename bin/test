@@ -13,6 +13,7 @@ set -euo pipefail
 # without booting a second Qt process to assert half of one narrative. They get
 # the module budget plus a 100-line allowance for the test doubles that budget
 # assumes live somewhere else.
+echo "==> gate: module size budget"
 module_loc_limit=250
 harness_loc_limit=350
 oversized=$(git ls-files '*.rs' | while read -r source_file; do
@@ -31,23 +32,35 @@ if [[ -n "$oversized" ]]; then
   exit 1
 fi
 
+echo "==> gate: formatting"
 cargo fmt --all --check
+
+echo "==> gate: clippy"
 cargo clippy --all-targets -- -D warnings
+
+echo "==> gate: workspace tests"
 QT_QPA_PLATFORM=offscreen cargo test --workspace
+
 # Core purity. Piping into `grep -q` cannot express this safely: grep exits at
 # the first match, the producer takes SIGPIPE, `pipefail` turns the pipeline's
 # status into 141, and `&& exit 1` never fires while `|| true` swallows it - so
 # the guard reports success precisely when it should fail. It only appeared to
 # work because cargo tree's output fits the pipe buffer. Capture, then match.
+echo "==> gate: core purity"
 core_tree=$(cargo tree -p allesbuien-core)
 if grep -qi cxx <<<"$core_tree"; then
   echo "allesbuien-core gained a CXX/Qt dependency:" >&2
   grep -in cxx <<<"$core_tree" >&2
   exit 1
 fi
+
+echo "==> gate: core coverage"
 cargo llvm-cov -p allesbuien-core --fail-under-lines 85
+
+echo "==> gate: cargo-llvm-cov version pin"
 cargo llvm-cov --version | grep -qF "$(cat .llvm-cov-version)"
 
+echo "==> gate: qml lint"
 if [[ -x /usr/lib/qt6/bin/qmllint ]]; then
   qmllint=/usr/lib/qt6/bin/qmllint
 else

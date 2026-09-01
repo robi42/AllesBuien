@@ -13,12 +13,21 @@ jobs:
     container: archlinux:base-devel
     env:
       QMAKE: /usr/bin/qmake6
+      # Job-level rather than per-step: GNU gold cannot resolve the whole-archive
+      # initialiser symbols CXX-Qt emits, so every cargo invocation in the job has
+      # to link the same way. Scoping it to the test step alone also gave clippy
+      # and test different fingerprints, so each rebuilt the other's artefacts.
+      RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
     steps:
+      # Ahead of the checkout on purpose. Without git in the image the checkout
+      # action silently falls back to the REST API tarball, which leaves a source
+      # tree but no repository, and the module-size gate enumerates its files
+      # with git ls-files.
+      - name: Install system dependencies and Rust
+        run: pacman -Syu --noconfirm git rustup qt6-base qt6-declarative && rustup default 1.98.0 && rustup component add llvm-tools-preview
+
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Install system dependencies and Rust
-        run: pacman -Syu --noconfirm rustup qt6-base qt6-declarative && rustup default 1.98.0 && rustup component add llvm-tools-preview
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -33,31 +42,9 @@ jobs:
         with:
           tool: cargo-llvm-cov@${{ steps.llvm-cov-version.outputs.version }}
 
-      - name: Check formatting
-        run: cargo fmt --all --check
-
-      - name: Run Clippy
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Run workspace tests
-        env:
-          QT_QPA_PLATFORM: offscreen
-          RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
-        run: cargo test --workspace
-
-      - name: Enforce core purity
-        shell: bash
-        run: cargo tree -p allesbuien-core | grep -qi cxx && exit 1 || true
-
-      - name: Enforce core coverage
-        run: cargo llvm-cov -p allesbuien-core --fail-under-lines 85
-
-      - name: Lint QML
-        shell: bash
-        run: |
-          if [[ -x /usr/lib/qt6/bin/qmllint ]]; then
-            qmllint=/usr/lib/qt6/bin/qmllint
-          else
-            qmllint=$(command -v qmllint)
-          fi
-          "$qmllint" --max-warnings 0 -I target/cxxqt/qml_modules app/qml/*.qml
+      # One step, one source of truth. Restating the gates here let the server
+      # and the working copy disagree: the module-size budget and the pinned
+      # cargo-llvm-cov version only ever ran locally, and CI kept its own copy of
+      # the core-purity check long after that copy was found unable to fail.
+      - name: Run quality gates
+        run: ./bin/test
