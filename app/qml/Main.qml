@@ -87,9 +87,19 @@ ApplicationWindow {
                         text: "Bron: Buienradar.nl"
                         font.pointSize: 10
                         font.bold: true
+                        font.underline: attributionHover.hovered
                         color: appTheme.text
-                        opacity: 0.7
+                        opacity: attributionHover.hovered ? 1.0 : 0.7
                         Layout.alignment: Qt.AlignRight
+
+                        HoverHandler {
+                            id: attributionHover
+                            cursorShape: Qt.PointingHandCursor
+                        }
+
+                        TapHandler {
+                            onTapped: Qt.openUrlExternally("https://www.buienradar.nl")
+                        }
                     }
                 }
             }

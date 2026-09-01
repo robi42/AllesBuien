@@ -233,6 +233,10 @@ Item {
                     color: radarPanel.theme.text
                     font.pointSize: 16
                     font.bold: true
+                    // Tabular figures. Proportional digits changed this label's
+                    // width every frame, which resized the column and nudged the
+                    // slider beside it once per animation step.
+                    font.features: ({ tnum: 1 })
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignRight
                 }
