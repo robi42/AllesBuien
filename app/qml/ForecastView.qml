@@ -119,16 +119,41 @@ ListView {
                 }
             }
 
-            // Tabular figures keep the slash and both readings on the same x
-            // down the column, whatever digits a day happens to carry.
-            Label {
-                text: forecastRow.minTemperature + "° / " + forecastRow.maxTemperature + "°"
-                font.pointSize: forecastView.theme.fontValue
-                font.bold: true
-                font.features: ({ tnum: 1 })
-                color: forecastView.theme.text
+            // Two readings, two ranks. The high is what the day is asked for;
+            // the overnight low is the context it is read against, and at one
+            // shared weight the pair competed and the row had no headline. The
+            // low drops to regular weight at `emphasisMid`, the high keeps bold
+            // at full strength, and nothing moves: the slack sits in a leading
+            // spacer so the column still ends on the same right edge.
+            //
+            // Tabular figures stay on both, which is what keeps the slash and
+            // both readings on the same x down the column, whatever digits a
+            // day happens to carry. A nested layout defaults to fillWidth, so
+            // this one says otherwise for the same reason the chance cell does.
+            RowLayout {
+                Layout.fillWidth: false
                 Layout.preferredWidth: forecastView.temperatureWidth
-                horizontalAlignment: Text.AlignRight
+                spacing: 0
+
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                Label {
+                    text: forecastRow.minTemperature + "° / "
+                    font.pointSize: forecastView.theme.fontValue
+                    font.features: ({ tnum: 1 })
+                    color: forecastView.theme.text
+                    opacity: forecastView.theme.emphasisMid
+                }
+
+                Label {
+                    text: forecastRow.maxTemperature + "°"
+                    font.pointSize: forecastView.theme.fontValue
+                    font.bold: true
+                    font.features: ({ tnum: 1 })
+                    color: forecastView.theme.text
+                }
             }
         }
 
