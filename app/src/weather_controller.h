@@ -4,4 +4,6 @@
 
 class WeatherController;
 
-void setWeatherController(QQmlApplicationEngine& engine, WeatherController& controller);
+void
+setWeatherController(QQmlApplicationEngine& engine,
+                     WeatherController& controller);

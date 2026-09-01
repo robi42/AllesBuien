@@ -4,4 +4,5 @@
 
 class RadarController;
 
-void setRadarController(QQmlApplicationEngine& engine, RadarController& controller);
+void
+setRadarController(QQmlApplicationEngine& engine, RadarController& controller);

@@ -4,4 +4,5 @@
 
 class ThemeController;
 
-void setThemeController(QQmlApplicationEngine& engine, ThemeController& controller);
+void
+setThemeController(QQmlApplicationEngine& engine, ThemeController& controller);
