@@ -1,0 +1,19 @@
+# Advisories only, deliberately.
+#
+# This is a private, non-distributed, single-maintainer desktop app with a small
+# dependency graph, so the other cargo-deny checks would cost attention without
+# buying safety: `licenses` matters when you redistribute, `bans`/duplicate-version
+# noise scales with graph size, and `sources` only earns its keep once something
+# other than crates.io is in play. What does matter is that this app speaks HTTP
+# to the internet through reqwest/rustls, so a published vulnerability in that
+# chain is a real exposure.
+#
+# Runs on a weekly schedule rather than on push: an advisory landing upstream is
+# not a reason to fail an unrelated commit, and a solo maintainer who sets
+# continue-on-error to dodge that ends up with a gate that never fails at all.
+
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "warn"
+# Every entry needs a comment naming why, and a plan to remove it.
+ignore = []

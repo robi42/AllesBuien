@@ -1,0 +1,4 @@
+# Every path, one owner. Exists so branch-protection rulesets that require code
+# owner review have something to resolve against if this repo ever gains a
+# second maintainer or goes public; with one maintainer it is otherwise inert.
+* @robi42
