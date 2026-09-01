@@ -13,26 +13,31 @@ ColumnLayout {
     required property var weatherController
     required property Theme theme
 
-    spacing: 8
+    // Bars are inset from their cell by this much, so the gap between two bars
+    // is one spacing step whatever the sample count turns out to be.
+    readonly property int barGap: rainView.theme.spaceXs
+    readonly property int axisHeight: rainView.theme.spaceLg
+
+    spacing: rainView.theme.spaceSm
 
     RowLayout {
         Layout.fillWidth: true
-        spacing: 12
+        spacing: rainView.theme.spaceMd
 
         Label {
             text: "Rain expectation"
-            font.pointSize: 11
+            font.pointSize: rainView.theme.fontLabel
             font.bold: true
             color: rainView.theme.text
-            opacity: 0.7
+            opacity: rainView.theme.emphasisLow
         }
 
         Label {
             text: rainView.weatherController.rainSummary
-            font.pointSize: 11
+            font.pointSize: rainView.theme.fontLabel
             font.bold: true
             color: rainView.weatherController.rainWet ? rainView.theme.accent : rainView.theme.text
-            opacity: rainView.weatherController.rainWet ? 1.0 : 0.7
+            opacity: rainView.weatherController.rainWet ? rainView.theme.emphasisFull : rainView.theme.emphasisLow
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignRight
             elide: Text.ElideRight
@@ -44,12 +49,12 @@ ColumnLayout {
         Layout.fillHeight: true
         Layout.minimumHeight: 48
         color: rainView.theme.panel
-        radius: 8
+        radius: rainView.theme.radiusMd
 
         Item {
             id: plot
             anchors.fill: parent
-            anchors.margins: 8
+            anchors.margins: rainView.theme.spaceSm
 
             readonly property int cellCount: Math.max(1, rainView.weatherController.rainLevels.length)
             readonly property real cellWidth: plot.width / plot.cellCount
@@ -63,12 +68,12 @@ ColumnLayout {
                     required property var modelData
 
                     x: bar.index * plot.cellWidth
-                    width: Math.max(2, plot.cellWidth - 4)
+                    width: Math.max(2, plot.cellWidth - rainView.barGap)
                     y: plot.height - bar.height
                     height: Math.max(2, plot.height * bar.modelData)
-                    radius: 2
+                    radius: rainView.theme.radiusSm
                     color: rainView.theme.accent
-                    opacity: bar.modelData > 0 ? 1.0 : 0.45
+                    opacity: bar.modelData > 0 ? rainView.theme.emphasisFull : 0.45
                 }
             }
 
@@ -76,7 +81,7 @@ ColumnLayout {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                height: 1
+                height: rainView.theme.hairline
                 color: rainView.theme.text
                 opacity: 0.4
             }
@@ -100,13 +105,13 @@ ColumnLayout {
 
     Item {
         Layout.fillWidth: true
-        Layout.preferredHeight: 16
+        Layout.preferredHeight: rainView.axisHeight
 
         Item {
             id: axis
             anchors.fill: parent
-            anchors.leftMargin: 8
-            anchors.rightMargin: 8
+            anchors.leftMargin: rainView.theme.spaceSm
+            anchors.rightMargin: rainView.theme.spaceSm
 
             Repeater {
                 model: rainView.weatherController.rainAxisLabels
@@ -118,9 +123,10 @@ ColumnLayout {
 
                     text: axisLabel.modelData
                     visible: axisLabel.text.length > 0
-                    font.pointSize: 9
+                    font.pointSize: rainView.theme.fontCaption
+                    font.features: ({ tnum: 1 })
                     color: rainView.theme.text
-                    opacity: 0.7
+                    opacity: rainView.theme.emphasisLow
                     x: Math.max(0, Math.min(axis.width - axisLabel.width, (axisLabel.index + 0.5) * plot.cellWidth - axisLabel.width / 2))
                 }
             }

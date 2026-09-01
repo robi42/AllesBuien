@@ -35,13 +35,13 @@ ApplicationWindow {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 24
-        spacing: 16
+        anchors.margins: appTheme.spaceXl
+        spacing: appTheme.spaceLg
 
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 32
+            spacing: appTheme.spaceXl
 
             RadarPanel {
                 objectName: "radarView"
@@ -52,17 +52,25 @@ ApplicationWindow {
                 Layout.minimumWidth: 400
             }
 
+            // 380, down from 420. The forecast row carries four short columns
+            // and nothing else; at 420 they could not be spread without leaving
+            // a hole, and the 40 px goes to the radar, which is the one thing
+            // here that gets better the larger it is.
             Rectangle {
-                Layout.preferredWidth: 420
+                Layout.preferredWidth: 380
                 Layout.fillHeight: true
                 color: appTheme.surface
-                radius: 16
+                radius: appTheme.radiusXl
 
+                // No standalone rule between the conditions block and the list:
+                // the metrics panel already ends the block with a filled edge,
+                // and the list draws its own row rules. The rule that used to
+                // sit here cost 33 px of column and separated nothing.
                 ColumnLayout {
                     id: rightCol
                     anchors.fill: parent
-                    anchors.margins: 20
-                    spacing: 16
+                    anchors.margins: appTheme.spaceLg
+                    spacing: appTheme.spaceMd
 
                     ConditionsView {
                         objectName: "conditionsView"
@@ -71,31 +79,28 @@ ApplicationWindow {
                         Layout.fillWidth: true
                     }
 
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 1
-                        color: appTheme.selection
-                        opacity: 0.5
-                    }
-
+                    // fillHeight without a preferred height: the list takes the
+                    // column's whole remainder and divides it across its rows,
+                    // so slack becomes row rhythm instead of a void above the
+                    // attribution. Binding preferredHeight to contentHeight
+                    // while the rows size themselves from the view would be a
+                    // loop, which is why that binding is gone.
                     ForecastView {
-                        id: forecastView
                         objectName: "forecastView"
                         weatherController: root.weatherSource
                         theme: appTheme
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        Layout.preferredHeight: forecastView.contentHeight
                     }
 
                     Label {
                         objectName: "attribution"
                         text: "Bron: Buienradar.nl"
-                        font.pointSize: 10
+                        font.pointSize: appTheme.fontCaption
                         font.bold: true
                         font.underline: attributionHover.hovered
                         color: appTheme.text
-                        opacity: attributionHover.hovered ? 1.0 : 0.7
+                        opacity: attributionHover.hovered ? appTheme.emphasisFull : appTheme.emphasisLow
                         Layout.alignment: Qt.AlignRight
 
                         HoverHandler {
@@ -115,13 +120,13 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.preferredHeight: 132
             color: appTheme.surface
-            radius: 16
+            radius: appTheme.radiusXl
 
             RainView {
                 weatherController: root.weatherSource
                 theme: appTheme
                 anchors.fill: parent
-                anchors.margins: 16
+                anchors.margins: appTheme.spaceLg
             }
         }
     }

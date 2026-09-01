@@ -13,13 +13,18 @@ Item {
     required property var radarController
     required property Theme theme
 
+    // Used on both axes of the handle; every other one-off size below is written
+    // where it is used, and anything that lands on the 4 px scale comes from the
+    // theme rather than being restated here.
+    readonly property int handleSize: 18
+
     Item {
         id: mapContainer
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: controlsContainer.top
-        anchors.bottomMargin: 12
+        anchors.bottomMargin: radarPanel.theme.spaceMd
 
         Image {
             id: basemap
@@ -50,8 +55,8 @@ Item {
             // raster and hands QML two fractions; everything here is geometry.
             Item {
                 id: locationMarker
-                width: 16
-                height: 16
+                width: radarPanel.theme.spaceLg
+                height: radarPanel.theme.spaceLg
                 x: basemap.rasterOriginX + radarPanel.radarController.markerXFraction * basemap.paintedWidth - locationMarker.width / 2
                 y: basemap.rasterOriginY + radarPanel.radarController.markerYFraction * basemap.paintedHeight - locationMarker.height / 2
                 visible: radarPanel.radarController.markerVisible && basemap.status === Image.Ready
@@ -65,8 +70,8 @@ Item {
 
                 Rectangle {
                     anchors.centerIn: parent
-                    width: 8
-                    height: 8
+                    width: radarPanel.theme.spaceSm
+                    height: radarPanel.theme.spaceSm
                     radius: width / 2
                     color: radarPanel.theme.accent
                     border.width: 2
@@ -75,35 +80,31 @@ Item {
             }
         }
 
-        // Qualitative on purpose: Buienradar documents no colour-to-rate
-        // mapping for these sprites, so numeric ticks would assert a
-        // precision no source backs. Swatches and captions both come from
-        // Rust, which is what keeps this file free of hardcoded colours.
-        Item {
+        // A padded card inset from the map's corner by the same step the panels
+        // use, rather than a ramp floating loose on the terrain. It sits bottom
+        // left because that corner is open sea and northern France — the one
+        // part of this frame that never carries Dutch weather.
+        //
+        // Qualitative on purpose: Buienradar documents no colour-to-rate mapping
+        // for these sprites, so numeric ticks would assert a precision no source
+        // backs. Swatches and captions both come from Rust, which is what keeps
+        // this file free of hardcoded colours.
+        Rectangle {
             id: legend
             anchors.left: parent.left
             anchors.bottom: parent.bottom
-            anchors.margins: 16
-            implicitWidth: legendColumn.implicitWidth
-            implicitHeight: legendColumn.implicitHeight
-            width: legend.implicitWidth
-            height: legend.implicitHeight
+            anchors.margins: radarPanel.theme.spaceMd
+            implicitWidth: legendColumn.implicitWidth + radarPanel.theme.spaceMd * 2
+            implicitHeight: legendColumn.implicitHeight + radarPanel.theme.spaceMd * 2
+            radius: radarPanel.theme.radiusMd
+            color: radarPanel.theme.surface
             visible: radarPanel.radarController.frameCount > 0
-
-            Rectangle {
-                anchors.fill: parent
-                anchors.margins: -8
-                radius: 6
-                color: radarPanel.theme.surface
-                opacity: 0.88
-                z: -1
-            }
 
             ColumnLayout {
                 id: legendColumn
-                width: legendColumn.implicitWidth
-                height: legendColumn.implicitHeight
-                spacing: 4
+                anchors.fill: parent
+                anchors.margins: radarPanel.theme.spaceMd
+                spacing: radarPanel.theme.spaceXs
 
                 Row {
                     spacing: 0
@@ -114,16 +115,19 @@ Item {
                             id: swatch
                             required property var modelData
 
-                            width: 15
-                            height: 8
+                            width: radarPanel.theme.spaceLg
+                            height: radarPanel.theme.spaceSm
                             color: swatch.modelData
                         }
                     }
                 }
 
+                // Spaced, not butted: three tracked uppercase captions under a
+                // continuous ramp run together without a gap at least as wide
+                // as their own tracking.
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 0
+                    spacing: radarPanel.theme.spaceSm
                     Repeater {
                         model: radarPanel.radarController.legendBuckets
 
@@ -131,11 +135,12 @@ Item {
                             id: bucketLabel
                             required property var modelData
 
-                            text: bucketLabel.modelData
-                            font.pointSize: 8
+                            text: bucketLabel.modelData.toUpperCase()
+                            font.pointSize: radarPanel.theme.fontCaption
                             font.bold: true
+                            font.letterSpacing: radarPanel.theme.capsTracking
                             color: radarPanel.theme.text
-                            opacity: 0.85
+                            opacity: radarPanel.theme.emphasisMid
                             Layout.fillWidth: true
                             horizontalAlignment: Text.AlignHCenter
                         }
@@ -151,19 +156,19 @@ Item {
             visible: radarError.text.length > 0
             color: radarPanel.theme.error
             anchors.centerIn: parent
-            width: Math.min(radarError.implicitWidth, parent.width - 48)
+            width: Math.min(radarError.implicitWidth, parent.width - radarPanel.theme.spaceXl * 2)
             wrapMode: Text.Wrap
             maximumLineCount: 3
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
-            font.pointSize: 14
+            font.pointSize: radarPanel.theme.fontBody
             font.bold: true
             Rectangle {
                 anchors.fill: parent
-                anchors.margins: -8
+                anchors.margins: -radarPanel.theme.spaceSm
                 color: radarPanel.theme.background
-                opacity: 0.8
-                radius: 4
+                opacity: radarPanel.theme.scrimOpacity
+                radius: radarPanel.theme.radiusSm
                 z: -1
             }
         }
@@ -176,13 +181,13 @@ Item {
         anchors.right: parent.right
         height: 56
         color: radarPanel.theme.surface
-        radius: 12
+        radius: radarPanel.theme.radiusLg
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 16
-            anchors.rightMargin: 20
-            spacing: 20
+            anchors.leftMargin: radarPanel.theme.spaceLg
+            anchors.rightMargin: radarPanel.theme.spaceXl
+            spacing: radarPanel.theme.spaceXl
 
             Button {
                 id: playButton
@@ -193,7 +198,7 @@ Item {
 
                 background: Rectangle {
                     color: playButton.down ? radarPanel.theme.selection : radarPanel.theme.buttonFill
-                    radius: 6
+                    radius: radarPanel.theme.radiusSm
                 }
                 contentItem: Text {
                     text: playButton.text
@@ -201,7 +206,7 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     font.bold: true
-                    font.pointSize: 11
+                    font.pointSize: radarPanel.theme.fontValue
                 }
 
                 onClicked: radarPanel.radarController.playing ? radarPanel.radarController.pause() : radarPanel.radarController.play()
@@ -224,30 +229,51 @@ Item {
                     implicitHeight: 6
                     width: frameSlider.availableWidth
                     height: sliderGroove.implicitHeight
-                    radius: 3
+                    radius: sliderGroove.height / 2
                     color: radarPanel.theme.sliderTrack
 
+                    // Where measurement stops and prediction starts. The window
+                    // is 2 observations against 24 predictions, so a lone hairline
+                    // this far left was easy to miss; the travelled part of the
+                    // track changes colour at the same x instead, which makes the
+                    // boundary an edge rather than something to hunt for.
+                    // Clamping is what handles Rust's degenerate runs: an
+                    // all-forecast run reports a fraction below 0 and comes out
+                    // fully accent, an all-observed one reports above 1 and comes
+                    // out fully muted, and neither draws the divider.
+                    readonly property real boundaryX: Math.max(0, Math.min(1, radarPanel.radarController.observedFraction)) * sliderGroove.width
+                    readonly property real travelledX: frameSlider.visualPosition * sliderGroove.width
+                    readonly property real observedX: Math.min(sliderGroove.travelledX, sliderGroove.boundaryX)
+
                     Rectangle {
-                        width: frameSlider.visualPosition * parent.width
-                        height: parent.height
-                        color: radarPanel.theme.accent
-                        radius: 3
+                        width: sliderGroove.observedX
+                        height: sliderGroove.height
+                        radius: sliderGroove.radius
+                        color: radarPanel.theme.text
+                        opacity: 0.55
                     }
 
-                    // Where measurement stops and prediction starts. The
-                    // window is 2 observations against 24 predictions, so
-                    // this tick sits hard against the left edge on purpose:
-                    // almost everything on screen is a forecast. Rust hides
-                    // it for an all-observed or all-forecast run, where the
-                    // boundary falls outside the track entirely.
+                    Rectangle {
+                        x: sliderGroove.observedX
+                        width: Math.max(0, sliderGroove.travelledX - sliderGroove.observedX)
+                        height: sliderGroove.height
+                        radius: sliderGroove.radius
+                        color: radarPanel.theme.accent
+                    }
+
+                    // Light edges over the dark untravelled track, dark core over
+                    // the accent and the muted fill: the divider has to stay
+                    // legible on all three, because the handle can be either side.
                     Rectangle {
                         id: forecastBoundary
-                        x: radarPanel.radarController.observedFraction * parent.width - forecastBoundary.width / 2
-                        y: (parent.height - forecastBoundary.height) / 2
-                        width: 2
-                        height: 16
+                        x: sliderGroove.boundaryX - forecastBoundary.width / 2
+                        y: (sliderGroove.height - forecastBoundary.height) / 2
+                        width: 4
+                        height: 18
                         radius: 1
-                        color: radarPanel.theme.text
+                        color: radarPanel.theme.background
+                        border.width: 1
+                        border.color: radarPanel.theme.text
                         visible: radarPanel.radarController.forecastBoundaryVisible
                     }
                 }
@@ -255,10 +281,12 @@ Item {
                     id: sliderHandle
                     x: frameSlider.leftPadding + frameSlider.visualPosition * (frameSlider.availableWidth - sliderHandle.width)
                     y: frameSlider.topPadding + frameSlider.availableHeight / 2 - sliderHandle.height / 2
-                    implicitWidth: 18
-                    implicitHeight: 18
-                    radius: 9
+                    implicitWidth: radarPanel.handleSize
+                    implicitHeight: radarPanel.handleSize
+                    radius: sliderHandle.width / 2
                     color: radarPanel.theme.accent
+                    border.width: 2
+                    border.color: radarPanel.theme.surface
                 }
 
                 onMoved: radarPanel.radarController.seek(Math.round(frameSlider.value))
@@ -271,7 +299,7 @@ Item {
                 Label {
                     text: radarPanel.radarController.currentFrameLabel
                     color: radarPanel.theme.text
-                    font.pointSize: 16
+                    font.pointSize: radarPanel.theme.fontLead
                     font.bold: true
                     // Tabular figures. Proportional digits changed this label's
                     // width every frame, which resized the column and nudged the
@@ -289,10 +317,10 @@ Item {
                     text: radarPanel.radarController.currentFrameObserved ? "OBSERVED" : "FORECAST"
                     visible: radarPanel.radarController.frameCount > 0
                     color: radarPanel.theme.text
-                    opacity: radarPanel.radarController.currentFrameObserved ? 0.7 : 1.0
-                    font.pointSize: 9
+                    opacity: radarPanel.radarController.currentFrameObserved ? radarPanel.theme.emphasisLow : radarPanel.theme.emphasisFull
+                    font.pointSize: radarPanel.theme.fontCaption
                     font.bold: true
-                    font.letterSpacing: 0.8
+                    font.letterSpacing: radarPanel.theme.capsTracking
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignRight
                 }
