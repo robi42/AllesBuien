@@ -23,8 +23,13 @@ jobs:
       # action silently falls back to the REST API tarball, which leaves a source
       # tree but no repository, and the module-size gate enumerates its files
       # with git ls-files.
+      #
+      # shellcheck and actionlint come from pacman rather than from the mise
+      # pins the working copy uses. The skew is deliberate and bounded: both are
+      # linters, both fail loudly, and a rule a newer release adds surfaces as a
+      # red run here instead of as a check that quietly stopped applying.
       - name: Install system dependencies and Rust
-        run: pacman -Syu --noconfirm git rustup qt6-base qt6-declarative && rustup default 1.98.0 && rustup component add llvm-tools-preview
+        run: pacman -Syu --noconfirm git rustup qt6-base qt6-declarative shellcheck actionlint && rustup default 1.98.0 && rustup component add llvm-tools-preview
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

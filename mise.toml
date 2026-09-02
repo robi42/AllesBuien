@@ -1,2 +1,12 @@
+# The linters are pinned beside the toolchain because both of them police
+# `bin/*` and `.github/workflows/*`, and an unpinned linter changes the gate's
+# verdict without a diff. `actionlint` carries the version the deleted
+# `.actionlint-version` file recorded; that file pinned a tool nothing ran.
+# mise provisions all three into the user's own prefix, so no gate ever needs
+# sudo. CI installs its own copies from pacman and accepts the version skew:
+# both linters fail loudly, so a newer server-side rule surfaces as a red run
+# rather than as a silently skipped check.
 [tools]
 rust = "1.98.0"
+actionlint = "1.7.12"
+shellcheck = "0.11.0"

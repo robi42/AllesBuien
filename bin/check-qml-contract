@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The other half of the CXX-Qt name-binding contract, checked against what the
+# build actually registered rather than against what the source looks like.
+# bin/check-fast asserts every extern "RustQt" block carries #[auto_cxx_name];
+# this asserts the registry that attribute produces still answers every name
+# QML asks it for. Both incidents this pair exists to catch were silent:
+# nothing failed to compile, no test failed, and the window came up unthemed
+# and unbound because a dozen camelCase reads resolved to nothing.
+#
+# The artefact path is an argument so the gate can be pointed at a deliberately
+# broken copy and watched to fail. A gate nobody has seen fail is a decoration.
+
+qmltypes=${1:-target/cxxqt/qml_modules/nl/allesbuien/plugin.qmltypes}
+
+# Loudly, not vacuously. Every check below reads this file, so an absent or
+# unbuilt artefact would otherwise turn the whole contract into a pass.
+if [[ ! -f "$qmltypes" ]]; then
+  printf 'FAIL the generated type registry is missing: %s\n' "$qmltypes" >&2
+  printf '  Build the app first; this gate reads what the build registered.\n' >&2
+  exit 1
+fi
+
+failed=0
+
+# Names the build registered. qmltyperegistrar writes one `name:` per
+# component, property, method, signal, and parameter, so this is the whole
+# vocabulary C++ and QML share.
+registered=$(grep -oE 'name: "[^"]*"' "$qmltypes" | sed -E 's/name: "(.*)"/\1/' | sort -u)
+if [[ -z "$registered" ]]; then
+  printf 'FAIL %s registered no names at all; the artefact is empty or its format changed\n' "$qmltypes" >&2
+  exit 1
+fi
+
+# Layer two: shape. A block that lost #[auto_cxx_name] hands C++ the Rust
+# spelling, so the registry fills with snake_case where QML expects camelCase.
+# Catching it here names the members rather than the symptom.
+echo "==> gate: generated type names"
+snake_case=$(printf '%s\n' "$registered" | grep -E '^[A-Za-z0-9]+_[A-Za-z0-9_]*$' | sed 's/^/  /' || true)
+if [[ -n "$snake_case" ]]; then
+  printf 'FAIL snake_case names reached the QML type registry:\n' >&2
+  printf '%s\n' "$snake_case" >&2
+  printf '  An extern "RustQt" block is missing #[auto_cxx_name].\n' >&2
+  failed=1
+fi
+
+# Layer three: the contract itself. Every controller member the UI reads has to
+# exist under the name the UI reads it by. This is the check that would have
+# gone red on both regressions, and the only one that would.
+echo "==> gate: qml member resolution"
+members=$(grep -ohE '\b(weather|radar|theme)(Controller|Source)\.[A-Za-z_][A-Za-z0-9_]*' app/qml/*.qml |
+  sed 's/.*\.//' | sort -u)
+if [[ -z "$members" ]]; then
+  printf 'FAIL no controller member reads found in app/qml; the extraction pattern no longer matches the UI\n' >&2
+  exit 1
+fi
+
+unresolved=$(printf '%s\n' "$members" | while read -r member; do
+  grep -qxF "$member" <<<"$registered" || printf '  %s\n' "$member"
+done)
+if [[ -n "$unresolved" ]]; then
+  printf 'FAIL QML reads members the type registry does not define:\n' >&2
+  printf '%s\n' "$unresolved" >&2
+  printf '  Either the member was renamed, or its block lost #[auto_cxx_name].\n' >&2
+  failed=1
+else
+  printf '    %s of %s controller members read by QML resolve\n' "$(wc -l <<<"$members")" "$(wc -l <<<"$members")"
+fi
+
+exit "$failed"

@@ -96,6 +96,7 @@ pub mod ffi {
         type QQuickImageProvider;
     }
 
+    #[auto_cxx_name]
     unsafe extern "RustQt" {
         #[qobject]
         #[base = QQuickImageProvider]

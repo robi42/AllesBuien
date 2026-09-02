@@ -1,10 +1,18 @@
 min_version: "2.0.0"
 
-# Formatting only. Clippy belongs to bin/test and CI, not to every commit:
-# clippy and test invalidate each other's cxx-qt build fingerprints, so running
-# it here costs a full ~22-minute C++ regeneration before a commit can land.
-# A hook that expensive teaches --no-verify, which then loses the fmt check too.
+# Formatting and the text-only gates, and nothing that needs a compiler.
+# Clippy belongs to bin/test and CI, not to every commit: clippy and test
+# invalidate each other's cxx-qt build fingerprints, so running it here costs a
+# full ~22-minute C++ regeneration before a commit can land. A hook that
+# expensive teaches --no-verify, which then loses the fmt check too.
+#
+# bin/check-fast is the same script bin/test runs first, so the hook can never
+# hold a weaker opinion than the server does. It reads tracked text only and
+# finishes in about a quarter of a second, which is what keeps it welcome here.
 pre-commit:
+  parallel: true
   jobs:
     - name: cargo-fmt
       run: cargo fmt --all --check
+    - name: check-fast
+      run: ./bin/check-fast

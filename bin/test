@@ -1,36 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Module size. A Rust file past 250 pure lines - non-blank, non-comment - has
-# outgrown one reviewer's working memory and is doing more than one thing. The
-# fix is extracting a cohesive module with its own doc and its own tests; never
-# reflowing code, joining lines, or dropping comments to get under the number.
-# Comments and blank lines are free on purpose, so the budget only counts
-# behaviour and can never argue against explaining it.
+# The workspace gate, and the one CI runs. Everything here either needs a
+# compiler, a built tree, or a tool heavier than a commit should wait for; the
+# millisecond text checks live in bin/check-fast and run first, so a misspelled
+# attribution or an unpinned action costs a quarter of a second to learn about
+# rather than twenty minutes.
 #
-# Files under app/tests/ are GUI harnesses, and AGENTS.md pins each to exactly
-# one GUI test and one QGuiApplication: they cannot be split by responsibility
-# without booting a second Qt process to assert half of one narrative. They get
-# the module budget plus a 100-line allowance for the test doubles that budget
-# assumes live somewhere else.
-echo "==> gate: module size budget"
-module_loc_limit=250
-harness_loc_limit=350
-oversized=$(git ls-files '*.rs' | while read -r source_file; do
-  case "$source_file" in
-    app/tests/*) loc_limit=$harness_loc_limit ;;
-    *) loc_limit=$module_loc_limit ;;
-  esac
-  pure_loc=$(grep -cvE '^[[:space:]]*(//|$)' "$source_file" || true)
-  if [[ "$pure_loc" -gt "$loc_limit" ]]; then
-    printf '  %5s  (limit %s)  %s\n' "$pure_loc" "$loc_limit" "$source_file"
-  fi
-done)
-if [[ -n "$oversized" ]]; then
-  echo "Rust files over their pure-LOC budget:" >&2
-  echo "$oversized" >&2
+# Gates fail loudly or not at all. A missing tool, a missing artefact, or an
+# empty result set is a failure, never a skip: this repository has already lost
+# one gate to a silent pass, and both name-binding regressions reached the
+# desktop through suites that stayed green.
+
+require_tool() {
+  command -v "$1" >/dev/null && return 0
+  printf 'error: %s is not installed. Its version is pinned in mise.toml; run: mise install\n' "$1" >&2
   exit 1
-fi
+}
+
+./bin/check-fast
+
+# The guardrails themselves are shell, and bin/test has already shipped a shell
+# bug that disabled a gate while reporting success. Linting them is not hygiene
+# for its own sake; it is the only reader that checks the checkers.
+echo "==> gate: shell scripts"
+require_tool shellcheck
+shellcheck bin/*
+
+echo "==> gate: workflow syntax"
+require_tool actionlint
+actionlint
 
 echo "==> gate: formatting"
 cargo fmt --all --check
@@ -40,6 +39,19 @@ cargo clippy --all-targets -- -D warnings
 
 echo "==> gate: workspace tests"
 QT_QPA_PLATFORM=offscreen cargo test --workspace
+
+# Timezone matrix. Two modules read the host clock on purpose, and a test that
+# quietly agrees with Amsterdam passes here and fails on a UTC server months
+# later - twice, so far. Grepping for ::now() would only condemn the legitimate
+# readers, so run the real suite in zones that disagree with this machine
+# instead. TZ is not a build input, so these re-execute the binaries the gate
+# above just built; Kolkata is in the list because its half-hour offset is what
+# catches an assertion that pinned the minutes to :00.
+echo "==> gate: timezone matrix"
+for zone in UTC Asia/Kolkata Pacific/Auckland America/New_York; do
+  printf '    TZ=%s\n' "$zone"
+  TZ="$zone" QT_QPA_PLATFORM=offscreen cargo test --workspace --quiet
+done
 
 # Core purity. Piping into `grep -q` cannot express this safely: grep exits at
 # the first match, the producer takes SIGPIPE, `pipefail` turns the pipeline's
@@ -60,6 +72,10 @@ cargo llvm-cov -p allesbuien-core --fail-under-lines 85
 echo "==> gate: cargo-llvm-cov version pin"
 cargo llvm-cov --version | grep -qF "$(cat .llvm-cov-version)"
 
+# The root .qmllint.ini is committed so a Qt upgrade changes this gate's
+# strictness through a reviewable diff rather than through whichever defaults
+# the new release happens to ship. qmllint finds it by walking up from
+# app/qml/; --max-warnings on the command line still overrides the file.
 echo "==> gate: qml lint"
 if [[ -x /usr/lib/qt6/bin/qmllint ]]; then
   qmllint=/usr/lib/qt6/bin/qmllint
@@ -67,3 +83,7 @@ else
   qmllint=$(command -v qmllint)
 fi
 "$qmllint" --max-warnings 0 -I target/cxxqt/qml_modules app/qml/*.qml
+
+# Last, because it reads what the build registered. The workspace test gate
+# above is what makes that artefact current.
+./bin/check-qml-contract

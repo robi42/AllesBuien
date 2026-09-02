@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Every gate in this file reads tracked text and nothing else: no build, no
+# generated artefact, no network. That is the entry price for running on each
+# commit through lefthook, where a gate that costs a rebuild teaches --no-verify
+# and takes the formatting check down with it. Gates that need a compiled tree
+# live in bin/test beside the compiler, and bin/test runs this script first so
+# the cheap verdicts arrive before the twenty-minute ones.
+#
+# Gates report every offender they find rather than stopping at the first, so
+# one run is one complete worklist.
+
+failed=0
+report() {
+  printf 'FAIL %s\n' "$1" >&2
+  shift
+  printf '%s\n' "$@" >&2
+  failed=1
+}
+
+# Module size. A Rust file past 250 pure lines - non-blank, non-comment - has
+# outgrown one reviewer's working memory and is doing more than one thing. The
+# fix is extracting a cohesive module with its own doc and its own tests; never
+# reflowing code, joining lines, or dropping comments to get under the number.
+# Comments and blank lines are free on purpose, so the budget only counts
+# behaviour and can never argue against explaining it.
+#
+# Files under app/tests/ are GUI harnesses, and AGENTS.md pins each to exactly
+# one GUI test and one QGuiApplication: they cannot be split by responsibility
+# without booting a second Qt process to assert half of one narrative. They get
+# the module budget plus a 100-line allowance for the test doubles that budget
+# assumes live somewhere else.
+echo "==> gate: module size budget"
+module_loc_limit=250
+harness_loc_limit=350
+oversized=$(git ls-files '*.rs' | while read -r source_file; do
+  case "$source_file" in
+    app/tests/*) loc_limit=$harness_loc_limit ;;
+    *) loc_limit=$module_loc_limit ;;
+  esac
+  pure_loc=$(grep -cvE '^[[:space:]]*(//|$)' "$source_file" || true)
+  if [[ "$pure_loc" -gt "$loc_limit" ]]; then
+    printf '  %5s  (limit %s)  %s\n' "$pure_loc" "$loc_limit" "$source_file"
+  fi
+done)
+[[ -z "$oversized" ]] || report "Rust files over their pure-LOC budget:" "$oversized"
+
+# CXX-Qt name binding, layer one of three. Without #[auto_cxx_name] on an
+# extern "RustQt" block, every multi-word member keeps its snake_case Rust name
+# on the C++ side, QML's camelCase read finds nothing, and the app runs unbound
+# with a green test suite - twice now. This is the source-shape half: counting
+# occurrences cannot express the rule, because two module docs quote both
+# strings verbatim. Read the file as code instead: blank and comment lines are
+# invisible, attributes accumulate, and any other line resets the run. Layers
+# two and three check the generated type registry in bin/check-qml-contract.
+echo "==> gate: cxx-qt name binding"
+# shellcheck disable=SC2016  # awk program, not a shell string: $0 is awk's line
+unbound=$(git ls-files '*.rs' | xargs -r awk '
+  FNR == 1 { auto = 0 }
+  {
+    line = $0
+    sub(/^[[:space:]]+/, "", line)
+    sub(/[[:space:]]+$/, "", line)
+  }
+  line == "" || line ~ /^\/\// { next }
+  line ~ /^(unsafe[[:space:]]+)?extern[[:space:]]+"RustQt"/ {
+    if (!auto) printf "  %s:%d: %s\n", FILENAME, FNR, line
+    auto = 0
+    next
+  }
+  line ~ /^#\[/ { if (line == "#[auto_cxx_name]") auto = 1; next }
+  { auto = 0 }
+')
+[[ -z "$unbound" ]] || report 'extern "RustQt" blocks without a preceding #[auto_cxx_name]:' "$unbound"
+
+# One GUI test per harness. A second one in the same file shares a process with
+# the first, so it meets a QGuiApplication that already exists and the run dies
+# with a SIGSEGV that reads like a product bug rather than a layout mistake.
+# Count only the attribute: five of the seven harnesses reach QGuiApplication
+# through AppBuilder::boot, so grepping for the type scores every file zero.
+echo "==> gate: one GUI test per harness"
+crowded=$(git ls-files 'app/tests/*.rs' | while read -r harness; do
+  case "$harness" in app/tests/*/*) continue ;; esac
+  test_count=$(grep -c '#\[test\]' "$harness" || true)
+  [[ "$test_count" -eq 1 ]] || printf '  %s has %s #[test] functions, expected 1\n' "$harness" "$test_count"
+done)
+[[ -z "$crowded" ]] || report 'GUI harnesses that share a process between tests:' "$crowded"
+
+# Attribution. Buienradar's free-data terms name two visible obligations: the
+# words Buienradar.nl are shown, and they link to the root domain. The GUI test
+# asserts both off the rendered object, which is the real proof - and which
+# costs a full build to reach. This is the belt that fails in milliseconds
+# instead, on the same two literals the licence actually asks for.
+echo "==> gate: attribution"
+missing_attribution=$(
+  grep -qF 'text: "Buienradar.nl"' app/qml/Main.qml || printf '  app/qml/Main.qml no longer shows the visible text Buienradar.nl\n'
+  grep -qF '"https://www.buienradar.nl"' app/qml/Main.qml || printf '  app/qml/Main.qml no longer links to https://www.buienradar.nl\n'
+  grep -qF '[Buienradar.nl](https://www.buienradar.nl)' README.md || printf '  README.md no longer carries the linked attribution\n'
+)
+[[ -z "$missing_attribution" ]] || report 'Buienradar attribution is incomplete:' "$missing_attribution"
+
+# Theme.qml resolves the palette and nothing else may. Every other QML file
+# binds a controller property or the SystemPalette fallback, so a colour named
+# anywhere else is a value that stops following the Omarchy theme the moment
+# the theme changes. Theme.qml is the one file allowed a literal, and it spends
+# that allowance on the "red" error fallback. Hex and computed colours are
+# refused everywhere, Theme.qml included: a fabricated palette value is the
+# same defect wearing the right file name, and Qt.rgba produces a colour the
+# theme never sees.
+echo "==> gate: theme-owned colours"
+hardcoded=$(
+  grep -nE '"#[0-9A-Fa-f]{3,8}"' app/qml/*.qml || true
+  grep -nE '(Qt\.(rgba|hsla|hsva|tint|colorEqual)|\.(lighter|darker))\(' app/qml/*.qml || true
+  git ls-files 'app/qml/*.qml' | grep -v '^app/qml/Theme\.qml$' | xargs -r \
+    grep -nE '(^|[^[:alnum:]_])color:|property[[:space:]]+color[[:space:]]' |
+    grep '"' || true
+)
+[[ -z "$hardcoded" ]] || report 'colours written outside Theme.qml:' "$hardcoded"
+
+# Image allowlist. A blanket ban would be wrong - the basemap, the README
+# screenshot, and the desktop icon are all ours to ship - but Buienradar's map
+# artwork is licensed to Buienradar, and the cheapest way to vendor it is to
+# drop a PNG in and forget. Name the three, and anything else is a question
+# that has to be answered before it lands.
+echo "==> gate: image allowlist"
+tracked_images=$(git ls-files '*.png' '*.jpg' '*.jpeg' '*.gif' '*.webp' '*.svg' '*.ico' '*.bmp' | sort)
+allowed_images=$(printf '%s\n' app/assets/basemap-nl.png assets/screenshot.png pkgbuild/allesbuien.svg | sort)
+mismatched=$(
+  comm -13 <(printf '%s\n' "$allowed_images") <(printf '%s\n' "$tracked_images") | sed 's/^/  tracked but not on the allowlist: /'
+  comm -23 <(printf '%s\n' "$allowed_images") <(printf '%s\n' "$tracked_images") | sed 's/^/  on the allowlist but no longer tracked: /'
+)
+[[ -z "$mismatched" ]] || report 'tracked images do not match the allowlist:' "$mismatched"
+
+# Pinned action SHAs. A tag or branch reference lets whoever owns the action
+# move it under a workflow that holds this repository's contents. actionlint
+# has no opinion on the subject, so the rule needs its own line: a full
+# forty-character commit plus the release tag in a comment, so the pin stays
+# readable to a human deciding whether to bump it.
+echo "==> gate: pinned action SHAs"
+unpinned=$(grep -rnE '^\s*-?\s*uses:' .github/workflows/*.yml | grep -vE '@[0-9a-f]{40} #' | sed 's/^/  /' || true)
+[[ -z "$unpinned" ]] || report 'workflow steps not pinned to a 40-character SHA with a tag comment:' "$unpinned"
+
+exit "$failed"
