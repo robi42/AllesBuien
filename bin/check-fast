@@ -26,19 +26,18 @@ report() {
 # Comments and blank lines are free on purpose, so the budget only counts
 # behaviour and can never argue against explaining it.
 #
-# Files under app/tests/ are GUI harnesses, and AGENTS.md pins each to exactly
-# one GUI test and one QGuiApplication: they cannot be split by responsibility
-# without booting a second Qt process to assert half of one narrative. They get
-# the module budget plus a 100-line allowance for the test doubles that budget
-# assumes live somewhere else.
+# The GUI harnesses under app/tests/ held a 350-line variant of this budget
+# until allesbuien-testkit existed. The argument for it was that one GUI test
+# per file left their test doubles nowhere else to live, and that was true while
+# all seven carried their own copy of the same stub feed, stub radar, stub
+# notifier, and fixture location. Given one home for the doubles they share, the
+# largest harness fell from 295 pure lines to 164 and the exception had nothing
+# left to buy. One number governs the whole tree again, which is the only way a
+# budget stays arguable on its merits rather than on which directory a file is
+# filed under.
 echo "==> gate: module size budget"
-module_loc_limit=250
-harness_loc_limit=350
+loc_limit=250
 oversized=$(git ls-files '*.rs' | while read -r source_file; do
-  case "$source_file" in
-    app/tests/*) loc_limit=$harness_loc_limit ;;
-    *) loc_limit=$module_loc_limit ;;
-  esac
   pure_loc=$(grep -cvE '^[[:space:]]*(//|$)' "$source_file" || true)
   if [[ "$pure_loc" -gt "$loc_limit" ]]; then
     printf '  %5s  (limit %s)  %s\n' "$pure_loc" "$loc_limit" "$source_file"
