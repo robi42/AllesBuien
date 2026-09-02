@@ -6,52 +6,7 @@ use std::{
 };
 
 use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
-use allesbuien_core::{
-    location::LocationConfig,
-    notify::{Notifier, NotifyError},
-    radar::{RadarApi, RadarError, RadarFuture},
-    weather::{FeedApi, FeedFuture, WeatherData},
-};
-
-struct StubFeedApi;
-
-impl FeedApi for StubFeedApi {
-    fn fetch(&self, _latitude: f64, _longitude: f64) -> FeedFuture<'_> {
-        Box::pin(async {
-            Ok(WeatherData {
-                current: None,
-                forecast: Vec::new(),
-                rain_line: String::new(),
-                rain_soon: None,
-                rain_series: Vec::new(),
-            })
-        })
-    }
-}
-
-struct StubRadarApi;
-
-impl RadarApi for StubRadarApi {
-    fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
-        Box::pin(async {
-            Err(RadarError::InvalidRunTimestamp {
-                timestamp: String::new(),
-            })
-        })
-    }
-
-    fn frame<'a>(&'a self, _url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-        Box::pin(async { unreachable!("theme test must not fetch radar frames") })
-    }
-}
-
-struct StubNotifier;
-
-impl Notifier for StubNotifier {
-    fn send(&self, _title: &str, _body: &str) -> Result<(), NotifyError> {
-        Ok(())
-    }
-}
+use allesbuien_testkit::{StubFeedApi, StubNotifier, StubRadarApi, amsterdam_west};
 
 struct TestDirectory(PathBuf);
 
@@ -126,11 +81,7 @@ fn exposes_colors_across_replacements_and_unavailability() {
         feed: Arc::new(StubFeedApi),
         radar: Arc::new(StubRadarApi),
         notifier: Arc::new(StubNotifier),
-        location: LocationConfig {
-            latitude: 52.37,
-            longitude: 4.84,
-            label: String::from("Amsterdam-West"),
-        },
+        location: amsterdam_west(),
         radar_state_dir: root.0.join("radar"),
     });
     let intervals = TimerIntervals {

@@ -13,12 +13,10 @@ use allesbuien::{
 };
 use allesbuien_core::{
     datetime::{LocalTimestamp, SOURCE_TIMEZONE},
-    location::LocationConfig,
-    notify::{Notifier, NotifyError},
-    radar::{RadarApi, RadarError, RadarFuture},
     rain::parse_series,
     weather::{CurrentConditions, FeedApi, FeedFuture, ForecastDay, RainSoon, WeatherData},
 };
+use allesbuien_testkit::{SETTLE_BUDGET, StubNotifier, StubRadarApi, amsterdam_west, pump_until};
 use cxx_qt_lib::{QByteArray, QModelIndex, QString};
 
 struct FakeFeedApi {
@@ -87,30 +85,6 @@ impl FeedApi for FakeFeedApi {
     }
 }
 
-struct StubRadarApi;
-
-impl RadarApi for StubRadarApi {
-    fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
-        Box::pin(async {
-            Err(RadarError::InvalidRunTimestamp {
-                timestamp: String::new(),
-            })
-        })
-    }
-
-    fn frame<'a>(&'a self, _url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-        Box::pin(async { unreachable!("weather test must not fetch radar frames") })
-    }
-}
-
-struct StubNotifier;
-
-impl Notifier for StubNotifier {
-    fn send(&self, _title: &str, _body: &str) -> Result<(), NotifyError> {
-        Ok(())
-    }
-}
-
 #[test]
 fn populates_weather_properties_when_boot_triggers_initial_refresh() {
     // Given: one GUI application builder with a fake feed and a long recurring interval.
@@ -122,11 +96,7 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
         feed: feed.clone(),
         radar: Arc::new(StubRadarApi),
         notifier: Arc::new(StubNotifier),
-        location: LocationConfig {
-            latitude: 52.37,
-            longitude: 4.84,
-            label: String::from("Amsterdam-West"),
-        },
+        location: amsterdam_west(),
         radar_state_dir: PathBuf::from("/nonexistent/test-radar"),
     });
     let intervals = TimerIntervals {
@@ -142,18 +112,14 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
     )
     .boot()
     .expect("fake-wired GUI should boot");
-    for _ in 0..10_000 {
+    pump_until("the boot refresh fills five rows", SETTLE_BUDGET, || {
         booted.process_events();
-        if booted
+        booted
             .weather_controller()
             .expect("controller should exist")
             .row_count(&QModelIndex::default())
             == 5
-        {
-            break;
-        }
-        std::thread::yield_now();
-    }
+    });
 
     // Then: the initial fetch ran once and populated conditions, rain, and five rows.
     {
@@ -249,19 +215,15 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
 
     feed.empty.store(true, Ordering::SeqCst);
     booted.refresh_weather();
-    for _ in 0..10_000 {
+    pump_until("the empty refresh reports itself", SETTLE_BUDGET, || {
         booted.process_events();
-        if booted
+        booted
             .weather_controller()
             .expect("controller should exist")
             .status()
             .to_string()
             == "Current conditions unavailable"
-        {
-            break;
-        }
-        std::thread::yield_now();
-    }
+    });
     let controller = booted
         .weather_controller()
         .expect("controller should exist");

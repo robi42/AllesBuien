@@ -6,12 +6,10 @@ use std::{
 };
 
 use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
-use allesbuien_core::{
-    location::LocationConfig,
-    notify::{Notifier, NotifyError},
-    radar::{RadarApi, RadarError, RadarFuture},
-    weather::{CurrentConditions, FeedApi, FeedFuture, ForecastDay, RainSoon, WeatherData},
+use allesbuien_core::weather::{
+    CurrentConditions, FeedApi, FeedFuture, ForecastDay, RainSoon, WeatherData,
 };
+use allesbuien_testkit::{SETTLE_BUDGET, StubNotifier, StubRadarApi, amsterdam_west, pump_until};
 use cxx_qt_lib::{QImage, QString, QVariant};
 
 #[repr(C)]
@@ -90,30 +88,6 @@ impl FeedApi for FakeFeedApi {
     }
 }
 
-struct StubRadarApi;
-
-impl RadarApi for StubRadarApi {
-    fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
-        Box::pin(async {
-            Err(RadarError::InvalidRunTimestamp {
-                timestamp: String::new(),
-            })
-        })
-    }
-
-    fn frame<'a>(&'a self, _url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-        Box::pin(async { unreachable!("forecast view test must not fetch radar frames") })
-    }
-}
-
-struct StubNotifier;
-
-impl Notifier for StubNotifier {
-    fn send(&self, _title: &str, _body: &str) -> Result<(), NotifyError> {
-        Ok(())
-    }
-}
-
 #[test]
 fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
     // Given: the real QML window backed by the donor's five-day fake feed.
@@ -121,11 +95,7 @@ fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
         feed: Arc::new(FakeFeedApi),
         radar: Arc::new(StubRadarApi),
         notifier: Arc::new(StubNotifier),
-        location: LocationConfig {
-            latitude: 52.37,
-            longitude: 4.84,
-            label: String::from("Amsterdam-West"),
-        },
+        location: amsterdam_west(),
         radar_state_dir: PathBuf::from("/nonexistent/test-radar"),
     });
 
@@ -137,18 +107,18 @@ fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
     )
     .boot()
     .expect("fake-wired GUI should boot");
-    for _ in 0..10_000 {
-        booted.process_events();
-        if booted
-            .weather_controller()
-            .expect("controller should exist")
-            .row_count(&cxx_qt_lib::QModelIndex::default())
-            == 5
-        {
-            break;
-        }
-        std::thread::yield_now();
-    }
+    pump_until(
+        "the model carries five forecast rows",
+        SETTLE_BUDGET,
+        || {
+            booted.process_events();
+            booted
+                .weather_controller()
+                .expect("controller should exist")
+                .row_count(&cxx_qt_lib::QModelIndex::default())
+                == 5
+        },
+    );
     booted.process_events();
 
     // SAFETY: Category 8 — Qt owns the focused QQuickWindow and its QObject tree for

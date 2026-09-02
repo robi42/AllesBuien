@@ -9,11 +9,10 @@ use std::{
 
 use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
 use allesbuien_core::{
-    location::LocationConfig,
     notify::{Notifier, NotifyConfig, NotifyError},
-    radar::{RadarApi, RadarError, RadarFuture},
     weather::{FeedApi, FeedFuture, RainSoon, WeatherData},
 };
+use allesbuien_testkit::{SETTLE_BUDGET, StubRadarApi, amsterdam_west, pump_until};
 
 struct FakeFeedApi {
     calls: AtomicUsize,
@@ -40,22 +39,6 @@ impl FeedApi for FakeFeedApi {
     }
 }
 
-struct StubRadarApi;
-
-impl RadarApi for StubRadarApi {
-    fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
-        Box::pin(async {
-            Err(RadarError::InvalidRunTimestamp {
-                timestamp: String::new(),
-            })
-        })
-    }
-
-    fn frame<'a>(&'a self, _url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-        Box::pin(async { unreachable!("notification test must not fetch radar frames") })
-    }
-}
-
 #[derive(Default)]
 struct FakeNotifier {
     calls: Mutex<Vec<(String, String)>>,
@@ -77,17 +60,6 @@ impl Notifier for FakeNotifier {
     }
 }
 
-fn wait_for(booted: &allesbuien::BootedApp, predicate: impl Fn() -> bool) {
-    for _ in 0..10_000 {
-        booted.process_events();
-        if predicate() {
-            return;
-        }
-        std::thread::yield_now();
-    }
-    panic!("timed out waiting for background refresh");
-}
-
 #[test]
 fn dispatches_once_when_same_rain_event_refreshes_within_cooldown() {
     // Given: one GUI application with rain inside the configured threshold and fake ports.
@@ -101,11 +73,7 @@ fn dispatches_once_when_same_rain_event_refreshes_within_cooldown() {
             feed: feed.clone(),
             radar: Arc::new(StubRadarApi),
             notifier: notifier.clone(),
-            location: LocationConfig {
-                latitude: 52.37,
-                longitude: 4.84,
-                label: String::from("Amsterdam-West"),
-            },
+            location: amsterdam_west(),
             radar_state_dir: PathBuf::from("/nonexistent/test-radar"),
         },
         NotifyConfig {
@@ -123,21 +91,24 @@ fn dispatches_once_when_same_rain_event_refreshes_within_cooldown() {
     .expect("fake-wired GUI should boot");
 
     // When: the initial refresh succeeds, then the same event refreshes again.
-    wait_for(&booted, || {
+    pump_until("the boot refresh lands and notifies", SETTLE_BUDGET, || {
+        booted.process_events();
         notifier.calls().len() == 1
             && booted
                 .weather_controller()
                 .is_some_and(|controller| controller.rain_summary().to_string() == "refresh 1")
     });
     booted.refresh_weather();
-    wait_for(&booted, || {
+    pump_until("the second refresh reaches the view", SETTLE_BUDGET, || {
+        booted.process_events();
         booted
             .weather_controller()
             .is_some_and(|controller| controller.rain_summary().to_string() == "refresh 2")
     });
     feed.rain.store(false, Ordering::SeqCst);
     booted.refresh_weather();
-    wait_for(&booted, || {
+    pump_until("the dry refresh reaches the view", SETTLE_BUDGET, || {
+        booted.process_events();
         booted
             .weather_controller()
             .is_some_and(|controller| controller.rain_summary().to_string() == "refresh 3")

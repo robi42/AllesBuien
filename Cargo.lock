@@ -13,6 +13,7 @@ name = "allesbuien"
 version = "0.1.0"
 dependencies = [
  "allesbuien-core",
+ "allesbuien-testkit",
  "cxx",
  "cxx-qt",
  "cxx-qt-build",
@@ -33,6 +34,13 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "toml",
+]
+
+[[package]]
+name = "allesbuien-testkit"
+version = "0.1.0"
+dependencies = [
+ "allesbuien-core",
 ]
 
 [[package]]

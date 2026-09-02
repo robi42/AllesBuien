@@ -7,12 +7,8 @@ use std::{
 };
 
 use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
-use allesbuien_core::{
-    location::LocationConfig,
-    notify::{Notifier, NotifyError},
-    radar::{RadarApi, RadarFuture},
-    weather::{FeedApi, FeedFuture, WeatherData},
-};
+use allesbuien_core::radar::{RadarApi, RadarFuture};
+use allesbuien_testkit::{SETTLE_BUDGET, StubFeedApi, StubNotifier, amsterdam_west, pump_until};
 use cxx_qt_lib::{QImage, QString, QUrl, QVariant};
 
 #[repr(C)]
@@ -49,22 +45,6 @@ unsafe extern "C" {
     static QOBJECT_STATIC_META_OBJECT: QMetaObject;
 }
 
-struct StubFeedApi;
-
-impl FeedApi for StubFeedApi {
-    fn fetch(&self, _latitude: f64, _longitude: f64) -> FeedFuture<'_> {
-        Box::pin(async {
-            Ok(WeatherData {
-                current: None,
-                forecast: Vec::new(),
-                rain_line: String::new(),
-                rain_soon: None,
-                rain_series: Vec::new(),
-            })
-        })
-    }
-}
-
 struct AnimatedRadarApi;
 
 impl RadarApi for AnimatedRadarApi {
@@ -85,14 +65,6 @@ impl RadarApi for AnimatedRadarApi {
     }
 }
 
-struct StubNotifier;
-
-impl Notifier for StubNotifier {
-    fn send(&self, _title: &str, _body: &str) -> Result<(), NotifyError> {
-        Ok(())
-    }
-}
-
 #[test]
 fn renders_and_advances_provider_frames_when_radar_is_playing() {
     // Given: two visibly distinct PNG frames and a short injected playback interval.
@@ -103,11 +75,7 @@ fn renders_and_advances_provider_frames_when_radar_is_playing() {
         feed: Arc::new(StubFeedApi),
         radar: Arc::new(AnimatedRadarApi),
         notifier: Arc::new(StubNotifier),
-        location: LocationConfig {
-            latitude: 52.37,
-            longitude: 4.84,
-            label: String::from("Amsterdam-West"),
-        },
+        location: amsterdam_west(),
         radar_state_dir: cache.clone(),
     });
     let intervals = TimerIntervals {
@@ -124,16 +92,12 @@ fn renders_and_advances_provider_frames_when_radar_is_playing() {
     )
     .boot()
     .expect("fake-wired GUI should boot");
-    for _ in 0..20_000 {
+    pump_until("the radar run exposes both frames", SETTLE_BUDGET, || {
         booted.process_events();
-        if booted
+        booted
             .radar_controller()
             .is_some_and(|controller| *controller.frame_count() == 2)
-        {
-            break;
-        }
-        std::thread::yield_now();
-    }
+    });
 
     // SAFETY: Category 8 — Qt owns the focused QQuickWindow and QObject tree for
     // `booted`'s lifetime; null pointers are rejected and calls stay on the GUI thread.

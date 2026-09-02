@@ -1,0 +1,15 @@
+[package]
+name = "allesbuien-testkit"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lints]
+workspace = true
+
+# Deliberately core-only. The GUI harnesses that consume this crate link Qt, but
+# nothing here does, so `cargo test -p allesbuien-testkit` builds and runs
+# without a Qt toolchain and `pump_until` keeps a plain-Rust unit test.
+[dependencies]
+allesbuien-core = { path = "../../core" }
