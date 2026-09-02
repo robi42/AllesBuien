@@ -157,9 +157,11 @@ impl ffi::RadarController {
                     .map_err(RadarError::Cache),
                 Err(error) => Err(error),
             };
-            let _queue_result = qt_thread.queue(move |controller| {
+            if let Err(error) = qt_thread.queue(move |controller| {
                 controller.apply_result(GenerationId(generation), loaded);
-            });
+            }) {
+                eprintln!("allesbuien: radar update never reached the window: {error}");
+            }
         }));
     }
 

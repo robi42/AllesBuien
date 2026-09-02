@@ -35,7 +35,6 @@ impl FeedApi for FakeFeedApi {
                 return Ok(WeatherData {
                     current: None,
                     forecast: Vec::new(),
-                    now_line: String::from("Now: unavailable"),
                     rain_line: String::from("next 2h: dry"),
                     rain_soon: None,
                     rain_series: Vec::new(),
@@ -76,7 +75,6 @@ impl FeedApi for FakeFeedApi {
                         ..ForecastDay::default()
                     })
                     .collect(),
-                now_line: String::from("Now: fixture"),
                 rain_line: String::from("starts around 14:10"),
                 rain_soon: Some(RainSoon {
                     minutes_until: 10,

@@ -32,7 +32,6 @@ impl FeedApi for FakeFeedApi {
             Ok(WeatherData {
                 current: None,
                 forecast: Vec::new(),
-                now_line: String::from("Now: unavailable"),
                 rain_line: format!("refresh {call}"),
                 rain_soon: rain,
                 rain_series: Vec::new(),

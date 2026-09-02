@@ -78,7 +78,6 @@ impl FeedApi for FakeFeedApi {
                         ..ForecastDay::default()
                     })
                     .collect(),
-                now_line: String::from("Now: fixture"),
                 rain_line: String::from("starts around 14:10"),
                 rain_soon: Some(RainSoon {
                     minutes_until: 10,

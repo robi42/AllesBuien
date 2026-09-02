@@ -96,7 +96,6 @@ impl FeedApi for ReqwestFeedApi {
             Ok(WeatherData {
                 current: parsed.current,
                 forecast: parsed.forecast,
-                now_line: parsed.now_line,
                 rain_line: rain.line,
                 rain_soon: rain.rain_soon,
                 rain_series: rain.points,
@@ -169,7 +168,6 @@ pub struct ForecastDay {
 pub struct WeatherData {
     pub current: Option<CurrentConditions>,
     pub forecast: Vec<ForecastDay>,
-    pub now_line: String,
     pub rain_line: String,
     pub rain_soon: Option<RainSoon>,
     /// Complete two-hour raintext window, oldest sample first.

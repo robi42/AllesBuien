@@ -95,20 +95,6 @@ pub(crate) fn parse_feed(
             observed_at: LocalTimestamp::from_feed(&value.timestamp),
         }
     });
-    let now_line = station.map_or_else(
-        || String::from("Now: unavailable"),
-        |value| {
-            format!(
-                "Now ({}): {}C feels {}C, wind {} m/s ({} bft), RH {}%",
-                value.station_name,
-                fmt_opt_f64(value.temperature),
-                fmt_opt_f64(value.feel_temperature),
-                fmt_opt_f64(value.wind_speed),
-                fmt_opt_i64(value.wind_bft),
-                fmt_opt_f64(value.humidity)
-            )
-        },
-    );
     let mut forecast = payload.forecast.fivedayforecast;
     for day in &mut forecast {
         day.condition_code = condition::code_from_icon_url(&day.icon_url).unwrap_or_default();
@@ -118,7 +104,6 @@ pub(crate) fn parse_feed(
     Ok(WeatherData {
         current,
         forecast,
-        now_line,
         rain_line: String::new(),
         rain_soon: None,
         rain_series: Vec::new(),
@@ -149,14 +134,6 @@ fn haversine_distance(station: &StationMeasurement, latitude: f64, longitude: f6
     let a = (latitude_delta / 2.0).sin().powi(2)
         + station_latitude.cos() * target_latitude.cos() * (longitude_delta / 2.0).sin().powi(2);
     2.0 * a.sqrt().asin()
-}
-
-fn fmt_opt_f64(value: Option<f64>) -> String {
-    value.map_or_else(|| String::from("n/a"), |number| format!("{number:.1}"))
-}
-
-fn fmt_opt_i64(value: Option<i64>) -> String {
-    value.map_or_else(|| String::from("n/a"), |number| number.to_string())
 }
 
 #[cfg(test)]
@@ -237,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_station_values_are_summarized_as_unavailable() {
+    fn missing_station_readings_stay_absent_rather_than_becoming_zero() {
         // Given
         let feed = r#"{
             "actual":{"stationmeasurements":[{"stationname":"Sparse","lat":52.37,"lon":4.84}]},
@@ -247,10 +224,18 @@ mod tests {
         // When
         let weather = parse_feed(feed, 52.37, 4.84).expect("feed should parse");
 
-        // Then
+        // Then: absent is not zero, and only absence lets the panel say so.
+        let current = weather.current.expect("station expected");
+        assert_eq!(current.station_name, "Sparse");
         assert_eq!(
-            weather.now_line,
-            "Now (Sparse): n/aC feels n/aC, wind n/a m/s (n/a bft), RH n/a%"
+            (
+                current.temperature,
+                current.feel_temperature,
+                current.wind_speed,
+                current.wind_bft,
+                current.humidity
+            ),
+            (None, None, None, None, None)
         );
     }
 

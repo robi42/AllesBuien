@@ -182,7 +182,9 @@ impl ffi::WeatherController {
                     eprintln!("allesbuien: notification failed: {error}");
                 }
             }
-            let _queue_result = qt_thread.queue(move |controller| controller.apply_result(result));
+            if let Err(error) = qt_thread.queue(move |controller| controller.apply_result(result)) {
+                eprintln!("allesbuien: weather update never reached the window: {error}");
+            }
         }));
     }
 

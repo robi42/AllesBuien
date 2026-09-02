@@ -82,7 +82,12 @@ pub struct NotificationInput<'a> {
     pub location_label: &'a str,
 }
 
-#[derive(Clone, Copy, Debug)]
+/// The two rules above, as settled values.
+///
+/// It lives with the rules it governs rather than with the environment reading
+/// that produces it: [`crate::config`] resolves one of these and carries it, so
+/// a threshold cannot be read here and be spelled differently there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NotifyConfig {
     pub enabled: bool,
     pub threshold_minutes: u32,

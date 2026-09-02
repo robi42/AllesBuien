@@ -17,7 +17,7 @@ use std::{
 use crate::icon_cache::IconCache;
 use allesbuien_core::{
     config::Config,
-    notify::{NotifyConfig, NotifySend},
+    notify::NotifySend,
     radar::RadarError,
     radar_transport::ReqwestRadarApi,
     weather::{ReqwestFeedApi, WeatherError},
@@ -90,11 +90,7 @@ pub fn run() -> Result<(), RunError> {
             location: config.location,
             radar_state_dir: config.state_dir,
         },
-        NotifyConfig {
-            enabled: config.notify.enabled,
-            threshold_minutes: config.notify.threshold_minutes,
-            cooldown: config.notify.cooldown,
-        },
+        config.notify,
     );
     let exit_code = AppBuilder::new(
         services,

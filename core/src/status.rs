@@ -89,21 +89,43 @@ mod tests {
         ]
     }
 
+    fn weather_samples() -> Vec<WeatherError> {
+        vec![
+            WeatherError::ClientBuild(endpoint_error()),
+            WeatherError::FeedRequest(endpoint_error()),
+            WeatherError::RaintextRequest(endpoint_error()),
+            WeatherError::FeedDecode(decode_error()),
+        ]
+    }
+
     #[test]
     fn never_leaks_a_url_host_or_path_to_the_viewer() {
-        // Given: variants whose own Display would quote internals verbatim.
-        for error in radar_samples() {
-            for stale in [false, true] {
-                // When
-                let message = radar_message(&error, stale);
+        // Given: variants whose own Display would quote internals verbatim,
+        // asserted to still do so, because a harmless sample proves nothing.
+        let radar = radar_samples();
+        let weather = weather_samples();
+        assert!(
+            weather
+                .iter()
+                .any(|error| error.to_string().contains("buienradar.nl")),
+            "a transport sample has to carry the address the wording must not"
+        );
+        let messages = radar
+            .iter()
+            .flat_map(|error| [false, true].map(|stale| radar_message(error, stale)))
+            .chain(
+                weather
+                    .iter()
+                    .flat_map(|error| [false, true].map(|stale| weather_message(error, stale))),
+            );
 
-                // Then
-                for leak in ["http", "://", "buienradar.nl", "/home/", ".local"] {
-                    assert!(
-                        !message.to_ascii_lowercase().contains(leak),
-                        "message {message:?} leaked {leak:?}"
-                    );
-                }
+        // When / Then
+        for message in messages {
+            for leak in ["http", "://", "buienradar.nl", "/home/", ".local"] {
+                assert!(
+                    !message.to_ascii_lowercase().contains(leak),
+                    "message {message:?} leaked {leak:?}"
+                );
             }
         }
     }
@@ -151,5 +173,18 @@ mod tests {
 
     fn decode_error() -> serde_json::Error {
         serde_json::from_str::<u8>("nope").expect_err("invalid json")
+    }
+
+    /// A reqwest error carrying the endpoint it failed on, as a live one does.
+    ///
+    /// Built offline through the hostless-scheme rejection rather than by
+    /// dialling anything: what this fixture has to reproduce is the URL in the
+    /// error's `Display`, and a unit test that needs a socket to reproduce it
+    /// would be a slower, flakier way to assert the same wording.
+    fn endpoint_error() -> reqwest::Error {
+        reqwest::Client::new()
+            .get("data:text/plain,https://data.buienradar.nl/2.0/feed/json")
+            .build()
+            .expect_err("a scheme carrying no host cannot become a request")
     }
 }

@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::location::{self, LocationConfig};
+use crate::notify::NotifyConfig;
 
 /// Buienradar's published feed endpoint, and the fallback its override returns to.
 pub const DEFAULT_FEED_URL: &str = "https://data.buienradar.nl/2.0/feed/json";
@@ -49,13 +50,6 @@ pub struct EndpointConfig {
     pub feed_url: String,
     pub raintext_url: String,
     pub radar_url: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NotifyConfig {
-    pub enabled: bool,
-    pub threshold_minutes: u32,
-    pub cooldown: Duration,
 }
 
 #[derive(Debug, Clone, PartialEq)]

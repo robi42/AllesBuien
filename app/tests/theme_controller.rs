@@ -21,7 +21,6 @@ impl FeedApi for StubFeedApi {
             Ok(WeatherData {
                 current: None,
                 forecast: Vec::new(),
-                now_line: String::new(),
                 rain_line: String::new(),
                 rain_soon: None,
                 rain_series: Vec::new(),
