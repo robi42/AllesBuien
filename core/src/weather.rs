@@ -23,8 +23,6 @@ use crate::{
 
 pub use crate::rain::{RainPoint, RainSoon, code_to_mmh as rain_code_to_mmh};
 
-pub const DEFAULT_FEED_URL: &str = "https://data.buienradar.nl/2.0/feed/json";
-pub const DEFAULT_RAINTEXT_URL: &str = "https://gpsgadget.buienradar.nl/data/raintext";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub type FeedFuture<'a> =
@@ -185,10 +183,8 @@ fn summarize_raintext_detail(raw: &str, clock_shift_minutes: i32) -> RainSeries 
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DEFAULT_FEED_URL, DEFAULT_RAINTEXT_URL, ReqwestFeedApi, parse_feed, rain_code_to_mmh,
-        summarize_raintext_detail,
-    };
+    use super::{ReqwestFeedApi, parse_feed, rain_code_to_mmh, summarize_raintext_detail};
+    use crate::config::{DEFAULT_FEED_URL, DEFAULT_RAINTEXT_URL};
 
     const FEED_FIXTURE: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),

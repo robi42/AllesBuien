@@ -11,8 +11,6 @@
 
 use crate::radar::{RadarApi, RadarError, RadarFuture};
 
-pub const DEFAULT_RADAR_BASE_URL: &str = "https://image.buienradar.nl";
-
 /// One frame per 5 minutes, so this window returns 26 frames spanning 5 minutes
 /// back to 2 hours ahead — the same horizon the raintext rain graph covers.
 ///
@@ -78,7 +76,8 @@ impl RadarApi for ReqwestRadarApi {
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_RADAR_BASE_URL, ReqwestRadarApi};
+    use super::ReqwestRadarApi;
+    use crate::config::DEFAULT_RADAR_URL;
 
     #[test]
     fn a_trailing_slash_on_the_base_url_does_not_double_the_path_separator() {
@@ -98,7 +97,7 @@ mod tests {
     #[test]
     fn the_metadata_query_asks_for_the_window_the_rain_graph_covers() {
         // Given / When
-        let api = ReqwestRadarApi::new(DEFAULT_RADAR_BASE_URL).expect("client should build");
+        let api = ReqwestRadarApi::new(DEFAULT_RADAR_URL).expect("client should build");
 
         // Then: two observed steps back, two hours ahead, and bare sprites.
         for parameter in [

@@ -10,15 +10,24 @@
 //! shipped value rather than to an empty string: an override that is present but
 //! blank is a mistake, not an instruction. The viewer's location is the single
 //! setting with a precedence rule of its own, and [`crate::location`] owns it.
+//!
+//! The shipped addresses live here rather than beside the transports that dial
+//! them, because a default is a settling decision and this is the module that
+//! settles it: it is the one place that has to name all three anyway. Held
+//! apart, two of them drifted into a second spelling in a second file, and the
+//! two copies could then disagree without anything failing.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::location::{self, LocationConfig};
 
-const DEFAULT_FEED_URL: &str = "https://data.buienradar.nl/2.0/feed/json";
-const DEFAULT_RAINTEXT_URL: &str = "https://gpsgadget.buienradar.nl/data/raintext";
-const DEFAULT_RADAR_URL: &str = "https://image.buienradar.nl";
+/// Buienradar's published feed endpoint, and the fallback its override returns to.
+pub const DEFAULT_FEED_URL: &str = "https://data.buienradar.nl/2.0/feed/json";
+/// The raintext endpoint; [`crate::weather`] appends the viewer's coordinates.
+pub const DEFAULT_RAINTEXT_URL: &str = "https://gpsgadget.buienradar.nl/data/raintext";
+/// The radar host alone; [`crate::radar_transport`] appends the metadata path.
+pub const DEFAULT_RADAR_URL: &str = "https://image.buienradar.nl";
 const DEFAULT_NOTIFY_THRESHOLD_MINUTES: u32 = 30;
 const DEFAULT_NOTIFY_COOLDOWN_MINUTES: u64 = 60;
 
