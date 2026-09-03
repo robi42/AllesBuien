@@ -22,10 +22,13 @@ require_tool() {
 
 # The guardrails themselves are shell, and bin/test has already shipped a shell
 # bug that disabled a gate while reporting success. Linting them is not hygiene
-# for its own sake; it is the only reader that checks the checkers.
+# for its own sake; it is the only reader that checks the checkers. The
+# violation fixtures under tests/gates are shell too, and they are read by the
+# same argument twice over: a fixture with a quoting bug proves nothing about
+# the gate it names.
 echo "==> gate: shell scripts"
 require_tool shellcheck
-shellcheck bin/*
+shellcheck bin/* tests/gates/*.sh
 
 echo "==> gate: workflow syntax"
 require_tool actionlint
@@ -69,8 +72,20 @@ fi
 echo "==> gate: core coverage"
 cargo llvm-cov -p allesbuien-core --fail-under-lines 85
 
+# Capture, then match, for the reason the gate above spells out. The hazard runs
+# the other way here - grep -q exits at the first match, cargo takes SIGPIPE,
+# and pipefail turns an agreeing version into 141 - but it is the same shape,
+# and it is the last one left in this file. Writing the fixture for this gate is
+# what showed the old form also said nothing at all when it failed: its entire
+# failure output was an exit code.
 echo "==> gate: cargo-llvm-cov version pin"
-cargo llvm-cov --version | grep -qF "$(cat .llvm-cov-version)"
+pinned_llvm_cov=$(cat .llvm-cov-version)
+installed_llvm_cov=$(cargo llvm-cov --version)
+if [[ "$installed_llvm_cov" != *"$pinned_llvm_cov"* ]]; then
+  printf 'error: cargo-llvm-cov reports "%s" but .llvm-cov-version pins %s\n' \
+    "$installed_llvm_cov" "$pinned_llvm_cov" >&2
+  exit 1
+fi
 
 # The root .qmllint.ini is committed so a Qt upgrade changes this gate's
 # strictness through a reviewable diff rather than through whichever defaults
@@ -84,6 +99,13 @@ else
 fi
 "$qmllint" --max-warnings 0 -I target/cxxqt/qml_modules app/qml/*.qml
 
-# Last, because it reads what the build registered. The workspace test gate
+# Last two, because both read what the build registered. The workspace test gate
 # above is what makes that artefact current.
 ./bin/check-qml-contract
+
+# And finally the gate that checks the gates: every one above run again against
+# an input it is supposed to refuse, in a throwaway copy of this tree, with the
+# failure message it produces asserted rather than just its exit code. Four
+# expensive gates are deliberately out of scope; tests/gates/README.md says
+# which and why.
+./bin/check-gates

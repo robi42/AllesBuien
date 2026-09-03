@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The gate that checks the gates. Every other gate in this repository asserts
+# something about the tree; this one asserts something about those gates - that
+# each still goes red on an input it exists to refuse, and green on the tree as
+# it stands. Both directions matter: a fixture that goes red against a baseline
+# that was already red proves nothing at all.
+#
+# The motivation is measured rather than theoretical. bin/test's core-purity
+# guard was `cargo tree | grep -qi cxx && exit 1 || true`, and under pipefail
+# that pipeline reports success precisely when it should fail, so the gate sat
+# green and useless for weeks. A gate that cannot fail is worse than no gate: it
+# turns "nobody checked" into "we verified this". Four gates had been watched to
+# fail at some point, each through a hand mutation that was then thrown away.
+# This file is that work made repeatable.
+#
+# Shape borrowed from florianbuetow/ai-guardrails: a baseline phase that asserts
+# the clean input passes, and a violation phase that overlays a known-bad input
+# and asserts the same check fails. Each fixture in tests/gates names the gate
+# it targets, mutates the tree, and declares the substrings the resulting
+# failure has to contain - because a gate that fails for the wrong reason is a
+# false pass wearing a red exit code.
+#
+# Nothing here touches the real working tree. Tracked files are copied into a
+# throwaway git repository under target/, which is ignored, so a crashed run
+# leaves `git status` clean and registers no worktree to prune.
+
+echo "==> gate: gate violations"
+
+repo_root=$PWD
+fixtures=tests/gates
+
+if [[ ! -d $fixtures ]]; then
+  printf 'FAIL %s is missing; run this from the repository root\n' "$fixtures" >&2
+  exit 1
+fi
+
+# Three fixtures read what the build registered. Missing, they would asssert
+# nothing while still reporting a pass, which is the exact defect this whole
+# file exists to catch - so an unbuilt tree fails here, as it does in
+# bin/check-qml-contract.
+qml_modules=target/cxxqt/qml_modules
+if [[ ! -d $qml_modules ]]; then
+  printf 'FAIL the generated QML modules are missing: %s\n' "$qml_modules" >&2
+  printf '  Build the app first; three fixtures read what the build registered.\n' >&2
+  exit 1
+fi
+
+mkdir -p target
+scratch=$(mktemp -d "$repo_root/target/violations.XXXXXX")
+trap 'rm -rf "$scratch"' EXIT
+
+# The working tree as it stands, not HEAD: the suite has to judge the gates you
+# are about to commit, not the ones you last committed. Untracked-but-not-
+# ignored files come along for the same reason, and for a sharper one - a new
+# module that git has not been told about yet is still a module cargo will try
+# to resolve, and leaving it behind turns every cargo-shaped gate red in the
+# scratch for a reason that has nothing to do with the fixture.
+git ls-files -z --cached --others --exclude-standard |
+  tar --null --files-from - --create --file - |
+  tar --extract --file - --directory "$scratch"
+mkdir -p "$scratch/$qml_modules"
+cp -a "$qml_modules/." "$scratch/$qml_modules/"
+
+# A throwaway index, because six gates read `git ls-files` and a fixture that
+# adds or deletes a file has to be visible to them. --all is the correct verb
+# for an index nothing will ever commit to a real branch; signing is off so the
+# suite never queues behind the SSH agent.
+git -C "$scratch" -c init.defaultBranch=main init -q
+git -C "$scratch" add --all -- .
+git -C "$scratch" \
+  -c user.name=gates -c user.email=gates@invalid -c commit.gpgsign=false \
+  commit -q -m 'violations baseline'
+
+restore_scratch() {
+  git -C "$scratch" reset -q --hard
+  git -C "$scratch" clean -qfd
+}
+
+# The gate's own text, lifted out of bin/test and run as written. Naming a gate
+# rather than copying its commands is the entire point: a fixture carrying its
+# own copy of a command keeps passing long after the real gate has changed
+# underneath it. The preamble comes along verbatim, ./bin/check-fast included,
+# which doubles as proof that each fixture is surgical enough to leave the cheap
+# gates green.
+#
+# A block runs to the next gate header or to the next delegated gate script,
+# whichever comes first. Both are boundaries: without the second one the last
+# gate in the file would absorb the two script calls that follow it, and this
+# script is one of them, so slicing bin/test would recurse into itself.
+slice_gate() {
+  awk 'index($0, "echo \"==> gate: ") == 1 { exit } { print }' bin/test
+  awk -v want="echo \"==> gate: $1\"" '
+    index($0, "echo \"==> gate: ") == 1 { keep = ($0 == want) }
+    index($0, "./bin/") == 1 { keep = 0 }
+    keep { print }
+  ' bin/test
+}
+
+# bin/check-fast and bin/check-qml-contract are whole scripts that report every
+# offender they find, so they run as themselves; bin/test builds a whole tree
+# and only its named slice is affordable.
+run_gate() {
+  local script=$1 gate=$2
+  shift 2
+  if [[ $script == bin/test ]]; then
+    slice_gate "$gate" >"$scratch/violation-gate.sh"
+    (cd "$scratch" && bash violation-gate.sh)
+  else
+    (cd "$scratch" && "./$script" "$@")
+  fi
+}
+
+declare -A baseline_result=()
+declare -A baseline_output=()
+
+check_baseline() {
+  local key="$1|$2" out
+  [[ -z ${baseline_result[$key]+set} ]] || return 0
+  restore_scratch
+  if out=$(run_gate "$1" "$2" 2>&1); then
+    baseline_result[$key]=green
+  else
+    baseline_result[$key]=red
+  fi
+  baseline_output[$key]=$out
+}
+
+failed=0
+rows=()
+gates_seen=()
+
+record() {
+  rows+=("$(printf '    %-5s %-27s %-29s %s' "$1" "$2" "$3" "$4")")
+}
+
+reject() {
+  failed=1
+  record FAIL "$1" "$2" "$3"
+  rows+=("$(printf '%s' "${4:-}" | sed 's/^/          /')")
+}
+
+for fixture in "$fixtures"/*.sh; do
+  name=${fixture##*/}
+  name=${name%.sh}
+
+  gate=
+  script=
+  outcome=
+  expect=()
+  args=()
+  unset -f mutate
+  # shellcheck source=/dev/null
+  . "$fixture"
+  gates_seen+=("$gate")
+
+  if [[ -z $gate || -z $script || -z $outcome ]] || ! declare -F mutate >/dev/null; then
+    reject "${gate:-?}" "$name" 'fixture declares no gate, script, outcome, or mutate()'
+    continue
+  fi
+  if [[ $outcome == red && ${#expect[@]} -eq 0 ]]; then
+    reject "$gate" "$name" 'a red fixture that asserts no message cannot tell a right failure from a wrong one'
+    continue
+  fi
+  if ! grep -qF "echo \"==> gate: $gate\"" "$script"; then
+    reject "$gate" "$name" "$script no longer has a gate named '$gate'"
+    continue
+  fi
+
+  check_baseline "$script" "$gate"
+  if [[ ${baseline_result["$script|$gate"]} != green ]]; then
+    reject "$gate" "$name" 'the gate is already red on the untouched tree' \
+      "${baseline_output["$script|$gate"]}"
+    continue
+  fi
+
+  restore_scratch
+  cd "$scratch"
+  mutate
+  cd "$repo_root"
+  if [[ -z $(git -C "$scratch" status --porcelain) ]]; then
+    reject "$gate" "$name" 'the mutation changed nothing, so the fixture asserts nothing'
+    continue
+  fi
+  git -C "$scratch" add --all -- .
+
+  if out=$(run_gate "$script" "$gate" "${args[@]}" 2>&1); then
+    verdict=green
+  else
+    verdict=red
+  fi
+
+  problem=
+  [[ $verdict == "$outcome" ]] || problem="expected the gate to go $outcome, it went $verdict"
+  if [[ -z $problem && $outcome == red ]]; then
+    for needle in "${expect[@]}"; do
+      case $out in
+        *"$needle"*) ;;
+        *) problem="the failure never mentions '$needle'" ;;
+      esac
+    done
+    # Both worklist scripts print one FAIL headline per gate, so more than one
+    # means the fixture is blunt and the red could be coming from elsewhere.
+    if [[ $script != bin/test ]]; then
+      headlines=$(grep -c '^FAIL ' <<<"$out" || true)
+      [[ $headlines -eq 1 ]] || problem="$headlines gates went red, expected exactly this one"
+    fi
+  fi
+
+  if [[ -n $problem ]]; then
+    reject "$gate" "$name" "$problem" "$out"
+  elif [[ $outcome == red ]]; then
+    record ok "$gate" "$name" "baseline green, red on ${expect[*]@Q}"
+  else
+    record ok "$gate" "$name" 'baseline green, stayed green'
+  fi
+done
+
+printf '%s\n' "${rows[@]}"
+distinct=$(printf '%s\n' "${gates_seen[@]}" | sort -u | wc -l)
+printf '    %s fixtures over %s gates\n' "${#gates_seen[@]}" "$distinct"
+exit "$failed"
