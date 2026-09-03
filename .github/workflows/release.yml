@@ -14,12 +14,55 @@ jobs:
     container: archlinux:base-devel
     env:
       QMAKE: /usr/bin/qmake6
+      # GNU gold cannot resolve the whole-archive initialiser symbols CXX-Qt
+      # emits, so the release binary has to link exactly the way CI's does.
+      RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
+      # The toolchain is installed once as root and read by the unprivileged
+      # builder, so its home is shared and its package cache is not: cargo
+      # writes to CARGO_HOME, and builder cannot write under /usr/local.
+      RUSTUP_HOME: /usr/local/rustup
+      CARGO_HOME: /home/builder/.cargo
     steps:
+      # Ahead of the checkout on purpose. Without git in the image the checkout
+      # action falls back to the REST API tarball, which leaves a source tree
+      # but no repository, and the source archive below is built by git archive.
+      #
+      # rustup rather than pacman's rust: bin/build asserts Cargo 1.98.0 to match
+      # rust-toolchain.toml, and a rolling distribution ships whatever it ships.
+      - name: Install release dependencies
+        run: |
+          pacman -Syu --noconfirm --needed git rustup lld qt6-base qt6-declarative
+          rustup default 1.98.0
+          chmod -R a+rX /usr/local/rustup
+
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install release dependencies
-        run: pacman -Syu --noconfirm rust base-devel qt6-base qt6-declarative
+      # The workspace is bind-mounted from the host and owned by the runner
+      # account while the container is root, so git refuses it as dubious
+      # ownership. The checkout action grants itself an exception in a global
+      # config it discards on return; every later step needs its own.
+      - name: Trust the checked-out workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # Before any build work, so a mistyped tag costs seconds rather than a
+      # full Qt compile. pkgver is static by design, which is exactly why
+      # nothing but a check keeps it honest.
+      - name: Verify the tag, the crates and the package agree
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          app_version=$(sed -n 's/^version = "\(.*\)"/\1/p' app/Cargo.toml | head -1)
+          core_version=$(sed -n 's/^version = "\(.*\)"/\1/p' core/Cargo.toml | head -1)
+          pkg_version=$(sed -n 's/^pkgver=//p' pkgbuild/PKGBUILD | head -1)
+          printf 'tag=%s app=%s core=%s pkgver=%s\n' \
+            "$tag_version" "$app_version" "$core_version" "$pkg_version"
+          for name in app_version core_version pkg_version; do
+            if [[ "${!name}" != "$tag_version" ]]; then
+              printf 'error: %s is %s but the tag claims %s\n' \
+                "$name" "${!name}" "$tag_version" >&2
+              exit 1
+            fi
+          done
 
       - name: Create source archive
         run: git archive --format=tar.gz -o "allesbuien-${GITHUB_REF_NAME}-src.tar.gz" HEAD
@@ -27,8 +70,22 @@ jobs:
       - name: Create unprivileged builder
         run: useradd -m builder && chown -R builder .
 
+      # makepkg refuses to run as root. su does not carry the job environment
+      # into the new shell, so the toolchain path and the linker flag are passed
+      # explicitly rather than assumed.
       - name: Build package
-        run: su builder -c '(cd pkgbuild && makepkg -f)'
+        run: |
+          # The single quotes are the point: $PATH has to reach builder's shell
+          # unexpanded so it resolves to builder's own path, not root's.
+          # shellcheck disable=SC2016
+          su builder -c '
+            export PATH=/usr/local/rustup/toolchains/1.98.0-x86_64-unknown-linux-gnu/bin:$PATH
+            export RUSTUP_HOME=/usr/local/rustup
+            export CARGO_HOME=/home/builder/.cargo
+            export QMAKE=/usr/bin/qmake6
+            export RUSTFLAGS="-C link-arg=-fuse-ld=lld"
+            cd pkgbuild && makepkg -f
+          '
 
       - name: Publish release assets
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
