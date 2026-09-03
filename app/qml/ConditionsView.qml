@@ -24,6 +24,17 @@ ColumnLayout {
     // its own could not tell a chosen place from a fallen-back one: Amsterdam-West
     // rendered identically whether the viewer had picked it or never configured
     // anything. Rust decides the word; this only places it.
+    //
+    // Quieter had stopped being enough. With a caption rail on this row and
+    // another under the reading, the two provenance strings bracketed the
+    // header and the name read as one of four peers. The provenance cannot go
+    // lower - it already sits at `emphasisLow`, which Theme.qml documents as
+    // the measured AA floor for caption sizes - so the name takes the anchor
+    // instead, at full opacity. That widens the gap to three simultaneous
+    // contrasts, 11pt bold at 1.0 against 9pt regular at 0.7, without either
+    // label leaving the tertiary grammar. Baseline alignment does the rest:
+    // sitting the caption on the name's baseline reads as an annotation to it,
+    // where vertical centring read as a sibling beside it.
     RowLayout {
         Layout.fillWidth: true
         spacing: conditionsView.theme.spaceSm
@@ -34,7 +45,8 @@ ColumnLayout {
             font.bold: true
             font.letterSpacing: conditionsView.theme.capsTracking
             color: conditionsView.theme.text
-            opacity: conditionsView.theme.emphasisMid
+            opacity: conditionsView.theme.emphasisFull
+            Layout.alignment: Qt.AlignBaseline
             Layout.fillWidth: true
             elide: Text.ElideRight
         }
@@ -49,6 +61,7 @@ ColumnLayout {
             font.letterSpacing: conditionsView.theme.capsTracking
             color: conditionsView.theme.text
             opacity: conditionsView.theme.emphasisLow
+            Layout.alignment: Qt.AlignBaseline
         }
     }
 
