@@ -60,7 +60,16 @@ impl RadarTimeline {
     }
 }
 
-fn instant(naive_utc: &str) -> Option<Timestamp> {
+/// Reads a radar stamp — naive UTC, per this module's doc — as an instant.
+///
+/// Unreadable text yields [`None`] rather than a fabricated instant.
+///
+/// Public so [`crate::radar_freshness`] can date a run's own timestamp under the
+/// same convention. Two parsers for "which instant is this stamp" would be one
+/// too many: whichever of them a vendor zone change reached first, the frame
+/// captions and the staleness verdict would then disagree about the same run.
+#[must_use]
+pub fn instant(naive_utc: &str) -> Option<Timestamp> {
     let civil: DateTime = naive_utc.trim().parse().ok()?;
     civil
         .to_zoned(TimeZone::UTC)

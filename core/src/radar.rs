@@ -153,18 +153,15 @@ fn prune_runs(state_dir: &Path) -> Result<(), RadarError> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        future::Future,
-        sync::{
-            Arc,
-            atomic::{AtomicUsize, Ordering},
-        },
-        task::{Context, Poll, Waker},
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
     };
 
     use tempfile::tempdir;
 
     use super::*;
+    use crate::test_support::block_on;
 
     const METADATA: &[u8] = br#"{
         "timestamp":"2026-08-29T21:15:00",
@@ -207,17 +204,6 @@ mod tests {
                 self.downloads.fetch_add(1, Ordering::Relaxed);
                 Ok(b"png".to_vec())
             })
-        }
-    }
-
-    fn block_on<F: Future>(future: F) -> F::Output {
-        let mut context = Context::from_waker(Waker::noop());
-        let mut future = Box::pin(future);
-        loop {
-            match future.as_mut().poll(&mut context) {
-                Poll::Ready(output) => return output,
-                Poll::Pending => std::thread::yield_now(),
-            }
         }
     }
 

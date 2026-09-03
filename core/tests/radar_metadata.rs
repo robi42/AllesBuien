@@ -1,6 +1,6 @@
 //! Offline coverage for the radar metadata fields the app reads.
 //!
-//! The fixture is a verbatim capture of the live `history=2&forecast=24` sprite
+//! The fixture is a verbatim capture of the live `history=0&forecast=24` sprite
 //! metadata response, so a vendor schema change surfaces here rather than as a
 //! two-hour caption drift on someone's desktop.
 
@@ -57,15 +57,15 @@ fn refresh(metadata: &'static [u8]) -> allesbuien_core::radar::RadarRefresh {
 }
 
 #[test]
-fn the_live_capture_carries_the_vendor_utc_offset_and_twenty_six_frames() {
+fn the_live_capture_carries_the_vendor_utc_offset_and_twenty_one_frames() {
     // Given / When
     let refreshed = refresh(LIVE_METADATA);
 
     // Then
     assert_eq!(refreshed.time_offset_hours, Some(2));
-    assert_eq!(refreshed.frames.len(), 26);
-    assert_eq!(refreshed.frames[0].timestamp, "2026-08-31T20:10:00");
-    assert_eq!(refreshed.frames[25].timestamp, "2026-08-31T22:15:00");
+    assert_eq!(refreshed.frames.len(), 21);
+    assert_eq!(refreshed.frames[0].timestamp, "2026-09-02T13:35:00");
+    assert_eq!(refreshed.frames[20].timestamp, "2026-09-02T15:15:00");
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn metadata_without_the_vendor_field_reports_no_offset() {
 }
 
 #[test]
-fn the_captured_run_splits_into_two_observations_and_twenty_four_predictions() {
+fn the_captured_run_opens_at_the_present_with_everything_after_it_predicted() {
     // Given: the instant the capture's own run timestamp names.
     let refreshed = refresh(LIVE_METADATA);
     let stamps: Vec<String> = refreshed
@@ -89,9 +89,9 @@ fn the_captured_run_splits_into_two_observations_and_twenty_four_predictions() {
         .collect();
 
     // When
-    let timeline = RadarTimeline::at(&stamps, "2026-08-31T20:15:00");
+    let timeline = RadarTimeline::at(&stamps, "2026-09-02T13:35:00");
 
     // Then
-    assert_eq!(timeline.first_forecast_index, 2);
-    assert_eq!(timeline.observed.len(), 26);
+    assert_eq!(timeline.first_forecast_index, 1);
+    assert_eq!(timeline.observed.len(), 21);
 }

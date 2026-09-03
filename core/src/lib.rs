@@ -5,6 +5,7 @@ pub mod error_chain;
 pub mod location;
 pub mod notify;
 pub mod radar;
+pub mod radar_freshness;
 pub mod radar_legend;
 pub mod radar_projection;
 pub mod radar_timeline;
@@ -13,6 +14,8 @@ pub mod rain;
 pub mod rain_cursor;
 pub mod retry;
 pub mod status;
+#[cfg(test)]
+mod test_support;
 pub mod theme;
 pub mod weather;
 pub mod weather_feed;
