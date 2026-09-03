@@ -125,6 +125,17 @@ Item {
 
                 RowLayout {
                     spacing: radarPanel.theme.spaceXs
+
+                    // Equal cells, and every delegate has to fill the cell it is
+                    // handed. Both halves are load-bearing: without the
+                    // `fillWidth` below, a column sizes to its own caption and
+                    // centres inside its cell, so the swatch above it inherits
+                    // the width of a string. That is how "10-100" came to draw
+                    // twice as wide as "0-2" — a difference that encoded nothing
+                    // but character count, on a key whose whole job is to say
+                    // that the buckets are read by colour and not by width.
+                    uniformCellSizes: true
+
                     Repeater {
                         model: radarPanel.radarController.legendSwatches
 
@@ -133,6 +144,16 @@ Item {
                             required property int index
                             required property var modelData
 
+                            Layout.fillWidth: true
+                            // Equal cells alone are not enough: the caption sets
+                            // this column's implicit width but `fillWidth` lets
+                            // it shrink under that, and the captions do not
+                            // elide, so a cell narrower than its text spills the
+                            // text over its neighbour. Flooring each cell at its
+                            // own caption makes the widest one ("10-100") the
+                            // floor for all five, which is also what widens the
+                            // card enough to hold them.
+                            Layout.minimumWidth: rangeCaption.implicitWidth
                             spacing: 2
 
                             Rectangle {
@@ -143,6 +164,7 @@ Item {
                             }
 
                             Label {
+                                id: rangeCaption
                                 text: radarPanel.radarController.legendBuckets[bucket.index]
                                 font.pointSize: radarPanel.legendRangeSize
                                 font.features: ({ tnum: 1 })
