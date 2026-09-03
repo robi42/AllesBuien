@@ -1,0 +1,28 @@
+# Gates deliberately shipped without a fixture, one name per line, spelled
+# exactly as the script echoes it. `gate coverage` in bin/check-fast reads this
+# file and refuses a gate that is neither covered here nor covered by a fixture,
+# so every name below is a decision somebody made on purpose and wrote down -
+# not a gap nobody noticed. An entry that stops matching a real gate, or that a
+# fixture has since covered, is itself refused: this list has to shrink when a
+# fixture lands. tests/gates/README.md carries the long form of each argument.
+#
+# All four need a compiled workspace, and a cold CXX-Qt build on this host is
+# over twenty minutes. All four are also stock invocations of tools whose
+# failure behaviour is not in question, which is the difference between them and
+# the hand-written shell every other gate is made of.
+
+# Needs a full build per fixture, and clippy and test invalidate each other's
+# cxx-qt fingerprints, so one fixture costs two rebuilds.
+clippy
+
+# The same rebuild, plus a fixture would have to break a test to prove the
+# runner reports it - which cargo test demonstrates on every red run anyway.
+workspace tests
+
+# Runs the whole suite four more times; the property it guards is proven by the
+# suite it re-runs, not by the loop around it.
+timezone matrix
+
+# An instrumented rebuild, and the threshold is a number cargo llvm-cov enforces
+# rather than a check written here.
+core coverage

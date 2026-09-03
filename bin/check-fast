@@ -140,4 +140,62 @@ echo "==> gate: pinned action SHAs"
 unpinned=$(grep -rnE '^\s*-?\s*uses:' .github/workflows/*.yml | grep -vE '@[0-9a-f]{40} #' | sed 's/^/  /' || true)
 [[ -z "$unpinned" ]] || report 'workflow steps not pinned to a 40-character SHA with a tag comment:' "$unpinned"
 
+# Gate coverage. bin/check-gates says how many gates it proved by counting the
+# ones its fixtures named, so a gate that ships without a fixture is not merely
+# unproven, it is invisible: the summary keeps printing the same totals, every
+# fixture still passes, and nothing anywhere goes red. That is how a decoration
+# reached this tree once already, and the arithmetic that catches it cannot live
+# in bin/check-gates - that script takes a selector argument which makes its
+# gate list legitimately partial, and a fixture aimed at a gate inside it would
+# nest the whole fixture suite in itself. It lives here, where lefthook runs it
+# on the commit that would introduce the unproven gate.
+#
+# A gate is declared by a column-1 `echo "==> gate: ..."` line, the same shape
+# bin/check-gates' slicer matches, so what counts as a gate header has one
+# definition and a comment quoting one is invisible to both. A gate is covered
+# by a `gate="..."` line in a fixture. Whatever is left has to be named in
+# tests/gates/uncovered with the reason it is excused, and that file is read in
+# both directions so it cannot fill with names that assert nothing.
+#
+# Fixtures are read off the directory rather than out of the git index: the
+# fixture that covers a new gate is written in the same commit and is not staged
+# yet when the hook runs, and refusing the commit that closes the gap would be
+# the wrong answer. bin/check-gates' own gate is outside the scan for the reason
+# above, and is proven instead by every fixture it runs.
+echo "==> gate: gate coverage"
+declared_gates=$(awk '
+  index($0, "echo \"==> gate: ") == 1 {
+    sub(/^echo "==> gate: /, "")
+    sub(/".*$/, "")
+    print
+  }
+' bin/test bin/check-fast bin/check-qml-contract | sort -u)
+covered_gates=$(awk '
+  index($0, "gate=\"") == 1 {
+    sub(/^gate="/, "")
+    sub(/".*$/, "")
+    print
+  }
+' tests/gates/*.sh | sort -u)
+excused_gates=$(grep -vE '^[[:space:]]*(#|$)' tests/gates/uncovered | sort -u || true)
+
+# printf of an empty variable is one blank line rather than none, and comm would
+# read that blank as a gate named "", so every set is filtered on the way in.
+# One report call, because a gate that prints two headlines reads as two gates.
+unproven_gates=$(
+  comm -23 \
+    <(printf '%s\n' "$declared_gates" | grep -v '^$') \
+    <(printf '%s\n' "$covered_gates" "$excused_gates" | grep -v '^$' | sort -u) |
+    sed 's|^|  no fixture, and not named in tests/gates/uncovered: |'
+  comm -13 \
+    <(printf '%s\n' "$declared_gates" | grep -v '^$') \
+    <(printf '%s\n' "$excused_gates" | grep -v '^$') |
+    sed 's|^|  named in tests/gates/uncovered, but no script declares it: |'
+  comm -12 \
+    <(printf '%s\n' "$covered_gates" | grep -v '^$') \
+    <(printf '%s\n' "$excused_gates" | grep -v '^$') |
+    sed 's|^|  named in tests/gates/uncovered, but a fixture now covers it: |'
+)
+[[ -z "$unproven_gates" ]] || report 'gates and their fixtures disagree:' "$unproven_gates"
+
 exit "$failed"

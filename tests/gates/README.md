@@ -26,6 +26,11 @@ A fixture is sourced by the runner and declares five things:
 | `expect` | substrings the failure output must contain; a `red` fixture without one is rejected |
 | `mutate` | a function run with the scratch copy as its working directory |
 
+Write `gate="…"` in column one. `bin/check-fast`'s `gate coverage` gate reads
+those declarations to work out which gates have a fixture at all, and it reads
+them by shape rather than by search — exactly as the slicer reads a gate header
+— so an indented or reworded copy is prose to both of them.
+
 `args` optionally passes arguments to the gate script, which is how the two
 contract fixtures point `bin/check-qml-contract` at a deliberately broken copy
 of `plugin.qmltypes` rather than at the real one.
@@ -65,7 +70,7 @@ commands would keep passing long after the real gate changed underneath it.
 
 ## Coverage
 
-Fifteen of the nineteen gates are covered. The four that are not all need a
+Sixteen of the twenty gates are covered. The four that are not all need a
 compiled workspace, and a cold CXX-Qt build on this host is over twenty minutes:
 
 | gate | why it is out of scope |
@@ -82,5 +87,24 @@ or a check whose message has to name an offender to be worth reading. The two
 that most needed proving, core purity and CXX-Qt name binding, are hand-written
 shell that has already been wrong once each.
 
+That table has a machine-readable half. `tests/gates/uncovered` names the same
+four gates, one per line, spelled as their script echoes them and each carrying
+its reason as a comment. `bin/check-fast`'s `gate coverage` gate reads it and
+refuses any declared gate that has neither a fixture nor an entry there, so
+"covered or excused on purpose" stops being a claim this file makes and becomes
+one the tree enforces. The list is read in both directions as well: a name that
+no longer matches a real gate, or one a fixture has since covered, is refused
+too, because an allowlist that only grows fills with entries asserting nothing.
+It carries no `.sh` extension on purpose, so `bin/test`'s
+`shellcheck bin/* tests/gates/*.sh` leaves it alone.
+
+That arithmetic deliberately does not live here. This runner reports how many
+gates its own fixtures named, which is silent by construction about a gate no
+fixture named — the summary keeps printing the same totals and nothing goes red.
+It could not live here either way: the selector argument makes this script's
+gate list legitimately partial, and a fixture aimed at a gate inside this file
+would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
+it, on the commit that would introduce the unproven gate.
+
 `gate violations` does not have a fixture of its own; it is proven by the
-twenty-three it runs, each of which fails loudly if its gate stops biting.
+twenty-six it runs, each of which fails loudly if its gate stops biting.
