@@ -31,6 +31,11 @@ echo "==> gate: gate violations"
 repo_root=$PWD
 fixtures=tests/gates
 
+# An optional substring, so a fixture can be run on its own while it is being
+# written or while the gate it names is being changed. bin/test passes none and
+# gets all of them.
+selector=${1:-}
+
 if [[ ! -d $fixtures ]]; then
   printf 'FAIL %s is missing; run this from the repository root\n' "$fixtures" >&2
   exit 1
@@ -144,6 +149,10 @@ reject() {
 for fixture in "$fixtures"/*.sh; do
   name=${fixture##*/}
   name=${name%.sh}
+  case $name in
+    *"$selector"*) ;;
+    *) continue ;;
+  esac
 
   gate=
   script=
@@ -216,6 +225,14 @@ for fixture in "$fixtures"/*.sh; do
     record ok "$gate" "$name" 'baseline green, stayed green'
   fi
 done
+
+# Loudly, not vacuously: a selector that matches nothing would otherwise report
+# a clean run over an empty worklist, which is the failure mode this whole file
+# exists to refuse.
+if [[ ${#gates_seen[@]} -eq 0 ]]; then
+  printf 'FAIL no fixture in %s matches "%s"\n' "$fixtures" "$selector" >&2
+  exit 1
+fi
 
 printf '%s\n' "${rows[@]}"
 distinct=$(printf '%s\n' "${gates_seen[@]}" | sort -u | wc -l)
