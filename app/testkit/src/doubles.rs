@@ -8,7 +8,8 @@
 //! own assertions instead.
 
 use allesbuien_core::{
-    location::LocationConfig,
+    location::{LocationConfig, LocationSource},
+    location_settings::LocationSettings,
     notify::{Notifier, NotifyError},
     radar::{RadarApi, RadarError, RadarFuture},
     weather::{FeedApi, FeedFuture, WeatherData},
@@ -20,13 +21,19 @@ use allesbuien_core::{
 /// header and the notification title, and `radar_controller` projects this
 /// latitude and longitude onto a pixel of the basemap raster and asserts where
 /// the marker lands. Moving the fixture moves that expectation with it.
+///
+/// It is pinned rather than watched so that a harness asserting something else
+/// entirely cannot be moved by whatever `weather.json` the machine running the
+/// suite happens to hold. The one harness that *is* about following that file
+/// builds its own settings over a temporary home.
 #[must_use]
-pub fn amsterdam_west() -> LocationConfig {
-    LocationConfig {
+pub fn amsterdam_west() -> LocationSettings {
+    LocationSettings::pinned(LocationConfig {
         latitude: 52.37,
         longitude: 4.84,
         label: String::from("Amsterdam-West"),
-    }
+        source: LocationSource::BuiltInDefault,
+    })
 }
 
 /// A feed that always answers, and always with nothing.

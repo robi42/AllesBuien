@@ -157,6 +157,40 @@ Item {
             }
         }
 
+        // Not the error slot, and deliberately not centred with it. A location
+        // outside the Dutch raster leaves this map painting its base and nothing
+        // else, which is indistinguishable from a failed frame request — so the
+        // one thing worth saying is that the emptiness is the configuration
+        // rather than a fault. It is a standing statement, not a failure, so it
+        // takes the text colour instead of the error colour and sits at the top,
+        // where it cannot collide with a refresh error arriving underneath it.
+        Label {
+            id: coverageNotice
+            objectName: "coverageNotice"
+            text: radarPanel.radarController.coverageNotice
+            visible: coverageNotice.text.length > 0
+            anchors.top: parent.top
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.topMargin: radarPanel.theme.spaceLg
+            width: Math.min(coverageNotice.implicitWidth, parent.width - radarPanel.theme.spaceXl * 2)
+            font.pointSize: radarPanel.theme.fontBody
+            font.bold: true
+            color: radarPanel.theme.text
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter
+
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -radarPanel.theme.spaceSm
+                color: radarPanel.theme.background
+                opacity: radarPanel.theme.scrimOpacity
+                radius: radarPanel.theme.radiusSm
+                z: -1
+            }
+        }
+
         Label {
             id: radarError
             objectName: "radarError"

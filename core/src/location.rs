@@ -13,6 +13,11 @@
 //! location falls through to the next rather than contributing part of one,
 //! which is why a damaged `weather.json` degrades to Amsterdam-West instead of
 //! to a location off the coast of Africa.
+//!
+//! Which source answered travels with the answer. Amsterdam-West reached the
+//! window looking exactly like a place the viewer had chosen, so the one state
+//! worth distinguishing — nothing is configured — was the one state the window
+//! could not show. [`crate::location_notice`] turns that into wording.
 
 use std::path::Path;
 
@@ -26,19 +31,32 @@ const UNNAMED_LABEL: &str = "Your location";
 const DEFAULT_LATITUDE: f64 = 52.37;
 const DEFAULT_LONGITUDE: f64 = 4.84;
 
+/// Which of the three sources produced a location.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocationSource {
+    /// The `ALLESBUIEN_LAT`/`ALLESBUIEN_LON` pair, set for this app alone.
+    Environment,
+    /// Omarchy's `weather.json`, shared with the desktop's own weather widget.
+    DesktopSetting,
+    /// Amsterdam-West, because neither of the other two answered.
+    BuiltInDefault,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocationConfig {
     pub latitude: f64,
     pub longitude: f64,
     pub label: String,
+    pub source: LocationSource,
 }
 
 impl LocationConfig {
     /// The place name to show for this location; never blank.
     ///
-    /// [`resolve`] cannot produce an empty label, but `LocationConfig` is a
-    /// public value other callers construct, and a blank header reads as a
-    /// rendering bug rather than as missing configuration.
+    /// [`crate::location_settings::LocationSettings::resolve`] cannot produce an
+    /// empty label, but `LocationConfig` is a public value other callers
+    /// construct, and a blank header reads as a rendering bug rather than as
+    /// missing configuration.
     #[must_use]
     pub fn display_label(&self) -> &str {
         let trimmed = self.label.trim();
@@ -48,13 +66,6 @@ impl LocationConfig {
             trimmed
         }
     }
-}
-
-/// Resolves the viewer's location: environment, then Omarchy settings, then default.
-pub(crate) fn resolve(env: &impl EnvSource, home: &Path) -> LocationConfig {
-    from_env(env)
-        .or_else(|| from_file(home))
-        .unwrap_or_else(default_location)
 }
 
 /// Omarchy's `weather.json`, whose key spellings have varied across releases.
@@ -68,7 +79,7 @@ struct WeatherLocation {
     longitude: Option<serde_json::Value>,
 }
 
-fn from_env(env: &impl EnvSource) -> Option<LocationConfig> {
+pub(crate) fn from_env(env: &impl EnvSource) -> Option<LocationConfig> {
     let latitude = parse_coordinate(&env.var("ALLESBUIEN_LAT")?, -90.0, 90.0)?;
     let longitude = parse_coordinate(&env.var("ALLESBUIEN_LON")?, -180.0, 180.0)?;
     let label = env
@@ -79,10 +90,11 @@ fn from_env(env: &impl EnvSource) -> Option<LocationConfig> {
         latitude,
         longitude,
         label,
+        source: LocationSource::Environment,
     })
 }
 
-fn from_file(home: &Path) -> Option<LocationConfig> {
+pub(crate) fn from_file(home: &Path) -> Option<LocationConfig> {
     let contents =
         std::fs::read_to_string(home.join(".local/state/omarchy/settings/weather.json")).ok()?;
     let weather: WeatherLocation = serde_json::from_str(&contents).ok()?;
@@ -92,6 +104,7 @@ fn from_file(home: &Path) -> Option<LocationConfig> {
         latitude,
         longitude,
         label: weather.name.filter(|value| !value.trim().is_empty())?,
+        source: LocationSource::DesktopSetting,
     })
 }
 
@@ -113,93 +126,105 @@ fn parse_coordinate(value: &str, minimum: f64, maximum: f64) -> Option<f64> {
         .filter(|parsed| parsed.is_finite() && (*parsed >= minimum) && (*parsed <= maximum))
 }
 
-fn default_location() -> LocationConfig {
+pub(crate) fn default_location() -> LocationConfig {
     LocationConfig {
         latitude: DEFAULT_LATITUDE,
         longitude: DEFAULT_LONGITUDE,
         label: DEFAULT_LABEL.to_owned(),
+        source: LocationSource::BuiltInDefault,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::Path;
-
-    use super::{LocationConfig, resolve};
-    use crate::config::EnvSource;
-
-    struct FakeEnv<const N: usize>([(&'static str, &'static str); N]);
-
-    impl<const N: usize> EnvSource for FakeEnv<N> {
-        fn var(&self, key: &str) -> Option<String> {
-            self.0
-                .iter()
-                .find_map(|(candidate, value)| (*candidate == key).then(|| (*value).to_owned()))
-        }
-    }
-
-    fn write_weather(home: &Path, json: &str) {
-        let path = home.join(".local/state/omarchy/settings/weather.json");
-        fs::create_dir_all(path.parent().expect("weather parent")).expect("create settings");
-        fs::write(path, json).expect("write weather fixture");
-    }
+    use super::{LocationConfig, LocationSource, default_location, from_env, from_file};
+    use crate::test_support::{FakeEnv, write_weather};
 
     #[test]
-    fn file_location_wins_when_environment_is_absent() {
+    fn each_producer_stamps_the_answer_with_the_source_that_gave_it() {
         // Given
         let home = tempfile::tempdir().expect("temporary home");
         write_weather(
             home.path(),
             r#"{"name":"Utrecht","latitude":"52.09","longitude":5.12,"extra":true}"#,
         );
+        let env = FakeEnv([("ALLESBUIEN_LAT", "51.9"), ("ALLESBUIEN_LON", "4.5")]);
+
         // When
-        let location = resolve(&FakeEnv([]), home.path());
+        let environment = from_env(&env).expect("a complete environment pair");
+        let desktop = from_file(home.path()).expect("a complete file entry");
+        let fallback = default_location();
+
         // Then
-        assert_eq!(
+        assert_eq!(environment.source, LocationSource::Environment);
+        assert_eq!(environment.label, "Custom");
+        assert_eq!(desktop.source, LocationSource::DesktopSetting);
+        assert_eq!((desktop.latitude, desktop.longitude), (52.09, 5.12));
+        assert_eq!(fallback.source, LocationSource::BuiltInDefault);
+        assert_eq!(fallback.label, "Amsterdam-West");
+    }
+
+    #[test]
+    fn an_incomplete_source_produces_nothing_rather_than_half_a_location() {
+        // Given: each case is one field short, out of range, or unnamed.
+        let home = tempfile::tempdir().expect("temporary home");
+        let cases = [
+            (r#"{"latitude":52.09,"longitude":5.12}"#, "no name"),
             (
-                location.latitude,
-                location.longitude,
-                location.label.as_str()
+                r#"{"name":"  ","latitude":52.09,"longitude":5.12}"#,
+                "blank name",
             ),
-            (52.09, 5.12, "Utrecht")
-        );
-    }
+            (r#"{"name":"Nowhere","longitude":5.12}"#, "no latitude"),
+            (
+                r#"{"name":"Broken","latitude":"oops","longitude":5.12}"#,
+                "unparseable",
+            ),
+            (
+                r#"{"name":"Impossible","latitude":91.0,"longitude":5.12}"#,
+                "out of range",
+            ),
+            (
+                r#"{"name":"Listy","latitude":[52.09],"longitude":5.12}"#,
+                "wrong JSON type",
+            ),
+            ("not json at all", "not json"),
+        ];
 
-    #[test]
-    fn an_out_of_range_environment_coordinate_falls_through_to_the_next_source() {
-        // Given: a latitude no point on Earth has, alongside a usable file.
-        let home = tempfile::tempdir().expect("temporary home");
-        write_weather(
-            home.path(),
-            r#"{"name":"Utrecht","latitude":52.09,"longitude":5.12}"#,
-        );
-        let env = FakeEnv([("ALLESBUIEN_LAT", "91.0"), ("ALLESBUIEN_LON", "4.5")]);
-        // When
-        let location = resolve(&env, home.path());
-        // Then
-        assert_eq!(location.label, "Utrecht");
-    }
-
-    #[test]
-    fn a_nameless_file_entry_is_rejected_rather_than_shown_without_a_place() {
-        // Given: coordinates Omarchy knows, but no name to caption them with.
-        let home = tempfile::tempdir().expect("temporary home");
-        write_weather(home.path(), r#"{"latitude":52.09,"longitude":5.12}"#);
-        // When
-        let location = resolve(&FakeEnv([]), home.path());
-        // Then
+        // When / Then
+        for (json, case) in cases {
+            write_weather(home.path(), json);
+            assert_eq!(from_file(home.path()), None, "{case} should not resolve");
+        }
         assert_eq!(
-            (location.latitude, location.label.as_str()),
-            (52.37, "Amsterdam-West")
+            from_env(&FakeEnv([("ALLESBUIEN_LAT", "51.9")])),
+            None,
+            "a latitude without a longitude should not resolve"
         );
+    }
+
+    #[test]
+    fn an_environment_label_is_taken_when_it_carries_a_name() {
+        // Given
+        let named = FakeEnv([
+            ("ALLESBUIEN_LAT", "51.9"),
+            ("ALLESBUIEN_LON", "4.5"),
+            ("ALLESBUIEN_LOCATION_LABEL", "Rotterdam"),
+        ]);
+        let blank = FakeEnv([
+            ("ALLESBUIEN_LAT", "51.9"),
+            ("ALLESBUIEN_LON", "4.5"),
+            ("ALLESBUIEN_LOCATION_LABEL", "   "),
+        ]);
+
+        // When / Then
+        assert_eq!(from_env(&named).expect("named").label, "Rotterdam");
+        assert_eq!(from_env(&blank).expect("blank").label, "Custom");
     }
 
     #[test]
     fn the_resolved_location_always_has_a_name_to_display() {
         // Given
-        let home = tempfile::tempdir().expect("temporary home");
-        let resolved = resolve(&FakeEnv([]), home.path());
+        let resolved = default_location();
         let padded = LocationConfig {
             label: String::from("  Utrecht  "),
             ..resolved.clone()

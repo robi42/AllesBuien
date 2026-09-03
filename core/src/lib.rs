@@ -3,6 +3,8 @@ pub mod config;
 pub mod datetime;
 pub mod error_chain;
 pub mod location;
+pub mod location_notice;
+pub mod location_settings;
 pub mod notify;
 pub mod radar;
 pub mod radar_freshness;

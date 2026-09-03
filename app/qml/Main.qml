@@ -195,6 +195,23 @@ ApplicationWindow {
         onTriggered: root.themeSource.poll()
     }
 
+    // Omarchy's weather.json is a desktop-wide setting the bar widget already
+    // follows live, and this window read it once at construction. Both bridges
+    // re-ask on the same tick and each decides for itself whether the answer
+    // moved; neither is told by the other, so the order of these two calls
+    // carries no meaning. Polled rather than watched for the reason the theme
+    // is: --clear removes the file and a later --set writes a new one, which an
+    // inode-bound watcher stops hearing about after the first removal.
+    Timer {
+        interval: root.weatherSource.locationPollIntervalMs
+        repeat: true
+        running: true
+        onTriggered: {
+            root.weatherSource.pollLocation();
+            root.radarSource.pollLocation();
+        }
+    }
+
     Timer {
         interval: 50
         running: Qt.platform.pluginName === "offscreen"

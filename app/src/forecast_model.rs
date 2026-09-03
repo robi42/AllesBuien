@@ -2,12 +2,42 @@
 //!
 //! The role table and the per-row projection live here rather than in the
 //! bridge so they can be asserted without a `QGuiApplication`, and so the
-//! controller module stays the property surface it is named for.
+//! controller module stays the property surface it is named for. The three
+//! `QAbstractListModel` overrides that answer from them are here too: the model
+//! is one responsibility, and splitting its data from its Qt surface only meant
+//! reading two files to learn what one row contains.
+
+use std::pin::Pin;
 
 use allesbuien_core::{condition::describe, weather::ForecastDay};
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QString, QVariant};
+use cxx_qt::CxxQtType;
+use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 
-use crate::{condition_icon, weather_controller::ffi::ForecastRole};
+use crate::{condition_icon, weather_controller::ffi};
+use ffi::ForecastRole;
+
+impl ffi::WeatherController {
+    pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
+        i32::try_from(self.forecast.len()).unwrap_or(i32::MAX)
+    }
+
+    pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
+        cell(&self.forecast, index.row(), role)
+    }
+
+    pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
+        role_names()
+    }
+
+    pub(crate) fn replace_forecast(mut self: Pin<&mut Self>, forecast: Vec<ForecastDay>) {
+        // SAFETY: Category 13 — no operation between this paired reset can fail or panic,
+        // and CxxQtThread guarantees execution on the model's owning Qt thread.
+        unsafe { self.as_mut().begin_reset_model() };
+        self.as_mut().rust_mut().forecast = forecast;
+        // SAFETY: Category 13 — this closes the immediately preceding model reset.
+        unsafe { self.end_reset_model() };
+    }
+}
 
 /// One forecast day, already projected onto the values QML renders.
 #[derive(Debug, Clone, PartialEq, Eq)]

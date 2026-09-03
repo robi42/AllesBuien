@@ -5,8 +5,52 @@
 //! square-root compressed against a fixed full-scale reference, raised to the
 //! observed peak only when that peak exceeds the reference. A dry window keeps
 //! every bar at zero, which the panel renders as a flat baseline.
+//!
+//! The bridge methods that publish the plot are here too, cursor included. The
+//! cursor is the graph's own read of which bar the radar is currently over, so
+//! keeping it beside the scale it is positioned against is what stops the two
+//! from being changed apart.
 
-use allesbuien_core::{rain::RainPoint, status::RAIN_UNAVAILABLE};
+use std::pin::Pin;
+
+use allesbuien_core::{rain::RainPoint, rain_cursor::frame_cursor, status::RAIN_UNAVAILABLE};
+use cxx_qt::CxxQtType;
+use cxx_qt_lib::{QList, QString, QStringList};
+
+use crate::weather_controller::ffi;
+
+impl ffi::WeatherController {
+    /// Points the rain graph's cursor at the radar frame QML is currently showing.
+    pub fn track_radar_frame(mut self: Pin<&mut Self>, label: &QString) {
+        self.as_mut().rust_mut().radar_frame_label = label.to_string();
+        self.update_rain_cursor();
+    }
+
+    pub(crate) fn apply_rain(mut self: Pin<&mut Self>, line: &str, points: &[RainPoint]) {
+        let graph = RainGraph::build(points, line);
+        self.as_mut().set_rain_summary((&graph.summary).into());
+        self.as_mut().set_rain_wet(graph.wet);
+        self.as_mut()
+            .set_rain_levels(graph.levels.iter().collect::<QList<f64>>());
+        self.as_mut().set_rain_axis_labels(
+            graph
+                .axis_labels
+                .iter()
+                .map(QString::from)
+                .collect::<QStringList>(),
+        );
+        self.as_mut().rust_mut().rain_points = points.to_vec();
+        self.update_rain_cursor();
+    }
+
+    fn update_rain_cursor(mut self: Pin<&mut Self>) {
+        let cursor = frame_cursor(&self.rain_points, &self.radar_frame_label);
+        self.as_mut().set_rain_cursor_visible(cursor.is_some());
+        if let Some(fraction) = cursor {
+            self.set_rain_cursor_fraction(fraction);
+        }
+    }
+}
 
 /// Intensity that fills the plot when nothing wetter is expected, in mm/h.
 const FULL_SCALE_MMH: f64 = 5.0;

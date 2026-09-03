@@ -19,15 +19,37 @@ ColumnLayout {
     // and was the second-largest thing on screen for a value the user chose and
     // already knows; as a tracked caption it labels the panel without competing
     // with the reading below it.
-    Label {
-        text: conditionsView.weatherController.locationName.toUpperCase()
-        font.pointSize: conditionsView.theme.fontLabel
-        font.bold: true
-        font.letterSpacing: conditionsView.theme.capsTracking
-        color: conditionsView.theme.text
-        opacity: conditionsView.theme.emphasisMid
+    //
+    // The provenance rides the same row, one rank quieter, because the name on
+    // its own could not tell a chosen place from a fallen-back one: Amsterdam-West
+    // rendered identically whether the viewer had picked it or never configured
+    // anything. Rust decides the word; this only places it.
+    RowLayout {
         Layout.fillWidth: true
-        elide: Text.ElideRight
+        spacing: conditionsView.theme.spaceSm
+
+        Label {
+            text: conditionsView.weatherController.locationName.toUpperCase()
+            font.pointSize: conditionsView.theme.fontLabel
+            font.bold: true
+            font.letterSpacing: conditionsView.theme.capsTracking
+            color: conditionsView.theme.text
+            opacity: conditionsView.theme.emphasisMid
+            Layout.fillWidth: true
+            elide: Text.ElideRight
+        }
+
+        Label {
+            id: locationSource
+            objectName: "locationSource"
+            text: conditionsView.weatherController.locationSource.toUpperCase()
+            visible: locationSource.text.length > 0
+            font.pointSize: conditionsView.theme.fontCaption
+            font.bold: false
+            font.letterSpacing: conditionsView.theme.capsTracking
+            color: conditionsView.theme.text
+            opacity: conditionsView.theme.emphasisLow
+        }
     }
 
     RowLayout {

@@ -10,7 +10,7 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use allesbuien_core::{
-    location::LocationConfig,
+    location_settings::LocationSettings,
     notify::{
         NotificationInput, Notifier, NotifyConfig, NotifyError, NotifyState,
         RainSoon as NotifyRainSoon, maybe_send_rain_notification,
@@ -26,7 +26,7 @@ pub struct CoreServiceConfig {
     pub feed: Arc<dyn FeedApi>,
     pub radar: Arc<dyn RadarApi>,
     pub notifier: Arc<NotifierService>,
-    pub location: LocationConfig,
+    pub location: LocationSettings,
     pub radar_state_dir: PathBuf,
 }
 
@@ -34,7 +34,7 @@ pub struct CoreServices {
     feed: Arc<dyn FeedApi>,
     radar: Arc<dyn RadarApi>,
     notifier: Arc<NotifierService>,
-    location: LocationConfig,
+    location: Arc<LocationSettings>,
     radar_state_dir: PathBuf,
     notify_config: NotifyConfig,
 }
@@ -58,7 +58,7 @@ impl CoreServices {
             feed: config.feed,
             radar: config.radar,
             notifier: config.notifier,
-            location: config.location,
+            location: Arc::new(config.location),
             radar_state_dir: config.radar_state_dir,
             notify_config,
         }
@@ -85,7 +85,7 @@ impl CoreServices {
     }
 
     #[must_use]
-    pub const fn location(&self) -> &LocationConfig {
+    pub const fn location(&self) -> &Arc<LocationSettings> {
         &self.location
     }
 
@@ -98,19 +98,13 @@ impl CoreServices {
 #[derive(Clone)]
 pub(crate) struct NotificationService {
     notifier: Arc<NotifierService>,
-    location_label: Arc<str>,
     state: Arc<tokio::sync::Mutex<NotifyState>>,
 }
 
 impl NotificationService {
-    pub(crate) fn new(
-        notifier: Arc<NotifierService>,
-        location_label: String,
-        config: NotifyConfig,
-    ) -> Self {
+    pub(crate) fn new(notifier: Arc<NotifierService>, config: NotifyConfig) -> Self {
         Self {
             notifier,
-            location_label: location_label.into(),
             state: Arc::new(tokio::sync::Mutex::new(NotifyState {
                 config,
                 last_sent_at: None,
@@ -119,7 +113,14 @@ impl NotificationService {
         }
     }
 
-    pub(crate) async fn notify_rain(&self, rain: Option<&RainSoon>) -> Result<(), NotifyError> {
+    /// The place is an argument rather than stored state because the desktop can
+    /// move it while the app runs, and a title naming where the viewer *was* is
+    /// worse than no title at all.
+    pub(crate) async fn notify_rain(
+        &self,
+        rain: Option<&RainSoon>,
+        location_label: &str,
+    ) -> Result<(), NotifyError> {
         let rain = rain.map(|rain| NotifyRainSoon {
             minutes_until: rain.minutes_until,
             time_label: &rain.time_label,
@@ -130,7 +131,7 @@ impl NotificationService {
             &NotifierAdapter(self.notifier.as_ref()),
             NotificationInput {
                 rain: rain.as_ref(),
-                location_label: &self.location_label,
+                location_label,
             },
             &mut state,
         )
@@ -151,6 +152,7 @@ pub struct TimerIntervals {
     pub radar_refresh: Duration,
     pub radar_playback: Duration,
     pub theme_poll: Duration,
+    pub location_poll: Duration,
 }
 
 impl Default for TimerIntervals {
@@ -160,6 +162,7 @@ impl Default for TimerIntervals {
             radar_refresh: Duration::from_secs(5 * 60),
             radar_playback: Duration::from_millis(400),
             theme_poll: Duration::from_secs(2),
+            location_poll: Duration::from_secs(2),
         }
     }
 }

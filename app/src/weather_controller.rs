@@ -13,20 +13,15 @@ use std::{pin::Pin, sync::Arc};
 
 use allesbuien_core::{
     error_chain,
-    rain::RainPoint,
-    rain_cursor::frame_cursor,
-    status,
-    weather::{ForecastDay, WeatherData, WeatherError},
+    location::LocationConfig,
+    location_notice, status,
+    weather::{WeatherData, WeatherError},
 };
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{
-    QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant,
-};
 
 use crate::{
     conditions_view::ConditionsView,
-    forecast_model, icon_cache,
-    rain_graph::RainGraph,
+    icon_cache,
     weather_state::{WeatherControllerConfig, WeatherControllerRust},
 };
 
@@ -72,6 +67,7 @@ pub mod ffi {
         #[qml_element]
         #[base = QAbstractListModel]
         #[qproperty(QString, location_name)]
+        #[qproperty(QString, location_source)]
         #[qproperty(QString, station_name)]
         #[qproperty(QString, temperature)]
         #[qproperty(QString, feels_like)]
@@ -88,10 +84,13 @@ pub mod ffi {
         #[qproperty(bool, rain_cursor_visible)]
         #[qproperty(QString, status)]
         #[qproperty(i32, refresh_interval_ms)]
+        #[qproperty(i32, location_poll_interval_ms)]
         type WeatherController = super::WeatherControllerRust;
 
         #[qinvokable]
         fn refresh(self: Pin<&mut WeatherController>);
+        #[qinvokable]
+        fn poll_location(self: Pin<&mut WeatherController>);
         #[qinvokable]
         fn track_radar_frame(self: Pin<&mut WeatherController>, label: &QString);
         #[cxx_override]
@@ -139,22 +138,49 @@ pub mod ffi {
 pub(crate) fn create(config: WeatherControllerConfig) -> cxx::UniquePtr<ffi::WeatherController> {
     let mut controller = ffi::new_weather_controller();
     if let Some(mut pinned) = controller.as_mut() {
-        let interval = i32::try_from(config.refresh_interval.as_millis()).unwrap_or(i32::MAX);
-        let location_name = QString::from(config.location.display_label());
+        let refresh_ms = i32::try_from(config.intervals.refresh.as_millis()).unwrap_or(i32::MAX);
+        let poll_ms = i32::try_from(config.intervals.location_poll.as_millis()).unwrap_or(i32::MAX);
+        let location = config.location.resolve();
         let mut rust = pinned.as_mut().rust_mut();
         rust.feed = Some(config.feed);
         rust.icons = config.icons;
-        rust.location = Some(config.location);
+        rust.location_settings = Some(config.location);
         rust.notifications = Some(config.notifications);
         rust.runtime = Some(config.runtime);
-        pinned.as_mut().set_location_name(location_name);
-        pinned.as_mut().set_refresh_interval_ms(interval);
+        pinned.as_mut().adopt_location(&location);
+        pinned.as_mut().set_refresh_interval_ms(refresh_ms);
+        pinned.as_mut().set_location_poll_interval_ms(poll_ms);
         pinned.refresh();
     }
     controller
 }
 
 impl ffi::WeatherController {
+    /// Re-asks the desktop where the viewer is, and re-fetches when it moved.
+    ///
+    /// Polled rather than watched for the same reason the theme is: the file is
+    /// removed and rewritten rather than edited in place, so an inode-bound
+    /// watcher stops hearing about it after the first `--clear`.
+    pub fn poll_location(mut self: Pin<&mut Self>) {
+        let Some(settings) = self.location_settings.as_ref() else {
+            return;
+        };
+        let resolved = settings.resolve();
+        if self.location.as_ref() == Some(&resolved) {
+            return;
+        }
+        self.as_mut().adopt_location(&resolved);
+        self.refresh();
+    }
+
+    fn adopt_location(mut self: Pin<&mut Self>, location: &LocationConfig) {
+        self.as_mut()
+            .set_location_name(location.display_label().into());
+        self.as_mut()
+            .set_location_source(location_notice::provenance(location.source).into());
+        self.as_mut().rust_mut().location = Some(location.clone());
+    }
+
     pub fn refresh(self: Pin<&mut Self>) {
         let (Some(feed), Some(location), Some(runtime), Some(notifications)) = (
             &self.feed,
@@ -178,7 +204,10 @@ impl ffi::WeatherController {
                 // Warms the provider before the URLs reach QML, so the icons are
                 // already decodable when the bindings below fire.
                 icons.warm(&icon_cache::condition_codes(data)).await;
-                if let Err(error) = notifications.notify_rain(data.rain_soon.as_ref()).await {
+                let notified = notifications
+                    .notify_rain(data.rain_soon.as_ref(), location.display_label())
+                    .await;
+                if let Err(error) = notified {
                     eprintln!("allesbuien: notification failed: {error}");
                 }
             }
@@ -217,57 +246,5 @@ impl ffi::WeatherController {
         self.as_mut()
             .set_observed_label((&view.observed_label).into());
         self.set_status((&view.status).into());
-    }
-
-    /// Points the rain graph's cursor at the radar frame QML is currently showing.
-    pub fn track_radar_frame(mut self: Pin<&mut Self>, label: &QString) {
-        self.as_mut().rust_mut().radar_frame_label = label.to_string();
-        self.update_rain_cursor();
-    }
-
-    fn apply_rain(mut self: Pin<&mut Self>, line: &str, points: &[RainPoint]) {
-        let graph = RainGraph::build(points, line);
-        self.as_mut().set_rain_summary((&graph.summary).into());
-        self.as_mut().set_rain_wet(graph.wet);
-        self.as_mut()
-            .set_rain_levels(graph.levels.iter().collect::<QList<f64>>());
-        self.as_mut().set_rain_axis_labels(
-            graph
-                .axis_labels
-                .iter()
-                .map(QString::from)
-                .collect::<QStringList>(),
-        );
-        self.as_mut().rust_mut().rain_points = points.to_vec();
-        self.update_rain_cursor();
-    }
-
-    fn update_rain_cursor(mut self: Pin<&mut Self>) {
-        let cursor = frame_cursor(&self.rain_points, &self.radar_frame_label);
-        self.as_mut().set_rain_cursor_visible(cursor.is_some());
-        if let Some(fraction) = cursor {
-            self.set_rain_cursor_fraction(fraction);
-        }
-    }
-
-    fn replace_forecast(mut self: Pin<&mut Self>, forecast: Vec<ForecastDay>) {
-        // SAFETY: Category 13 — no operation between this paired reset can fail or panic,
-        // and CxxQtThread guarantees execution on the model's owning Qt thread.
-        unsafe { self.as_mut().begin_reset_model() };
-        self.as_mut().rust_mut().forecast = forecast;
-        // SAFETY: Category 13 — this closes the immediately preceding model reset.
-        unsafe { self.end_reset_model() };
-    }
-
-    pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
-        i32::try_from(self.forecast.len()).unwrap_or(i32::MAX)
-    }
-
-    pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        forecast_model::cell(&self.forecast, index.row(), role)
-    }
-
-    pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
-        forecast_model::role_names()
     }
 }

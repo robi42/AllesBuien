@@ -11,6 +11,10 @@
 //! blank is a mistake, not an instruction. The viewer's location is the single
 //! setting with a precedence rule of its own, and [`crate::location`] owns it.
 //!
+//! It is also the single setting that outlives this resolution. Omarchy rewrites
+//! its half of it while the app runs, so `location` holds the re-askable
+//! [`LocationSettings`] rather than one answer taken here and frozen.
+//!
 //! The shipped addresses live here rather than beside the transports that dial
 //! them, because a default is a settling decision and this is the module that
 //! settles it: it is the one place that has to name all three anyway. Held
@@ -20,7 +24,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::location::{self, LocationConfig};
+use crate::location_settings::LocationSettings;
 use crate::notify::NotifyConfig;
 
 /// Buienradar's published feed endpoint, and the fallback its override returns to.
@@ -54,7 +58,7 @@ pub struct EndpointConfig {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
-    pub location: LocationConfig,
+    pub location: LocationSettings,
     pub endpoints: EndpointConfig,
     pub notify: NotifyConfig,
     pub state_dir: PathBuf,
@@ -75,7 +79,7 @@ impl Config {
     #[must_use]
     pub fn resolve(env: &impl EnvSource, home: &Path) -> Self {
         Self {
-            location: location::resolve(env, home),
+            location: LocationSettings::new(env, home.to_owned()),
             endpoints: EndpointConfig {
                 feed_url: value_or_default(env, "ALLESBUIEN_FEED_URL", DEFAULT_FEED_URL),
                 raintext_url: value_or_default(
@@ -125,26 +129,10 @@ fn value_or_default(env: &impl EnvSource, key: &str, default: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
     use std::path::Path;
 
-    use super::{Config, DEFAULT_FEED_URL, DEFAULT_RADAR_URL, DEFAULT_RAINTEXT_URL, EnvSource};
-
-    struct FakeEnv<const N: usize>([(&'static str, &'static str); N]);
-
-    impl<const N: usize> EnvSource for FakeEnv<N> {
-        fn var(&self, key: &str) -> Option<String> {
-            self.0
-                .iter()
-                .find_map(|(candidate, value)| (*candidate == key).then(|| (*value).to_owned()))
-        }
-    }
-
-    fn write_weather(home: &Path, json: &str) {
-        let path = home.join(".local/state/omarchy/settings/weather.json");
-        fs::create_dir_all(path.parent().expect("weather parent")).expect("create settings");
-        fs::write(path, json).expect("write weather fixture");
-    }
+    use super::{Config, DEFAULT_FEED_URL, DEFAULT_RADAR_URL, DEFAULT_RAINTEXT_URL};
+    use crate::test_support::{FakeEnv, write_weather};
 
     #[test]
     fn environment_location_wins_over_file() {
@@ -164,12 +152,13 @@ mod tests {
         ]);
         // When
         let config = Config::resolve(&env, home.path());
+        let location = config.location.resolve();
         // Then
         assert_eq!(
             (
-                config.location.latitude,
-                config.location.longitude,
-                config.location.label.as_str(),
+                location.latitude,
+                location.longitude,
+                location.label.as_str(),
                 config.notify.threshold_minutes,
                 config.notify.cooldown.as_secs()
             ),
@@ -184,12 +173,13 @@ mod tests {
         let home = tempfile::tempdir().expect("temporary home");
         // When
         let config = Config::resolve(&FakeEnv([]), home.path());
+        let location = config.location.resolve();
         // Then
         assert_eq!(
             (
-                config.location.latitude,
-                config.location.longitude,
-                config.location.label.as_str()
+                location.latitude,
+                location.longitude,
+                location.label.as_str()
             ),
             (52.37, 4.84, "Amsterdam-West")
         );
@@ -229,7 +219,7 @@ mod tests {
         // When
         let config = Config::resolve(&env, home.path());
         // Then
-        assert_eq!(config.location.label, "Amsterdam-West");
+        assert_eq!(config.location.resolve().label, "Amsterdam-West");
         assert_eq!(
             (
                 config.notify.threshold_minutes,
@@ -237,6 +227,28 @@ mod tests {
             ),
             (30, 3_600)
         );
+    }
+
+    #[test]
+    fn the_resolved_location_setting_stays_answerable_after_the_desktop_rewrites_it() {
+        // Given: the configuration a running process holds, resolved once at startup.
+        let home = tempfile::tempdir().expect("temporary home");
+        write_weather(
+            home.path(),
+            r#"{"name":"Utrecht","latitude":52.09,"longitude":5.12}"#,
+        );
+        let config = Config::resolve(&FakeEnv([]), home.path());
+        let before = config.location.resolve();
+
+        // When: Omarchy rewrites the setting under the process that already read it.
+        write_weather(
+            home.path(),
+            r#"{"name":"Groningen","latitude":53.22,"longitude":6.57}"#,
+        );
+
+        // Then
+        assert_eq!(before.label, "Utrecht");
+        assert_eq!(config.location.resolve().label, "Groningen");
     }
 
     #[test]

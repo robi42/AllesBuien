@@ -7,6 +7,7 @@ use std::{sync::Arc, time::Duration};
 
 use allesbuien_core::{
     location::LocationConfig,
+    location_settings::LocationSettings,
     rain::RainPoint,
     status::{RAIN_UNAVAILABLE, UNAVAILABLE, WEATHER_UNAVAILABLE},
     weather::{FeedApi, ForecastDay},
@@ -19,14 +20,22 @@ use crate::{icon_cache::IconCache, services::NotificationService};
 pub(crate) struct WeatherControllerConfig {
     pub(crate) feed: Arc<dyn FeedApi>,
     pub(crate) icons: IconCache,
-    pub(crate) location: LocationConfig,
+    pub(crate) location: Arc<LocationSettings>,
     pub(crate) notifications: NotificationService,
     pub(crate) runtime: Handle,
-    pub(crate) refresh_interval: Duration,
+    pub(crate) intervals: WeatherIntervals,
+}
+
+/// The two cadences QML drives this controller with.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct WeatherIntervals {
+    pub(crate) refresh: Duration,
+    pub(crate) location_poll: Duration,
 }
 
 pub struct WeatherControllerRust {
     pub(crate) location_name: QString,
+    pub(crate) location_source: QString,
     pub(crate) station_name: QString,
     pub(crate) temperature: QString,
     pub(crate) feels_like: QString,
@@ -43,13 +52,16 @@ pub struct WeatherControllerRust {
     pub(crate) rain_cursor_visible: bool,
     pub(crate) status: QString,
     pub(crate) refresh_interval_ms: i32,
+    pub(crate) location_poll_interval_ms: i32,
     pub(crate) forecast: Vec<ForecastDay>,
     /// Retained so the radar cursor can be replaced without refetching raintext.
     pub(crate) rain_points: Vec<RainPoint>,
     pub(crate) radar_frame_label: String,
     pub(crate) feed: Option<Arc<dyn FeedApi>>,
     pub(crate) icons: IconCache,
+    /// The location currently on screen, compared against on every poll.
     pub(crate) location: Option<LocationConfig>,
+    pub(crate) location_settings: Option<Arc<LocationSettings>>,
     pub(crate) runtime: Option<Handle>,
     pub(crate) notifications: Option<NotificationService>,
 }
@@ -58,6 +70,7 @@ impl Default for WeatherControllerRust {
     fn default() -> Self {
         Self {
             location_name: QString::default(),
+            location_source: QString::default(),
             station_name: UNAVAILABLE.into(),
             temperature: UNAVAILABLE.into(),
             feels_like: QString::default(),
@@ -74,12 +87,14 @@ impl Default for WeatherControllerRust {
             rain_cursor_visible: false,
             status: WEATHER_UNAVAILABLE.into(),
             refresh_interval_ms: 600_000,
+            location_poll_interval_ms: 2_000,
             forecast: Vec::new(),
             rain_points: Vec::new(),
             radar_frame_label: String::new(),
             feed: None,
             icons: IconCache::disabled(),
             location: None,
+            location_settings: None,
             runtime: None,
             notifications: None,
         }

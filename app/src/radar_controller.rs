@@ -12,6 +12,8 @@ use std::{pin::Pin, sync::Arc};
 
 use allesbuien_core::{
     error_chain,
+    location::LocationConfig,
+    location_notice,
     radar::{GenerationId, RadarClient, RadarError},
     radar_projection::marker_position,
     radar_timeline::{boundary_visible, observed_fraction},
@@ -58,13 +60,17 @@ pub mod ffi {
         #[qproperty(QStringList, legend_swatches)]
         #[qproperty(QStringList, legend_buckets)]
         #[qproperty(QString, legend_unit)]
+        #[qproperty(QString, coverage_notice)]
         #[qproperty(QString, status)]
         #[qproperty(i32, refresh_interval_ms)]
         #[qproperty(i32, playback_interval_ms)]
+        #[qproperty(i32, location_poll_interval_ms)]
         type RadarController = super::RadarControllerRust;
 
         #[qinvokable]
         fn refresh(self: Pin<&mut RadarController>);
+        #[qinvokable]
+        fn poll_location(self: Pin<&mut RadarController>);
         #[qinvokable]
         fn play(self: Pin<&mut RadarController>);
         #[qinvokable]
@@ -98,27 +104,58 @@ pub mod ffi {
 pub(crate) fn create(config: RadarControllerConfig) -> cxx::UniquePtr<ffi::RadarController> {
     let mut controller = ffi::new_radar_controller();
     if let Some(mut pinned) = controller.as_mut() {
-        let refresh_ms = i32::try_from(config.refresh_interval.as_millis()).unwrap_or(i32::MAX);
-        let playback_ms = i32::try_from(config.playback_interval.as_millis()).unwrap_or(i32::MAX);
-        let marker = marker_position(config.location.latitude, config.location.longitude);
+        let refresh_ms = i32::try_from(config.intervals.refresh.as_millis()).unwrap_or(i32::MAX);
+        let playback_ms = i32::try_from(config.intervals.playback.as_millis()).unwrap_or(i32::MAX);
+        let poll_ms = i32::try_from(config.intervals.location_poll.as_millis()).unwrap_or(i32::MAX);
+        let location = config.location.resolve();
         let mut rust = pinned.as_mut().rust_mut();
         rust.api = Some(config.api);
         rust.state_dir = config.state_dir;
+        rust.location_settings = Some(config.location);
         rust.runtime = Some(config.runtime);
         rust.configured_refresh_ms = refresh_ms;
         pinned.as_mut().set_refresh_interval_ms(refresh_ms);
         pinned.as_mut().set_playback_interval_ms(playback_ms);
-        pinned.as_mut().set_marker_visible(marker.is_some());
-        if let Some(marker) = marker {
-            pinned.as_mut().set_marker_x_fraction(marker.x);
-            pinned.as_mut().set_marker_y_fraction(marker.y);
-        }
+        pinned.as_mut().set_location_poll_interval_ms(poll_ms);
+        pinned.as_mut().adopt_location(&location);
         pinned.refresh();
     }
     controller
 }
 
 impl ffi::RadarController {
+    /// Re-asks the desktop where the viewer is, and re-runs the radar when it moved.
+    ///
+    /// Both bridges poll the same settings independently rather than one telling
+    /// the other. Each compares against the location it last adopted, so neither
+    /// can miss a change the other consumed first, and there is no shared cell
+    /// for them to race over.
+    pub fn poll_location(mut self: Pin<&mut Self>) {
+        let Some(settings) = self.location_settings.as_ref() else {
+            return;
+        };
+        let resolved = settings.resolve();
+        if self.location.as_ref() == Some(&resolved) {
+            return;
+        }
+        self.as_mut().adopt_location(&resolved);
+        self.refresh();
+    }
+
+    /// Moves the marker onto the new coordinates, and says so when it cannot.
+    fn adopt_location(mut self: Pin<&mut Self>, location: &LocationConfig) {
+        let marker = marker_position(location.latitude, location.longitude);
+        self.as_mut().set_marker_visible(marker.is_some());
+        if let Some(marker) = marker {
+            self.as_mut().set_marker_x_fraction(marker.x);
+            self.as_mut().set_marker_y_fraction(marker.y);
+        }
+        let notice = location_notice::coverage_notice(location);
+        self.as_mut()
+            .set_coverage_notice(notice.map_or_else(QString::default, QString::from));
+        self.as_mut().rust_mut().location = Some(location.clone());
+    }
+
     pub fn refresh(mut self: Pin<&mut Self>) {
         let (Some(api), Some(runtime)) = (&self.api, &self.runtime) else {
             return;
@@ -222,53 +259,5 @@ impl ffi::RadarController {
                 .collect::<QStringList>(),
         );
         self.as_mut().update_current_frame();
-    }
-
-    pub fn play(mut self: Pin<&mut Self>) {
-        let can_play = *self.frame_count() > 1;
-        self.as_mut().set_playing(can_play);
-    }
-
-    pub fn pause(mut self: Pin<&mut Self>) {
-        self.as_mut().set_playing(false);
-    }
-
-    pub fn advance_frame(mut self: Pin<&mut Self>) {
-        if !*self.playing() || *self.frame_count() == 0 {
-            return;
-        }
-        let next = (*self.current_frame_index() + 1) % *self.frame_count();
-        self.as_mut().set_current_frame_index(next);
-        self.update_current_frame();
-    }
-
-    pub fn seek(mut self: Pin<&mut Self>, index: i32) {
-        let last = self.frame_count().saturating_sub(1);
-        if last < 0 {
-            return;
-        }
-        self.as_mut().set_playing(false);
-        self.as_mut().set_current_frame_index(index.clamp(0, last));
-        self.update_current_frame();
-    }
-
-    fn update_current_frame(mut self: Pin<&mut Self>) {
-        let index = isize::try_from(*self.current_frame_index()).unwrap_or_default();
-        let label = self
-            .timestamps()
-            .get(index)
-            .map_or_else(QString::default, Clone::clone);
-        let url = format!(
-            "image://radar/{}/{}",
-            self.generation(),
-            self.current_frame_index()
-        );
-        let observed = usize::try_from(index)
-            .ok()
-            .and_then(|index| self.observed.get(index).copied())
-            .unwrap_or(true);
-        self.as_mut().set_current_frame_observed(observed);
-        self.as_mut().set_current_frame_label(label);
-        self.set_current_frame_url(url.into());
     }
 }

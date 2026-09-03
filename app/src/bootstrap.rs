@@ -28,11 +28,11 @@ use crate::{
     CoreServices, TimerIntervals, app_style,
     icon_cache::IconCache,
     image_provider, radar_controller,
-    radar_state::RadarControllerConfig,
+    radar_state::{RadarControllerConfig, RadarIntervals},
     services::{AppRuntime, NotificationService},
     theme_controller::{self, ThemeControllerConfig},
     weather_controller,
-    weather_state::WeatherControllerConfig,
+    weather_state::{WeatherControllerConfig, WeatherIntervals},
 };
 
 const MAIN_QML_URL: &str = "qrc:/qt/qml/nl/allesbuien/qml/Main.qml";
@@ -94,14 +94,16 @@ impl AppBuilder {
         let mut weather_controller = weather_controller::create(WeatherControllerConfig {
             feed: Arc::clone(self.services.feed()),
             icons: self.icons,
-            location: self.services.location().clone(),
+            location: Arc::clone(self.services.location()),
             notifications: NotificationService::new(
                 Arc::clone(self.services.notifier()),
-                self.services.location().label.clone(),
                 self.services.notify_config(),
             ),
             runtime: runtime.handle(),
-            refresh_interval: self.intervals.weather_refresh,
+            intervals: WeatherIntervals {
+                refresh: self.intervals.weather_refresh,
+                location_poll: self.intervals.location_poll,
+            },
         });
         let Some(weather_controller_pin) = weather_controller.as_mut() else {
             return Err(BootstrapError::ControllerCreation);
@@ -115,10 +117,13 @@ impl AppBuilder {
         let mut radar_controller = radar_controller::create(RadarControllerConfig {
             api: Arc::clone(self.services.radar()),
             state_dir: self.services.radar_state_dir().clone(),
-            location: self.services.location().clone(),
+            location: Arc::clone(self.services.location()),
             runtime: runtime.handle(),
-            refresh_interval: self.intervals.radar_refresh,
-            playback_interval: self.intervals.radar_playback,
+            intervals: RadarIntervals {
+                refresh: self.intervals.radar_refresh,
+                playback: self.intervals.radar_playback,
+                location_poll: self.intervals.location_poll,
+            },
         });
         let Some(radar_controller_pin) = radar_controller.as_mut() else {
             return Err(BootstrapError::ControllerCreation);
@@ -241,6 +246,16 @@ impl BootedApp {
     pub fn poll_theme(&mut self) {
         if let Some(controller) = self.theme_controller.as_mut() {
             controller.poll();
+        }
+    }
+
+    /// Drives both location polls, as the one QML Timer that owns them does.
+    pub fn poll_location(&mut self) {
+        if let Some(controller) = self.weather_controller.as_mut() {
+            controller.poll_location();
+        }
+        if let Some(controller) = self.radar_controller.as_mut() {
+            controller.poll_location();
         }
     }
 

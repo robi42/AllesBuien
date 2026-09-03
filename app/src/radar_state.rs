@@ -7,6 +7,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use allesbuien_core::{
     location::LocationConfig,
+    location_settings::LocationSettings,
     radar::RadarApi,
     radar_legend::{self, UNIT},
     status::RADAR_UNAVAILABLE,
@@ -19,10 +20,17 @@ use crate::radar_frames::FrameSet;
 pub(crate) struct RadarControllerConfig {
     pub(crate) api: Arc<dyn RadarApi>,
     pub(crate) state_dir: PathBuf,
-    pub(crate) location: LocationConfig,
+    pub(crate) location: Arc<LocationSettings>,
     pub(crate) runtime: Handle,
-    pub(crate) refresh_interval: Duration,
-    pub(crate) playback_interval: Duration,
+    pub(crate) intervals: RadarIntervals,
+}
+
+/// The three cadences QML drives this controller with.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RadarIntervals {
+    pub(crate) refresh: Duration,
+    pub(crate) playback: Duration,
+    pub(crate) location_poll: Duration,
 }
 
 pub struct RadarControllerRust {
@@ -43,13 +51,18 @@ pub struct RadarControllerRust {
     pub(crate) legend_swatches: QStringList,
     pub(crate) legend_buckets: QStringList,
     pub(crate) legend_unit: QString,
+    pub(crate) coverage_notice: QString,
     pub(crate) status: QString,
     pub(crate) refresh_interval_ms: i32,
+    pub(crate) location_poll_interval_ms: i32,
     /// The cadence from config, restored after a failure shortens it.
     pub(crate) configured_refresh_ms: i32,
     pub(crate) playback_interval_ms: i32,
     pub(crate) api: Option<Arc<dyn RadarApi>>,
     pub(crate) state_dir: PathBuf,
+    /// The location the marker currently sits on, compared against on every poll.
+    pub(crate) location: Option<LocationConfig>,
+    pub(crate) location_settings: Option<Arc<LocationSettings>>,
     pub(crate) runtime: Option<Handle>,
     pub(crate) observed: Vec<bool>,
     pub(crate) last_good: Option<FrameSet>,
@@ -81,12 +94,16 @@ impl Default for RadarControllerRust {
                 .map(QString::from)
                 .collect(),
             legend_unit: UNIT.into(),
+            coverage_notice: QString::default(),
             status: RADAR_UNAVAILABLE.into(),
             refresh_interval_ms: 300_000,
+            location_poll_interval_ms: 2_000,
             configured_refresh_ms: 300_000,
             playback_interval_ms: 400,
             api: None,
             state_dir: PathBuf::new(),
+            location: None,
+            location_settings: None,
             runtime: None,
             observed: Vec::new(),
             last_good: None,
