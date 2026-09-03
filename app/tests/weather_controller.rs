@@ -42,7 +42,7 @@ impl FeedApi for FakeFeedApi {
                 current: Some(CurrentConditions {
                     // Deliberately unequal to the configured location label, so
                     // the header assertions below fail if the two are swapped.
-                    station_name: String::from("Meetstation Schiphol"),
+                    station_name: String::from("Station Schiphol"),
                     temperature: Some(19.5),
                     feel_temperature: Some(18.8),
                     wind_speed: Some(3.2),
@@ -128,10 +128,7 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
             .expect("controller should exist");
         assert_eq!(feed.calls.load(Ordering::SeqCst), 1);
         assert_eq!(controller.location_name().to_string(), "Amsterdam-West");
-        assert_eq!(
-            controller.station_name().to_string(),
-            "Meetstation Schiphol"
-        );
+        assert_eq!(controller.station_name().to_string(), "Station Schiphol");
         assert_eq!(controller.temperature().to_string(), "19.5 °C");
         assert_eq!(controller.feels_like().to_string(), "18.8 °C");
         assert_eq!(controller.wind().to_string(), "3.2 m/s");

@@ -98,7 +98,7 @@ mod tests {
     fn a_complete_measurement_formats_every_panel_string() {
         // Given
         let current = CurrentConditions {
-            station_name: String::from("Meetstation Schiphol"),
+            station_name: String::from("Station Schiphol"),
             temperature: Some(20.34),
             feel_temperature: Some(21.4),
             wind_speed: Some(9.9),
@@ -113,7 +113,7 @@ mod tests {
         let view = ConditionsView::from_current(Some(&current));
 
         // Then
-        assert_eq!(view.station_name, "Meetstation Schiphol");
+        assert_eq!(view.station_name, "Station Schiphol");
         assert_eq!(view.temperature, "20.3 °C");
         assert_eq!(view.feels_like, "21.4 °C");
         assert_eq!(view.wind, "9.9 m/s");
@@ -159,7 +159,7 @@ mod tests {
     fn absent_optional_readings_do_not_fabricate_numbers() {
         // Given
         let current = CurrentConditions {
-            station_name: String::from("Meetstation Schiphol"),
+            station_name: String::from("Station Schiphol"),
             condition_code: String::from("a"),
             ..CurrentConditions::default()
         };

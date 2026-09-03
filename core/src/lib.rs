@@ -15,6 +15,7 @@ pub mod radar_transport;
 pub mod rain;
 pub mod rain_cursor;
 pub mod retry;
+pub(crate) mod station;
 pub mod status;
 #[cfg(test)]
 mod test_support;

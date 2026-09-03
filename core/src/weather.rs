@@ -118,6 +118,9 @@ pub enum WeatherError {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CurrentConditions {
+    /// Measuring station, in English: the feed's Dutch `"Meetstation Schiphol"`
+    /// is mapped to `"Station Schiphol"` while the feed is parsed, so the Dutch
+    /// form never reaches here. Names without that prefix arrive unchanged.
     pub station_name: String,
     pub temperature: Option<f64>,
     pub feel_temperature: Option<f64>,
