@@ -94,23 +94,44 @@ restore_scratch() {
 # whichever comes first. Both are boundaries: without the second one the last
 # gate in the file would absorb the two script calls that follow it, and this
 # script is one of them, so slicing bin/test would recurse into itself.
+#
+# The scratch copy of bin/test, not the ambient one. This script runs from the
+# repository root and every `cd "$scratch"` below is subshell-only, so reading
+# bin/test out of $PWD judges the file as it sits in the real tree while the
+# mutation the fixture just made lives in the scratch. On a clean run the two
+# are byte-identical and nothing about the behaviour changes; what changes is
+# that the slicer becomes something a fixture can aim at.
 slice_gate() {
-  awk 'index($0, "echo \"==> gate: ") == 1 { exit } { print }' bin/test
+  awk 'index($0, "echo \"==> gate: ") == 1 { exit } { print }' "$scratch/bin/test"
   awk -v want="echo \"==> gate: $1\"" '
     index($0, "echo \"==> gate: ") == 1 { keep = ($0 == want) }
     index($0, "./bin/") == 1 { keep = 0 }
     keep { print }
-  ' bin/test
+  ' "$scratch/bin/test"
 }
 
 # bin/check-fast and bin/check-qml-contract are whole scripts that report every
 # offender they find, so they run as themselves; bin/test builds a whole tree
 # and only its named slice is affordable.
 run_gate() {
-  local script=$1 gate=$2
+  local script=$1 gate=$2 slice=$scratch/violation-gate.sh
   shift 2
   if [[ $script == bin/test ]]; then
-    slice_gate "$gate" >"$scratch/violation-gate.sh"
+    slice_gate "$gate" >"$slice"
+    # The existence check below matches a gate's echo line as a substring while
+    # the slicer above matches it as a whole line, so a header that has been
+    # reformatted - a trailing comment is enough - satisfies the first and cuts
+    # nothing under the second. What runs then is the preamble alone: no gate,
+    # exit 0, and a fixture that asked for red gets green. The verdict
+    # comparison further down does catch that and the run goes red, so nothing
+    # passes silently - but it goes red saying the named gate stopped biting,
+    # and the named gate was never run. Name the culprit here, where it is
+    # known, rather than leaving the reader to rediscover this function.
+    if ! grep -qF "==> gate: $gate" "$slice"; then
+      printf "slice_gate cut no block for gate '%s': its header in bin/test no longer matches the slicer's whole-line pattern\n" \
+        "$gate" >&2
+      return 1
+    fi
     (cd "$scratch" && bash violation-gate.sh)
   else
     (cd "$scratch" && "./$script" "$@")

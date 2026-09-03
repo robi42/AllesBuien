@@ -107,4 +107,10 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-twenty-six it runs, each of which fails loudly if its gate stops biting.
+twenty-seven it runs, each of which fails loudly if its gate stops biting. One
+of those twenty-seven aims at the runner rather than at a gate: the slicer
+checks a gate exists by substring and cuts its block by whole line, so a
+reformatted header satisfies the first and cuts nothing under the second, and
+the empty block that results goes green where the fixture asked for red. That
+is caught — the verdict comparison sees it — but it is caught as "the gate
+stopped biting" when the gate never ran, so the slicer now says so itself.
