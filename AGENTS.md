@@ -23,7 +23,9 @@ AllesBuien/
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Configuration and location precedence | `core/src/config.rs` | Environment → optional Omarchy weather settings → Amsterdam-West default |
+| Configuration | `core/src/config.rs` | Endpoints, notification thresholds, state directory, and the location setting |
+| Location precedence and re-resolution | `core/src/location.rs`, `core/src/location_settings.rs` | Environment → Omarchy `weather.json` → Amsterdam-West default, re-askable at any time |
+| Location provenance and radar coverage wording | `core/src/location_notice.rs` | Which source answered, and whether the Dutch radar reaches the place |
 | Buienradar feed and raintext parsing | `core/src/weather.rs` | `FeedApi` boundary and forecast/current-condition models |
 | Radar metadata, frames, and cache pruning | `core/src/radar.rs` | `RadarApi`, generation IDs, bounded run cache |
 | Notification rules and adapter | `core/src/notify.rs` | Cooldown/event dedup behind `Notifier` |
@@ -59,6 +61,9 @@ lefthook run pre-commit
 - **Qt threading:** HTTP, file reads, and notification dispatch run off the Qt thread; QObject changes return through the CXX-Qt thread queue.
 - **Theme-watch re-arm:** Omarchy replaces `~/.local/state/omarchy/current/theme` by removing and renaming a directory. Poll every 2000 ms, re-resolve the path on each changed read, and tolerate disappearance/recreation; an inode-bound watcher cannot survive replacement.
 - **Theme fallback:** Rust exposes `themeAvailable`; QML uses `SystemPalette` when unavailable. Theme colors otherwise come from the controller.
+- **Location following:** `~/.local/state/omarchy/settings/weather.json` is a desktop-wide setting that `omarchy-weather-location` rewrites and `--clear` removes, so it is polled every 2000 ms and never watched — `--clear` unlinks the file and a later `--set` writes a new one, which defeats an inode-bound watcher exactly as a theme replacement does. `LocationSettings` holds the inputs rather than the answer, and the weather and radar bridges each re-resolve on the same tick and compare against the location they last adopted. Neither tells the other, so there is no shared cell to race over and the order of the two `pollLocation()` calls carries no meaning. An `ALLESBUIEN_LAT`/`ALLESBUIEN_LON` pair is captured once at construction and outranks every later file change: a viewer who pinned this app to a coordinate did not ask the desktop to move it.
+- **No location auto-detection, deliberately:** Omarchy's own weather widget treats a missing `weather.json` as "detect from the IP address", because wttr.in resolves an empty query that way and its widget can render any city on Earth. AllesBuien draws Dutch radar and only Dutch radar, so an IP that resolves to Berlin would yield a correct-looking window over an empty map — a worse answer than a Dutch default that at least shows rain. A missing setting therefore falls back to Amsterdam-West, and `core/src/location_notice.rs` labels it as a default so the state reads as unconfigured rather than chosen. The same reasoning rules out geocoding a name-only entry: `omarchy-weather-location --set Malibu` writes no coordinates, and inventing them is a second source of truth for a setting the desktop already owns.
+- **Radar coverage:** A location outside `core/src/radar_projection`'s bounding box gets no marker and a stated notice, because a raster that paints its base and nothing else is indistinguishable from a failed frame request. The bounds are named once, in `radar_projection`; `location_notice` asks that module rather than restating them.
 - **Radar delivery:** Metadata `times[]` determines frame order and cadence. Transparent frame PNGs are served without Rust-side composition through generation-keyed `image://radar/<generation>/<index>` URLs.
 - **Error UX:** Retain last-good data and expose one minimal inline status per view. Malformed or missing optional input must not panic.
 - **GUI tests:** Every file directly under `app/tests/` contains exactly one GUI test and constructs exactly one `QGuiApplication`, giving each Qt application its own process.
@@ -78,7 +83,8 @@ lefthook run pre-commit
 - Do NOT use mocks when a trait fake can express the scenario; do not call live endpoints from unit tests or mutate process-global environment variables in tests.
 - Do NOT place multiple GUI tests or multiple `QGuiApplication` instances in one integration-test file/executable.
 - Do NOT decode or compose radar/basemap images in Rust, hardcode radar cadence, retain stale generations, or allow an unbounded radar cache.
-- Do NOT use a file/inode watcher for the Omarchy theme directory, fabricate fallback palette values, hard-fail on missing theme keys, or add custom C++ watcher bindings.
+- Do NOT use a file/inode watcher for the Omarchy theme directory or the Omarchy weather settings file, fabricate fallback palette values, hard-fail on missing theme keys, or add custom C++ watcher bindings.
+- Do NOT add IP geolocation, forward or reverse geocoding, or an in-app location picker. The desktop already ships `omarchy-weather-location`, and a second way to set a desktop-wide setting is the thing to avoid; the divergence from Omarchy's IP auto-detection is a recorded decision, not an omission.
 - Do NOT hardcode colors in QML; bind controller theme properties or `SystemPalette` fallback values.
 - Do NOT add toast/retry frameworks or notification spam; keep one inline error status per view and preserve cooldown/event dedup.
 - Do NOT replace Buienradar with wttr.in/Open-Meteo, expand beyond Dutch radar, or remove the required attribution: the visible `Buienradar.nl` and its link to `https://www.buienradar.nl` both have to stay.

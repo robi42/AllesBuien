@@ -44,6 +44,25 @@ update-desktop-database "$DATA_HOME/applications" || true
 
 The Omarchy user wiring in `~/.config/hypr/bindings.lua` binds **SUPER+ALT+W** to launch AllesBuien and applies a floating window rule for app ID `allesbuien`.
 
+## Location
+
+AllesBuien reads the location Omarchy already knows, so there is nothing extra to configure and no second place to change it:
+
+```bash
+omarchy-weather-location --set Groningen 53.22,6.57
+omarchy-weather-location --clear
+```
+
+The open window follows either command within about two seconds. The place name, the marker on the radar, and the weather it fetches all move together; no restart is involved, and the desktop's own weather widget follows the same file at the same time.
+
+Three sources answer in order. An `ALLESBUIEN_LAT`/`ALLESBUIEN_LON` pair pins this app alone and outranks everything after it, including later changes to the Omarchy setting. Omarchy's `~/.local/state/omarchy/settings/weather.json` decides otherwise, provided it carries both coordinates. Failing both, the window falls back to Amsterdam-West. The header says which of the three answered, so a fallback reads as a default rather than as a place someone chose.
+
+Two behaviours are deliberate, and both follow from this being a Dutch radar viewer rather than a general weather app:
+
+Unlike Omarchy's own weather widget, **AllesBuien does not auto-detect your location from your IP address.** That widget can render any city on Earth, so detection is a good default for it. This one draws Buienradar's Dutch radar and nothing else, so an IP resolving to Berlin would produce a confident-looking window over a permanently empty map. A sensible Dutch default, labelled as a default, is the better wrong answer.
+
+And a location outside the radar's coverage says so on the map, rather than leaving a blank raster that looks like a failed download. `omarchy-weather-location --set Malibu` — a name with no coordinates — is treated as no setting at all, because geocoding it would mean owning a copy of a setting the desktop already owns.
+
 ## Rollback
 
 Restore the timestamped `bindings.lua` backup created during Omarchy wiring before removing the selected installation mode:
