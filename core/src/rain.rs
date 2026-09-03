@@ -61,15 +61,17 @@ pub fn code_to_mmh(code: i32) -> f64 {
 /// Parses a raintext payload into the full series and its summary.
 ///
 /// `clock_shift_minutes` is added to every `HH:MM` label so the series reads in
-/// the viewer's timezone; pass `0` to keep the Dutch wall clock. Blank and
-/// malformed rows are skipped rather than treated as dry, so a partially broken
-/// payload still produces a usable graph.
+/// the viewer's timezone; pass `0` to keep the Dutch wall clock.
 #[must_use]
-#[expect(
-    clippy::missing_panics_doc,
-    reason = "the only expect here is unreachable: the peak filter above has already proved a positive-code sample exists, so documenting a panic would promise callers a failure mode this cannot reach"
-)]
 pub fn parse_series(raw: &str, clock_shift_minutes: i32) -> RainSeries {
+    summarise(parse_points(raw, clock_shift_minutes))
+}
+
+/// Parses raintext rows into ordered samples, oldest first.
+///
+/// Blank and malformed rows are skipped rather than treated as dry, so a
+/// partially broken payload still produces a usable graph.
+fn parse_points(raw: &str, clock_shift_minutes: i32) -> Vec<RainPoint> {
     let mut points: Vec<RainPoint> = Vec::new();
     for line in raw.lines() {
         let trimmed = line.trim();
@@ -94,7 +96,11 @@ pub fn parse_series(raw: &str, clock_shift_minutes: i32) -> RainSeries {
             minutes_from_start,
         });
     }
+    points
+}
 
+/// Finds the peak and the first wet sample, and builds the one-line summary.
+fn summarise(points: Vec<RainPoint>) -> RainSeries {
     let peak = points
         .iter()
         .max_by(|left, right| left.code.cmp(&right.code));
