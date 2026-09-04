@@ -254,24 +254,74 @@ Item {
             anchors.rightMargin: radarPanel.theme.spaceXl
             spacing: radarPanel.theme.spaceXl
 
+            // The transport verb is drawn instead of typed. "Play" and "Pause"
+            // are words a reader has to stop and parse; the two marks that every
+            // player on the desktop already uses say the same thing without being
+            // read, and dropping the word gives the timeline beside it the ~44 px
+            // the label was holding — which is the whole reason this control is
+            // now 36 square rather than 80 wide. The word itself does not leave:
+            // `text:` stays because `AbstractButton.text` is this button's
+            // accessible name, and a screen reader still has to be able to say
+            // "Pause" after the pixels stopped saying it.
+            //
+            // The glyph is a plain CHILD of the button carrying its own explicit
+            // size, not the button's `contentItem`. A Control sizes its content
+            // item to `availableWidth`, and at this width Material's padding
+            // leaves nothing of it — measured in this app at 36 - 24 - 24, floored
+            // to zero — so a Canvas mounted there has no area to paint into and
+            // stays empty however often it is asked to draw. A child is not sized
+            // by the Control at all: it keeps its 12 px and centres on the button.
+            // The repaint hooks are a guarantee rather than a diagnosis — the
+            // glyph asks to be redrawn on each input it reads and once more when
+            // the surface reports itself paintable, so the first paint does not
+            // depend on which of those comes first.
             Button {
                 id: playButton
                 text: radarPanel.radarController.playing ? "Pause" : "Play"
                 enabled: radarPanel.radarController.frameCount > 1
                 Layout.preferredHeight: 36
-                Layout.preferredWidth: 80
+                Layout.preferredWidth: 36
 
                 background: Rectangle {
                     color: playButton.down ? radarPanel.theme.selection : radarPanel.theme.buttonFill
                     radius: radarPanel.theme.radiusSm
                 }
-                contentItem: Text {
-                    text: playButton.text
-                    color: radarPanel.theme.buttonText
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    font.bold: true
-                    font.pointSize: radarPanel.theme.fontValue
+                contentItem: Item {}
+
+                Canvas {
+                    id: transportGlyph
+                    readonly property bool showPause: radarPanel.radarController.playing
+                    readonly property color ink: radarPanel.theme.buttonText
+                    readonly property int side: 12
+                    anchors.centerIn: parent
+                    z: 2
+                    width: transportGlyph.side
+                    height: transportGlyph.side
+                    onShowPauseChanged: transportGlyph.requestPaint()
+                    onInkChanged: transportGlyph.requestPaint()
+                    onWidthChanged: transportGlyph.requestPaint()
+                    onHeightChanged: transportGlyph.requestPaint()
+                    Component.onCompleted: transportGlyph.requestPaint()
+                    onAvailableChanged: if (transportGlyph.available) transportGlyph.requestPaint()
+                    onPaint: {
+                        const ctx = transportGlyph.getContext("2d");
+                        ctx.clearRect(0, 0, transportGlyph.width, transportGlyph.height);
+                        ctx.fillStyle = transportGlyph.ink;
+                        const left = (transportGlyph.width - transportGlyph.side) / 2;
+                        const top = (transportGlyph.height - transportGlyph.side) / 2;
+                        if (transportGlyph.showPause) {
+                            const bar = transportGlyph.side / 3;
+                            ctx.fillRect(left, top, bar, transportGlyph.side);
+                            ctx.fillRect(left + transportGlyph.side - bar, top, bar, transportGlyph.side);
+                        } else {
+                            ctx.beginPath();
+                            ctx.moveTo(left + 1, top);
+                            ctx.lineTo(left + transportGlyph.side, top + transportGlyph.side / 2);
+                            ctx.lineTo(left + 1, top + transportGlyph.side);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
+                    }
                 }
 
                 onClicked: radarPanel.radarController.playing ? radarPanel.radarController.pause() : radarPanel.radarController.play()
