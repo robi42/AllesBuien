@@ -18,14 +18,6 @@ Item {
     // theme rather than being restated here.
     readonly property int handleSize: 18
 
-    // The five bucket ranges sit a step under the unit that governs them: they
-    // are the key's data, the unit is its title, and at one shared size the
-    // block read as six equal captions. One point is the whole difference —
-    // enough to rank them, not enough to make the digits work to read. A
-    // seventh entry in the type scale would mean two things competing at the
-    // same rank, so a size used in exactly one place stays local to that file.
-    readonly property int legendRangeSize: radarPanel.theme.fontCaption - 1
-
     Item {
         id: mapContainer
         anchors.top: parent.top
@@ -88,95 +80,9 @@ Item {
             }
         }
 
-        // A padded card inset from the map's corner by the same step the panels
-        // use, rather than a ramp floating loose on the terrain. It sits bottom
-        // left because that corner is open sea and northern France — the one
-        // part of this frame that never carries Dutch weather.
-        //
-        // Reproduces the scale Buienradar prints on its own map. Buckets are
-        // uneven (2, 3, 5, 90, open-ended), so each gets an equal block rather
-        // than a proportional gradient. Swatches, captions, and unit all come
-        // from Rust, which keeps this file free of hardcoded colours.
-        Rectangle {
-            id: legend
-            anchors.left: parent.left
-            anchors.bottom: parent.bottom
-            anchors.margins: radarPanel.theme.spaceMd
-            implicitWidth: legendColumn.implicitWidth + radarPanel.theme.spaceMd * 2
-            implicitHeight: legendColumn.implicitHeight + radarPanel.theme.spaceMd * 2
-            radius: radarPanel.theme.radiusMd
-            color: radarPanel.theme.surface
-            visible: radarPanel.radarController.frameCount > 0
-
-            ColumnLayout {
-                id: legendColumn
-                anchors.fill: parent
-                anchors.margins: radarPanel.theme.spaceMd
-                spacing: radarPanel.theme.spaceXs
-
-                Label {
-                    text: radarPanel.radarController.legendUnit
-                    font.pointSize: radarPanel.theme.fontCaption
-                    font.bold: true
-                    font.letterSpacing: radarPanel.theme.capsTracking
-                    color: radarPanel.theme.text
-                    opacity: radarPanel.theme.emphasisMid
-                }
-
-                RowLayout {
-                    spacing: radarPanel.theme.spaceXs
-
-                    // Equal cells, and every delegate has to fill the cell it is
-                    // handed. Both halves are load-bearing: without the
-                    // `fillWidth` below, a column sizes to its own caption and
-                    // centres inside its cell, so the swatch above it inherits
-                    // the width of a string. That is how "10-100" came to draw
-                    // twice as wide as "0-2" — a difference that encoded nothing
-                    // but character count, on a key whose whole job is to say
-                    // that the buckets are read by colour and not by width.
-                    uniformCellSizes: true
-
-                    Repeater {
-                        model: radarPanel.radarController.legendSwatches
-
-                        ColumnLayout {
-                            id: bucket
-                            required property int index
-                            required property var modelData
-
-                            Layout.fillWidth: true
-                            // Equal cells alone are not enough: the caption sets
-                            // this column's implicit width but `fillWidth` lets
-                            // it shrink under that, and the captions do not
-                            // elide, so a cell narrower than its text spills the
-                            // text over its neighbour. Flooring each cell at its
-                            // own caption makes the widest one ("10-100") the
-                            // floor for all five, which is also what widens the
-                            // card enough to hold them.
-                            Layout.minimumWidth: rangeCaption.implicitWidth
-                            spacing: 2
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                implicitHeight: radarPanel.theme.spaceSm
-                                radius: radarPanel.theme.radiusSm
-                                color: bucket.modelData
-                            }
-
-                            Label {
-                                id: rangeCaption
-                                text: radarPanel.radarController.legendBuckets[bucket.index]
-                                font.pointSize: radarPanel.legendRangeSize
-                                font.features: ({ tnum: 1 })
-                                color: radarPanel.theme.text
-                                opacity: radarPanel.theme.emphasisMid
-                                Layout.fillWidth: true
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                        }
-                    }
-                }
-            }
+        RadarLegend {
+            radarController: radarPanel.radarController
+            theme: radarPanel.theme
         }
 
         // Not the error slot, and deliberately not centred with it. A location
