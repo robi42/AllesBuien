@@ -147,10 +147,18 @@ pub fn maybe_send_rain_notification(
     };
 
     let title = format!("Rain soon ({})", input.location_label);
-    let body = format!(
-        "Starts around {} ({} min), peak ~{:.2} mm/h",
-        rain.time_label, rain.minutes_until, rain.max_mmh
-    );
+    // Zero minutes means the series' first row is already wet, so this rain has
+    // started rather than being due. Both the clock time and the count are
+    // dropped there because "about now" already says each of them, and saying
+    // them anyway produced "Starts around 12:05 (0 min)" — the bug restated.
+    let body = if rain.minutes_until == 0 {
+        format!("Starts about now, peak ~{:.2} mm/h", rain.max_mmh)
+    } else {
+        format!(
+            "Starts around {} ({} min), peak ~{:.2} mm/h",
+            rain.time_label, rain.minutes_until, rain.max_mmh
+        )
+    };
     notifier.send(&title, &body)?;
     notify_state.last_sent_at = Some(Instant::now());
     notify_state.last_event_key = Some(event_key);
@@ -183,6 +191,27 @@ mod tests {
             time_label,
             max_mmh,
         }
+    }
+
+    /// The title and body `rain` produces on a fresh state.
+    ///
+    /// The wording has no accessor of its own — a dispatch is the only place it
+    /// is observable — so every wording test has to arrange one.
+    fn dispatched(rain: &RainSoon<'_>) -> (String, String) {
+        let notifier = FakeNotifier::default();
+        let mut state = base_state();
+        let input = NotificationInput {
+            rain: Some(rain),
+            location_label: "Home",
+        };
+
+        maybe_send_rain_notification(&notifier, input, &mut state).expect("fake send succeeds");
+
+        notifier
+            .calls()
+            .first()
+            .cloned()
+            .expect("the announcement went out")
     }
 
     #[test]
@@ -254,5 +283,31 @@ mod tests {
                 String::from("Starts around 12:15 (10 min), peak ~0.80 mm/h")
             )]
         );
+    }
+
+    #[test]
+    fn rain_that_has_already_started_is_announced_as_starting_now() {
+        // Given
+        let falling = rain(0, "12:05", 1.4);
+
+        // When
+        let (title, body) = dispatched(&falling);
+
+        // Then
+        assert_eq!(title, "Rain soon (Home)");
+        assert_eq!(body, "Starts about now, peak ~1.40 mm/h");
+    }
+
+    #[test]
+    fn rain_still_minutes_away_keeps_its_clock_time_and_its_countdown() {
+        // Given
+        let coming = rain(5, "12:10", 0.35);
+
+        // When
+        let (title, body) = dispatched(&coming);
+
+        // Then
+        assert_eq!(title, "Rain soon (Home)");
+        assert_eq!(body, "Starts around 12:10 (5 min), peak ~0.35 mm/h");
     }
 }
