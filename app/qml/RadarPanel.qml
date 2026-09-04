@@ -186,56 +186,24 @@ Item {
         // rather than a fault. It is a standing statement, not a failure, so it
         // takes the text colour instead of the error colour and sits at the top,
         // where it cannot collide with a refresh error arriving underneath it.
-        Label {
-            id: coverageNotice
+        ScrimNotice {
             objectName: "coverageNotice"
+            theme: radarPanel.theme
             text: radarPanel.radarController.coverageNotice
-            visible: coverageNotice.text.length > 0
+            color: radarPanel.theme.text
+            maximumLineCount: 2
             anchors.top: parent.top
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.topMargin: radarPanel.theme.spaceLg
-            width: Math.min(coverageNotice.implicitWidth, parent.width - radarPanel.theme.spaceXl * 2)
-            font.pointSize: radarPanel.theme.fontBody
-            font.bold: true
-            color: radarPanel.theme.text
-            wrapMode: Text.Wrap
-            maximumLineCount: 2
-            elide: Text.ElideRight
-            horizontalAlignment: Text.AlignHCenter
-
-            Rectangle {
-                anchors.fill: parent
-                anchors.margins: -radarPanel.theme.spaceSm
-                color: radarPanel.theme.background
-                opacity: radarPanel.theme.scrimOpacity
-                radius: radarPanel.theme.radiusSm
-                z: -1
-            }
         }
 
-        Label {
-            id: radarError
+        ScrimNotice {
             objectName: "radarError"
+            theme: radarPanel.theme
             text: radarPanel.radarController.status
-            visible: radarError.text.length > 0
-            anchors.centerIn: parent
-            width: Math.min(radarError.implicitWidth, parent.width - radarPanel.theme.spaceXl * 2)
-            font.pointSize: radarPanel.theme.fontBody
-            font.bold: true
             color: radarPanel.theme.error
-            wrapMode: Text.Wrap
             maximumLineCount: 3
-            elide: Text.ElideRight
-            horizontalAlignment: Text.AlignHCenter
-
-            Rectangle {
-                anchors.fill: parent
-                anchors.margins: -radarPanel.theme.spaceSm
-                color: radarPanel.theme.background
-                opacity: radarPanel.theme.scrimOpacity
-                radius: radarPanel.theme.radiusSm
-                z: -1
-            }
+            anchors.centerIn: parent
         }
     }
 

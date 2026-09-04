@@ -29,6 +29,7 @@ fn main() {
         "qml/RadarPanel.qml",
         "qml/ConditionIcon.qml",
         "qml/MetricChip.qml",
+        "qml/ScrimNotice.qml",
         "qml/ConditionsView.qml",
         "qml/ForecastView.qml",
         "qml/RainView.qml",
