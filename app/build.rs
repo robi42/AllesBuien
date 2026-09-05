@@ -27,6 +27,7 @@ fn main() {
         "qml/Main.qml",
         "qml/Theme.qml",
         "qml/RadarPanel.qml",
+        "qml/RadarTransport.qml",
         "qml/ConditionIcon.qml",
         "qml/MetricChip.qml",
         "qml/RadarLegend.qml",
