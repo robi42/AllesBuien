@@ -13,6 +13,11 @@ const SAMPLES: [(&str, GeoPoint, [u8; 3]); 6] = [
     ("Groningen", GeoPoint::new(6.57, 53.22), LAND),
 ];
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the six fixed geography samples are inside the projection extent, so rounding deliberately selects their non-negative canvas pixels"
+)]
 fn main() -> Result<(), Box<dyn Error>> {
     let input = input_path()?;
     let image = image::open(&input)?;

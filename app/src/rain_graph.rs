@@ -160,6 +160,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "encoded rain value zero must map to the exact zero-height baseline asserted by this regression test"
+    )]
     fn light_rain_stays_visible_against_the_fixed_full_scale() {
         // Given: 0.04 mm/h, three orders of magnitude below the 5 mm/h reference.
         let points = series("000|12:00\n065|12:05\n");
@@ -207,6 +211,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::format_collect,
+        reason = "this eight-entry test fixture is clearest as a compact formatted iterator comprehension"
+    )]
     fn axis_captions_appear_every_thirty_minutes_and_at_the_final_sample() {
         // Given: eight samples spanning 35 minutes at the five-minute cadence.
         let raw: String = (0..8).map(|step| format!("000|12:{step:02}\n")).collect();

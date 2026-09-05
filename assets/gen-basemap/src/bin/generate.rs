@@ -130,7 +130,10 @@ fn update_license(path: &Path, digest: &str) -> Result<(), Box<dyn Error>> {
         .filter(|line| !line.starts_with("Basemap SHA-256:"))
         .collect::<Vec<_>>()
         .join("\n");
-    updated.push_str(&format!("\nBasemap SHA-256: {digest}\n"));
+    updated.push('\n');
+    updated.push_str("Basemap SHA-256: ");
+    updated.push_str(digest);
+    updated.push('\n');
     fs::write(path, updated)?;
     Ok(())
 }

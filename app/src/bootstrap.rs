@@ -71,6 +71,10 @@ impl AppBuilder {
     ///
     /// # Errors
     /// Returns [`BootstrapError`] if Qt cannot create the application, engine, or root object.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Qt object construction, pinning, ownership transfer, signal wiring, and QML loading form one ordered startup transaction"
+    )]
     pub fn boot(self) -> Result<BootedApp, BootstrapError> {
         app_style::set_material_style();
         QGuiApplication::set_desktop_file_name(&QString::from("allesbuien"));

@@ -74,6 +74,10 @@ fn shown(booted: &allesbuien::BootedApp) -> Shown {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "this one-process GUI regression keeps set, unchanged, clear, and out-of-coverage location transitions in one ordered narrative"
+)]
 fn follows_the_desktop_location_setting_while_the_window_stays_open() {
     // Given: one GUI application over a temporary home that already names Utrecht.
     let home = tempfile::tempdir().expect("temporary home");

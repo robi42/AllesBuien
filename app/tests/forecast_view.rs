@@ -89,6 +89,10 @@ impl FeedApi for FakeFeedApi {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "this one-process GUI regression keeps forecast settling, QObject inspection, attribution checks, and rendered-image evidence in one ordered narrative"
+)]
 fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
     // Given: the real QML window backed by the donor's five-day fake feed.
     let services = CoreServices::new(CoreServiceConfig {

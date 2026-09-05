@@ -8,6 +8,12 @@ struct Edge {
     end: ScreenPoint,
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "scanline coordinates are clipped to the fixed 1058x915 canvas before deliberate integer-pixel rounding, and every row index is at most 914"
+)]
 pub fn fill_polygon(
     image: &mut RgbImage,
     projection: &MapProjection,
@@ -110,6 +116,10 @@ fn clip_to_canvas(start: ScreenPoint, end: ScreenPoint) -> Option<(ScreenPoint, 
     ))
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "Liang-Barsky clipping bounds both endpoints to the 1058x915 canvas before Bresenham rounds them to integer pixels"
+)]
 fn bresenham(image: &mut RgbImage, start: ScreenPoint, end: ScreenPoint, color: Rgb<u8>) {
     let mut x = start.x.round() as i32;
     let mut y = start.y.round() as i32;

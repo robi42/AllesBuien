@@ -25,6 +25,10 @@ fn assert_local_clock_label(label: &str) {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "this one-process GUI regression keeps generation replacement, playback, seeking, stale completion, and final-state assertions in one ordered narrative"
+)]
 fn ignores_stale_generation_frame_and_refresh_started_resets_state() {
     // Given: one GUI application, deterministic radar generations, and injected timer intervals.
     let stale_gate = Arc::new(Gate::new());

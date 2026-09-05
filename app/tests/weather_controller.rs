@@ -25,6 +25,10 @@ struct FakeFeedApi {
 }
 
 impl FeedApi for FakeFeedApi {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "this test-only feed keeps its complete deterministic weather response beside the single GUI scenario that consumes it"
+    )]
     fn fetch(&self, _latitude: f64, _longitude: f64) -> FeedFuture<'_> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let empty = self.empty.load(Ordering::SeqCst);
@@ -86,6 +90,14 @@ impl FeedApi for FakeFeedApi {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "this one-process GUI regression keeps bootstrap, async settling, property checks, model roles, and refresh replacement in one ordered narrative"
+)]
+#[expect(
+    clippy::float_cmp,
+    reason = "the encoded dry rain sample must map to the exact zero-height baseline asserted by this regression test"
+)]
 fn populates_weather_properties_when_boot_triggers_initial_refresh() {
     // Given: one GUI application builder with a fake feed and a long recurring interval.
     let feed = Arc::new(FakeFeedApi {

@@ -29,8 +29,18 @@ pub mod conditions_view;
 pub mod forecast_model;
 pub mod icon_cache;
 pub mod icon_store;
+#[expect(
+    clippy::must_use_candidate,
+    clippy::needless_pass_by_value,
+    clippy::unnecessary_box_returns,
+    reason = "the image-provider module contains CXX-Qt constructor plumbing whose generated signatures and boxed QObject allocation are fixed by its C++ ABI"
+)]
 pub mod image_provider;
 pub mod radar_clock;
+#[expect(
+    clippy::float_cmp,
+    reason = "the radar bridge module contains CXX-Qt generated exact equality for f64 Q_PROPERTY change detection"
+)]
 pub mod radar_controller;
 mod radar_frames;
 mod radar_playback;
@@ -38,6 +48,10 @@ mod radar_state;
 pub mod rain_graph;
 mod services;
 pub mod theme_controller;
+#[expect(
+    clippy::float_cmp,
+    reason = "the weather bridge module contains CXX-Qt generated exact equality for f64 Q_PROPERTY change detection"
+)]
 pub mod weather_controller;
 mod weather_state;
 
@@ -66,6 +80,12 @@ impl Display for RunError {
 
 impl Error for RunError {}
 
+/// Builds the production services, starts Qt, and runs its event loop.
+///
+/// # Errors
+///
+/// Returns [`RunError`] when a weather or radar client cannot be constructed,
+/// Qt application bootstrap fails, or the Qt event loop exits unsuccessfully.
 pub fn run() -> Result<(), RunError> {
     let config = Config::load();
     let feed = ReqwestFeedApi::new(config.endpoints.feed_url, config.endpoints.raintext_url)

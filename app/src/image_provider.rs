@@ -115,6 +115,7 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("image_provider.h");
         #[rust_name = "new_image_provider"]
+        #[must_use]
         fn imageProviderNew(
             image_type: QQmlImageProviderBaseImageType,
         ) -> *mut QQmlImageProviderBase;

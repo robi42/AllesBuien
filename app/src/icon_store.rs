@@ -147,7 +147,11 @@ mod tests {
             .collect();
         assert_eq!(remaining.len(), MAX_CACHED_ICONS);
         assert!(
-            remaining.iter().all(|name| !name.ends_with(".part")),
+            remaining.iter().all(|name| {
+                std::path::Path::new(name)
+                    .extension()
+                    .is_none_or(|extension| extension != "part")
+            }),
             "a temporary write file survived: {remaining:?}"
         );
     }

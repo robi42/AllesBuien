@@ -5,6 +5,9 @@ edition = "2024"
 license = "MIT"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 allesbuien-core = { path = "../core" }
 cxx = "1.0"

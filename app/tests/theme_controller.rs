@@ -63,6 +63,10 @@ fn replace_theme(root: &Path, current: &Path, fixture: &ThemeFixture<'_>) {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "this one-process GUI regression keeps the ordered theme replacement, disappearance, recreation, and property assertions together"
+)]
 fn exposes_colors_across_replacements_and_unavailability() {
     // Given: one GUI application and an injected Omarchy theme directory.
     let root = TestDirectory::new();

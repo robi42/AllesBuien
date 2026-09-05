@@ -22,6 +22,11 @@ fn projection_maps_extent_corners_to_canvas_when_using_web_mercator() {
 }
 
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the fixed land and hole samples are inside the test projection extent, so rounding deliberately selects their non-negative canvas pixels"
+)]
 fn scanline_fill_leaves_hole_water_when_polygon_has_interior_ring() {
     // Given
     let projection = MapProjection::default();

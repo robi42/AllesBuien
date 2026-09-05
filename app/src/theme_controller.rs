@@ -41,6 +41,7 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("cxx-qt-lib/common.h");
         #[rust_name = "new_theme_controller"]
+        #[must_use]
         fn make_unique() -> UniquePtr<ThemeController>;
     }
 

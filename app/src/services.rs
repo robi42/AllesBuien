@@ -158,8 +158,8 @@ pub struct TimerIntervals {
 impl Default for TimerIntervals {
     fn default() -> Self {
         Self {
-            weather_refresh: Duration::from_secs(10 * 60),
-            radar_refresh: Duration::from_secs(5 * 60),
+            weather_refresh: Duration::from_mins(10),
+            radar_refresh: Duration::from_mins(5),
             radar_playback: Duration::from_millis(400),
             theme_poll: Duration::from_secs(2),
             location_poll: Duration::from_secs(2),

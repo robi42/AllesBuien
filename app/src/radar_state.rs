@@ -33,6 +33,10 @@ pub(crate) struct RadarIntervals {
     pub(crate) location_poll: Duration,
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "these booleans are independent QML properties for playback, observation, forecast-boundary, and marker visibility state"
+)]
 pub struct RadarControllerRust {
     pub(crate) frame_count: i32,
     pub(crate) current_frame_index: i32,

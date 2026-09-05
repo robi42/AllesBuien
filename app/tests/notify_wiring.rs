@@ -61,6 +61,10 @@ impl Notifier for FakeNotifier {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "this single-process GUI scenario keeps setup, two refreshes, cooldown observation, and notifier assertions in one ordered narrative"
+)]
 fn dispatches_once_when_same_rain_event_refreshes_within_cooldown() {
     // Given: one GUI application with rain inside the configured threshold and fake ports.
     let feed = Arc::new(FakeFeedApi {

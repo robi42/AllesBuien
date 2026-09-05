@@ -5,7 +5,7 @@
 //! window with frames from a run nobody is watching.
 //!
 //! `#[auto_cxx_name]` on the `extern "RustQt"` block is load-bearing: without
-//! it, each multi-word `#[qproperty]` is exported under its snake_case Rust
+//! it, each multi-word `#[qproperty]` is exported under its `snake_case` Rust
 //! name and the camelCase binding in QML silently resolves to `undefined`.
 
 use std::{pin::Pin, sync::Arc};
@@ -88,6 +88,7 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("cxx-qt-lib/common.h");
         #[rust_name = "new_radar_controller"]
+        #[must_use]
         fn make_unique() -> UniquePtr<RadarController>;
     }
 

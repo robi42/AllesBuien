@@ -66,6 +66,10 @@ impl RadarApi for AnimatedRadarApi {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "this one-process GUI regression keeps provider loading, timer advancement, FFI object access, and rendered-frame assertions in one ordered narrative"
+)]
 fn renders_and_advances_provider_frames_when_radar_is_playing() {
     // Given: two visibly distinct PNG frames and a short injected playback interval.
     let cache =

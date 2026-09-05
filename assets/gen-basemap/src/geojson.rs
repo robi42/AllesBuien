@@ -56,6 +56,11 @@ impl fmt::Display for GeoJsonError {
 
 impl Error for GeoJsonError {}
 
+/// Parses polygon and multipolygon features from a `GeoJSON` document.
+///
+/// # Errors
+/// Returns [`GeoJsonError`] when the document is invalid or contains a missing,
+/// malformed, or unsupported geometry.
 pub fn parse_polygons(bytes: &[u8]) -> Result<Vec<Polygon>, GeoJsonError> {
     let document: Value = serde_json::from_slice(bytes)
         .map_err(|error| GeoJsonError(format!("invalid GeoJSON: {error}")))?;
@@ -83,6 +88,11 @@ pub fn parse_polygons(bytes: &[u8]) -> Result<Vec<Polygon>, GeoJsonError> {
     Ok(polygons)
 }
 
+/// Parses line-string and multiline-string features from a `GeoJSON` document.
+///
+/// # Errors
+/// Returns [`GeoJsonError`] when the document is invalid or contains a missing,
+/// malformed, or unsupported geometry.
 pub fn parse_lines(bytes: &[u8]) -> Result<Vec<Vec<GeoPoint>>, GeoJsonError> {
     let document: Value = serde_json::from_slice(bytes)
         .map_err(|error| GeoJsonError(format!("invalid GeoJSON: {error}")))?;
