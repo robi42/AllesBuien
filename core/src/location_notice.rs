@@ -21,10 +21,21 @@ use crate::{
     radar_projection::marker_position,
 };
 
-/// Captions naming which source answered, shown beside the place name.
-pub const ENVIRONMENT_PROVENANCE: &str = "Env override";
-pub const DESKTOP_PROVENANCE: &str = "Omarchy setting";
-pub const DEFAULT_PROVENANCE: &str = "Default";
+/// Captions naming which source answered, shown under the place name.
+///
+/// The two that answer are prepositional because of where they are read: the
+/// caption sits directly beneath the name, so it is read as a predicate of it
+/// and has to complete the sentence the name starts. `Amsterdam / Omarchy
+/// setting` is two nouns and leaves the relation between them to be guessed;
+/// `Amsterdam / Via Omarchy` says the place came from the desktop's setting.
+///
+/// The fallback deliberately breaks that grammar. Nothing answered, so there is
+/// no source to name and no `via` to write; saying `No setting` names the
+/// absence, which is both the true state and the one that hints there is
+/// something to set. `Default` named the value instead and read like a choice.
+pub const ENVIRONMENT_PROVENANCE: &str = "Via env override";
+pub const DESKTOP_PROVENANCE: &str = "Via Omarchy";
+pub const DEFAULT_PROVENANCE: &str = "No setting";
 
 /// The caption for where this location came from.
 #[must_use]
@@ -75,7 +86,7 @@ mod tests {
         let captions = sources.map(provenance);
 
         // Then
-        assert_eq!(captions, ["Env override", "Omarchy setting", "Default"]);
+        assert_eq!(captions, ["Via env override", "Via Omarchy", "No setting"]);
         assert_eq!(
             captions
                 .iter()
@@ -85,8 +96,12 @@ mod tests {
             "two sources sharing a caption would be indistinguishable on screen"
         );
         assert!(
-            provenance(LocationSource::BuiltInDefault).contains("Default"),
-            "the fallback has to read as a default rather than as a choice"
+            !provenance(LocationSource::BuiltInDefault).starts_with("Via "),
+            "nothing answered, so the fallback has no source to name"
+        );
+        assert!(
+            provenance(LocationSource::BuiltInDefault).contains("No setting"),
+            "the fallback has to read as an absence rather than as a choice"
         );
     }
 

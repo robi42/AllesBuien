@@ -106,7 +106,7 @@ fn follows_the_desktop_location_setting_while_the_window_stays_open() {
     let opened = shown(&booted);
     let (utrecht_x, utrecht_y) = opened.marker.expect("Utrecht is on the Dutch radar");
     assert_eq!(opened.name, "Utrecht");
-    assert_eq!(opened.source, "Omarchy setting");
+    assert_eq!(opened.source, "Via Omarchy");
     assert_eq!(opened.coverage_notice, "");
     pump_until(
         "the opening refresh asks about Utrecht",
@@ -128,7 +128,7 @@ fn follows_the_desktop_location_setting_while_the_window_stays_open() {
 
     // Then: the window followed without a restart, and refetched the new place.
     assert_eq!(moved.name, "Groningen");
-    assert_eq!(moved.source, "Omarchy setting");
+    assert_eq!(moved.source, "Via Omarchy");
     assert!(
         groningen_x > utrecht_x && groningen_y < utrecht_y,
         "Groningen is north-east of Utrecht, so the marker moves right and up: \
@@ -154,7 +154,7 @@ fn follows_the_desktop_location_setting_while_the_window_stays_open() {
 
     // Then: the fallback is shown as a fallback rather than as a chosen place.
     assert_eq!(cleared.name, "Amsterdam-West");
-    assert_eq!(cleared.source, "Default");
+    assert_eq!(cleared.source, "No setting");
     assert_eq!(cleared.coverage_notice, "");
     assert!(cleared.marker.is_some(), "Amsterdam-West is on the radar");
 
@@ -168,7 +168,7 @@ fn follows_the_desktop_location_setting_while_the_window_stays_open() {
 
     // Then: the blank map is explained rather than left looking like a fault.
     assert_eq!(uncovered.name, "Berlin");
-    assert_eq!(uncovered.source, "Omarchy setting");
+    assert_eq!(uncovered.source, "Via Omarchy");
     assert_eq!(
         uncovered.coverage_notice,
         "Berlin is outside the Dutch radar — the map stays empty"

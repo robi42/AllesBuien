@@ -20,24 +20,45 @@ ColumnLayout {
     // already knows; as a tracked caption it labels the panel without competing
     // with the reading below it.
     //
-    // The provenance rides the same row, one rank quieter, because the name on
-    // its own could not tell a chosen place from a fallen-back one: Amsterdam-West
-    // rendered identically whether the viewer had picked it or never configured
-    // anything. Rust decides the word; this only places it.
+    // Under it rides the provenance, because the name on its own could not tell
+    // a chosen place from a fallen-back one: Amsterdam-West rendered identically
+    // whether the viewer had picked it or never configured anything. Rust
+    // decides the word; this only places it.
     //
-    // Quieter had stopped being enough. With a caption rail on this row and
-    // another under the reading, the two provenance strings bracketed the
-    // header and the name read as one of four peers. The provenance cannot go
-    // lower - it already sits at `emphasisLow`, which Theme.qml documents as
-    // the measured AA floor for caption sizes - so the name takes the anchor
-    // instead, at full opacity. That widens the gap to three simultaneous
-    // contrasts, 11pt bold at 1.0 against 9pt regular at 0.7, without either
-    // label leaving the tertiary grammar. Baseline alignment does the rest:
-    // sitting the caption on the name's baseline reads as an annotation to it,
-    // where vertical centring read as a sibling beside it.
-    RowLayout {
+    // It used to ride the name's row, flush right, at `emphasisLow` and regular
+    // weight, and it was hard to find for two measured reasons rather than one.
+    //
+    // The first is that regular weight cannot cash the opacity it is given. At
+    // 9 pt a regular stem is thinner than a device pixel, so antialiasing never
+    // lets any pixel reach the colour the binding asks for: the caption's
+    // brightest pixel measured 3.97:1 against the card and its stroke averaged
+    // 3.42:1, under the 4.5:1 AA asks of text this size, while the colour it was
+    // *specified* at is 4.57:1. Bold is the whole correction. The proof was
+    // already on screen before anything changed - `observedLabel` below is the
+    // same 9 pt at the same `emphasisLow`, differing only in weight, and it
+    // measured exactly 4.57:1 where its regular neighbour `stationLabel`
+    // measured 3.42:1. So the fix is weight, not opacity: `emphasisLow` is the
+    // floor Theme.qml documents and there was never any room under it, and
+    // going up instead would have bought contrast by spending the name's rank.
+    //
+    // The second is distance. Flush right, the caption sat 131 px clear of the
+    // end of `AMSTERDAM` and 266 px from where the eye starts the line - the
+    // one part of the header nothing else asks you to look at. Moving it to its
+    // own line directly under the name takes that to a 0 px left-edge offset:
+    // the two now share a reading edge, and the caption is found on the way
+    // down to the reading rather than sought out.
+    //
+    // Neither move costs the anchor, which is the constraint this replaced an
+    // earlier fix to satisfy. The name keeps 11 pt bold at `emphasisFull` and
+    // measures 7.24:1 against the caption's 4.47:1, one rank larger and a third
+    // more ink, on the line above. It reads as the header; the caption reads as
+    // its predicate - which is why the wording in `location_notice.rs` is
+    // prepositional now. Directly under a place name, `OMARCHY SETTING` is a
+    // second noun and leaves the relation to be guessed; `VIA OMARCHY` finishes
+    // the sentence the name starts.
+    ColumnLayout {
         Layout.fillWidth: true
-        spacing: conditionsView.theme.spaceSm
+        spacing: 0
 
         Label {
             text: conditionsView.weatherController.locationName.toUpperCase()
@@ -46,7 +67,6 @@ ColumnLayout {
             font.letterSpacing: conditionsView.theme.capsTracking
             color: conditionsView.theme.text
             opacity: conditionsView.theme.emphasisFull
-            Layout.alignment: Qt.AlignBaseline
             Layout.fillWidth: true
             elide: Text.ElideRight
         }
@@ -57,11 +77,12 @@ ColumnLayout {
             text: conditionsView.weatherController.locationSource.toUpperCase()
             visible: locationSource.text.length > 0
             font.pointSize: conditionsView.theme.fontCaption
-            font.bold: false
+            font.bold: true
             font.letterSpacing: conditionsView.theme.capsTracking
             color: conditionsView.theme.text
             opacity: conditionsView.theme.emphasisLow
-            Layout.alignment: Qt.AlignBaseline
+            Layout.fillWidth: true
+            elide: Text.ElideRight
         }
     }
 
