@@ -20,7 +20,7 @@ use serde::Deserialize;
 use crate::{
     condition,
     datetime::LocalTimestamp,
-    station::english_station_name,
+    station::station_place_name,
     weather::{CurrentConditions, ForecastDay, WeatherData, WeatherError},
 };
 
@@ -84,7 +84,7 @@ pub(crate) fn parse_feed(
         let code = condition::code_from_icon_url(&value.icon_url).unwrap_or_default();
         let dutch = value.condition.as_deref().unwrap_or_default();
         CurrentConditions {
-            station_name: english_station_name(&value.station_name),
+            station_name: station_place_name(&value.station_name),
             temperature: value.temperature,
             feel_temperature: value.feel_temperature,
             wind_speed: value.wind_speed,
@@ -247,7 +247,7 @@ mod tests {
 
         // Then
         let current = weather.current.expect("nearest station expected");
-        assert_eq!(current.station_name, "Station Arnhem");
+        assert_eq!(current.station_name, "Arnhem");
         assert_eq!(current.feel_temperature, Some(18.0));
         assert_eq!(current.humidity, Some(94.0));
         assert_eq!(current.condition_code, "qq");

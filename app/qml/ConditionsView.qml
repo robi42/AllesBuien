@@ -13,14 +13,6 @@ ColumnLayout {
     required property var weatherController
     required property Theme theme
 
-    // One point above the field-name step, and named here rather than added to
-    // Theme.qml's six-step scale because that file states the rule: everything
-    // a second file could plausibly need is a token there, and a size used in
-    // exactly one place stays a named property where it is used. Nothing else
-    // in this tree is a panel header, so there is nothing for a seventh step to
-    // share. Why 12 and not 11 is argued with the header below.
-    readonly property int locationNameSize: conditionsView.theme.fontLabel + 1
-
     spacing: conditionsView.theme.spaceMd
 
     // The header is two columns, and the split is the question and its answer:
@@ -30,14 +22,21 @@ ColumnLayout {
     //
     // Tertiary, all four of them. The name was a 14 pt bold headline and the
     // second-largest thing on screen for a value the viewer chose and already
-    // knows, and 11 pt tracked caps is what that argument reduced it to. It
-    // goes back up here, by one point and only one, because the argument's
-    // premise changed rather than its reasoning: the name now shares the header
-    // with three caption-weight items instead of one, and an anchor that is
-    // merely first among four captions is not an anchor. A point is a third of
-    // what the earlier reduction took away, it leaves the reading three scale
-    // steps clear at 38 pt, and it is checked rather than assumed - the
-    // measured margins are quoted at the bottom of this comment.
+    // knows, and 11 pt tracked caps is what that argument reduced it to. It has
+    // since gone back up twice, and both steps are one correction rather than a
+    // drift: an anchor that is merely first among four captions is not an
+    // anchor, and what put three captions on this row is the corner filling up.
+    //
+    // 13 is `theme.fontBody`, and that matters past the number. The
+    // intermediate 12 was one point above `theme.fontLabel`, a size no step in
+    // Theme.qml held, so it had to be declared here as a local property and
+    // defended against that file's rule that a seventh step would mean two
+    // things competing at the same rank. 13 needs no such defence. It is an existing step, shared with
+    // the condition sentence, and the two cannot compete because they differ in
+    // weight, case, tracking, column and opacity - sharing a size step is what
+    // `fontCaption` already does four times over on this very row. So the local
+    // property is gone with the point it was invented for, the size is a token
+    // again, and the reading is still three scale steps clear at 38 pt.
     //
     // Under the name rides the provenance, because the name on its own could
     // not tell a chosen place from a fallen-back one: Amsterdam-West rendered
@@ -53,14 +52,34 @@ ColumnLayout {
     // the sentence the name starts.
     //
     // The corner that move vacated is where the measurement source now sits,
-    // and that is what pays for the extra point. `STATION SCHIPHOL` and
-    // `OBSERVED 14:10` used to span the card's full width on a row of their
-    // own, between the reading and the metrics panel - which put the two
-    // captions that qualify the reading after it, and spent a row of card
-    // height doing so. In the corner they spend none: two 9 pt lines stack
-    // shorter than the name over its provenance, so the header's height is
-    // still the left column's height and the card is one row shorter than it
-    // was.
+    // and that is what pays for the extra point. It used to span the card's
+    // full width on a row of its own, between the reading and the metrics panel
+    // - which put the two captions that qualify the reading after it, and spent
+    // a row of card height doing so. In the corner they spend none: two 9 pt
+    // lines stack shorter than the name over its provenance, so the header's
+    // height is still the left column's height and the card is one row shorter
+    // than it was.
+    //
+    // That corner now says `SCHIPHOL` and `14:10`, two words fewer than the
+    // `STATION SCHIPHOL` / `OBSERVED 14:10` it arrived as, and the reversal is
+    // a change of premise rather than a change of mind. Both qualifiers were
+    // argued for, and `core/src/station.rs` still carries the original argument
+    // beside the reason it lapsed. It was made against the full-width row above:
+    // level with nothing, at the width of a headline, a bare `SCHIPHOL` really
+    // would have read as a second place competing with `AMSTERDAM`, and a bare
+    // `14:10` as an unlabelled clock. None of that survives the move. Position
+    // says caption rather than headline, because that is what this window puts
+    // in a corner; the pairing says the two answer one question between them, so
+    // a place stacked on a time can only be an instrument and when it read; and
+    // the shared right edge ties both to the location opposite rather than to
+    // the reading below. Three signals already carry what the words carried, and
+    // a word that restates three signals only spends width - width this corner
+    // has to find for `HOEK VAN HOLLAND`, a real station name, inside half a
+    // header. `OBSERVED` was also the second one on screen: `RadarTransport.qml`
+    // spends that exact word distinguishing past frames from forecast ones,
+    // which is a distinction this timestamp is not making, and a duplicate
+    // invites it to be read as one. That label keeps the word; this one has no
+    // claim on it.
     //
     // They stay a pair, and they stack. A pair because they answer one
     // question between them - which instrument, at what time - and splitting
@@ -75,42 +94,56 @@ ColumnLayout {
     // was written out as regular on purpose, which was a measured defect rather
     // than a preference. Opacity is a specification, not an outcome: at 9 pt a
     // regular stem is thinner than a device pixel, so antialiasing never lets
-    // any pixel reach the colour the binding asks for. The station's brightest
-    // rendered pixel measured 4.05:1 against the card and its brightest decile
-    // 3.29:1, under the 4.5:1 AA asks of text this size, while the colour it
-    // was *specified* at is 4.57:1. The control was already beside it:
-    // `observedLabel` differed from it in weight and in nothing else, and
-    // measured 4.57:1 max and 4.44:1 decile. So the lever is weight, not
+    // any pixel reach the colour the binding asks for, and that label's stroke
+    // sat under the 4.5:1 AA asks of text this size while being *specified* at
+    // 4.57:1. The control was beside it all along - `observedLabel` differed
+    // from it in weight and in nothing else - so the lever is weight, not
     // opacity. `emphasisLow` is the floor Theme.qml documents and there was
     // never any room under it, and reaching up instead would have bought the
-    // contrast by spending the name's rank - which is exactly what a header
+    // contrast by spending the name's rank, which is exactly what a header
     // carrying three captions cannot afford.
     //
     // Measured on the shipped build at display scale 1.25, from rendered pixels
-    // over the card, as max / brightest decile with the stroke's pixel count
-    // beside it:
+    // over the card, as max / brightest decile with the stroke's pixel count and
+    // rendered width beside them. Both states were captured from the same
+    // compositor at the same window origin, because a capture taken seconds
+    // after a raise reads every foreground about 2% dark while the background is
+    // unmoved - which is enough to invent a difference this change did not make.
+    // The control is the hero glyph, whose colour no part of this changed: it
+    // reads (213,219,230) in both.
     //
-    //   AMSTERDAM         7.31:1 / 7.24:1   ink 1974
-    //   VIA OMARCHY       4.47:1 / 4.43:1   ink 1226
-    //   STATION SCHIPHOL  4.48:1 / 4.43:1   ink 1673   (was 4.05:1 / 3.29:1)
-    //   OBSERVED 14:10    4.57:1 / 4.46:1   ink 1479
+    //                       contrast          ink    width
+    //   AMSTERDAM           7.24:1 / 7.24:1   1986   144 px      before
+    //   AMSTERDAM           7.24:1 / 7.24:1   2229   153 px      after
+    //   VIA OMARCHY         4.47:1 / 4.43:1   1252   126 px
+    //   STATION SCHIPHOL    4.47:1 / 4.43:1   1708   168 px      before
+    //   SCHIPHOL            4.47:1 / 4.43:1    930    88 px      after
+    //   OBSERVED hh:mm      4.47:1 / 4.45:1   1570   147 px      before
+    //   hh:mm               4.47:1 / 4.44:1    517    49 px      after
     //
-    // The name holds 1.63x the contrast of the caption beneath it and 1.61x its
-    // ink - both a shade wider than before the corner filled up - and 2.1x the
-    // ink per character of the longest caption on the row. Per character is the
-    // honest density figure here: raw ink flatters `STATION SCHIPHOL` only
-    // because it is sixteen characters against the name's nine.
+    // Only the timestamp's ink is not reproducible to the pixel across runs -
+    // it is live data, and 490 to 517 is the spread over which digits the clock
+    // happened to be showing. Its width is fixed: the label asks for tabular
+    // figures for exactly this reason.
     //
-    // The station's remaining 0.07 to 4.50:1 is device-row phase rather than
-    // anything this file specifies. The same build captured at four window
-    // origins one logical pixel apart reads 4.57:1, 4.56:1, 4.56:1 and 4.57:1
-    // for that label, and every rendered figure above sits about 3% under the
-    // colour it was specified at because antialiasing never quite fills a stem
-    // - the name is 7.24:1 rendered against 7.45:1 specified by the same tax.
-    // That is why the decile is quoted beside the max and why neither is the
-    // criterion: WCAG 1.4.3 is assessed on the specified pair, and this one is
-    // 4.57:1.
+    // Read the contrast column first, because it is the one that did not move:
+    // a point of type size buys ink and width, never contrast, so 13 pt is not
+    // what makes the name legible and never was. What it buys is 12% more ink
+    // over 9 px more width, and the corner giving back 80 px of the 168 it held
+    // is what that width is taken from rather than from the name.
+    //
+    // The name holds 1.62x the contrast of the loudest caption on the row and
+    // 2.18x its ink per character. Per character is the honest density figure:
+    // raw ink flattered `STATION SCHIPHOL` at sixteen characters against the
+    // name's nine, and now flatters nothing, because the longest caption left is
+    // `VIA OMARCHY` at eleven. Every rendered figure sits a few percent under the
+    // colour it was specified at, because antialiasing never quite fills a stem -
+    // which is why the decile is quoted beside the max and why neither is the
+    // criterion. WCAG 1.4.3 is assessed on the specified pair: 7.45:1 for the
+    // name at `emphasisFull`, 4.57:1 for every caption at `emphasisLow`, a
+    // specified margin of 1.63x.
     RowLayout {
+        objectName: "headerRow"
         Layout.fillWidth: true
         spacing: conditionsView.theme.spaceMd
 
@@ -120,7 +153,7 @@ ColumnLayout {
 
             Label {
                 text: conditionsView.weatherController.locationName.toUpperCase()
-                font.pointSize: conditionsView.locationNameSize
+                font.pointSize: conditionsView.theme.fontBody
                 font.bold: true
                 font.letterSpacing: conditionsView.theme.capsTracking
                 color: conditionsView.theme.text
@@ -147,15 +180,19 @@ ColumnLayout {
         // Collapsed as a block, not just per label: with both labels hidden the
         // two-item stack still has a row gap in front of it, and a feed that
         // names no station would leave the name ending 12 px early for no
-        // stated reason.
+        // stated reason. `headerRow` and `headerCorner` carry objectNames so
+        // `app/tests/conditions_header_corner.rs` can read that collapse off the
+        // rendered tree - a binding that says `visible: false` proves nothing
+        // about the gap in front of it, which is a layout outcome.
         //
         // Half the header is the cap because neither side may starve the other
         // by construction. Nothing on this row is fixed-width - the station is
-        // whatever Buienradar named the nearest instrument, and `STATION HOEK
-        // VAN HOLLAND` is a real one - so without a cap a long station name
-        // would take its width out of the name, which is the one thing here
-        // that is not allowed to shrink.
+        // whatever Buienradar named the nearest instrument, and `HOEK VAN
+        // HOLLAND` is a real one - so without a cap a long station name would
+        // take its width out of the name, which is the one thing here that is
+        // not allowed to shrink.
         ColumnLayout {
+            objectName: "headerCorner"
             visible: stationLabel.visible || observedLabel.visible
             Layout.alignment: Qt.AlignRight | Qt.AlignTop
             Layout.maximumWidth: conditionsView.width / 2

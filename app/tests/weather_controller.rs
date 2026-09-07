@@ -46,7 +46,7 @@ impl FeedApi for FakeFeedApi {
                 current: Some(CurrentConditions {
                     // Deliberately unequal to the configured location label, so
                     // the header assertions below fail if the two are swapped.
-                    station_name: String::from("Station Schiphol"),
+                    station_name: String::from("Schiphol"),
                     temperature: Some(19.5),
                     feel_temperature: Some(18.8),
                     wind_speed: Some(3.2),
@@ -140,7 +140,7 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
             .expect("controller should exist");
         assert_eq!(feed.calls.load(Ordering::SeqCst), 1);
         assert_eq!(controller.location_name().to_string(), "Amsterdam-West");
-        assert_eq!(controller.station_name().to_string(), "Station Schiphol");
+        assert_eq!(controller.station_name().to_string(), "Schiphol");
         assert_eq!(controller.temperature().to_string(), "19.5 °C");
         assert_eq!(controller.feels_like().to_string(), "18.8 °C");
         assert_eq!(controller.wind().to_string(), "3.2 m/s");
@@ -153,7 +153,7 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
             controller.condition_icon_url().to_string(),
             "image://condition/QQ"
         );
-        assert_eq!(controller.observed_label().to_string(), "Observed 17:50");
+        assert_eq!(controller.observed_label().to_string(), "17:50");
         assert_eq!(controller.rain_summary().to_string(), "starts around 14:10");
         assert_eq!(controller.row_count(&QModelIndex::default()), 5);
         assert_eq!(*controller.refresh_interval_ms(), 60_000);

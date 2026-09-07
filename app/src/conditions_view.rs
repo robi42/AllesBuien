@@ -50,7 +50,6 @@ impl ConditionsView {
         let Some(current) = current else {
             return Self::default();
         };
-        let observed = current.observed_at.time_label.trim();
         Self {
             station_name: current.station_name.clone(),
             temperature: measurement(current.temperature, "°C"),
@@ -62,11 +61,7 @@ impl ConditionsView {
                 current.condition.as_deref().unwrap_or_default(),
             ),
             icon_url: condition_icon::display_url(&current.condition_code, ""),
-            observed_label: if observed.is_empty() {
-                String::new()
-            } else {
-                format!("Observed {observed}")
-            },
+            observed_label: current.observed_at.time_label.trim().to_owned(),
             status: String::new(),
         }
     }
@@ -98,7 +93,7 @@ mod tests {
     fn a_complete_measurement_formats_every_panel_string() {
         // Given
         let current = CurrentConditions {
-            station_name: String::from("Station Schiphol"),
+            station_name: String::from("Schiphol"),
             temperature: Some(20.34),
             feel_temperature: Some(21.4),
             wind_speed: Some(9.9),
@@ -113,14 +108,14 @@ mod tests {
         let view = ConditionsView::from_current(Some(&current));
 
         // Then
-        assert_eq!(view.station_name, "Station Schiphol");
+        assert_eq!(view.station_name, "Schiphol");
         assert_eq!(view.temperature, "20.3 °C");
         assert_eq!(view.feels_like, "21.4 °C");
         assert_eq!(view.wind, "9.9 m/s");
         assert_eq!(view.humidity, "65%");
         assert_eq!(view.condition, "Heavily clouded with rain");
         assert_eq!(view.icon_url, "image://condition/QQ");
-        assert_eq!(view.observed_label, "Observed 17:50");
+        assert_eq!(view.observed_label, "17:50");
         assert!(view.status.is_empty());
     }
 
@@ -159,7 +154,7 @@ mod tests {
     fn absent_optional_readings_do_not_fabricate_numbers() {
         // Given
         let current = CurrentConditions {
-            station_name: String::from("Station Schiphol"),
+            station_name: String::from("Schiphol"),
             condition_code: String::from("a"),
             ..CurrentConditions::default()
         };
