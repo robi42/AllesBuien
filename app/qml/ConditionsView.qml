@@ -31,13 +31,13 @@ ColumnLayout {
     // The first is that regular weight cannot cash the opacity it is given. At
     // 9 pt a regular stem is thinner than a device pixel, so antialiasing never
     // lets any pixel reach the colour the binding asks for: the caption's
-    // brightest pixel measured 3.97:1 against the card and its stroke averaged
+    // brightest pixel measured 3.98:1 against the card and its brightest decile
     // 3.42:1, under the 4.5:1 AA asks of text this size, while the colour it was
     // *specified* at is 4.57:1. Bold is the whole correction. The proof was
     // already on screen before anything changed - `observedLabel` below is the
-    // same 9 pt at the same `emphasisLow`, differing only in weight, and it
-    // measured exactly 4.57:1 where its regular neighbour `stationLabel`
-    // measured 3.42:1. So the fix is weight, not opacity: `emphasisLow` is the
+    // same 9 pt at the same `emphasisLow`, differing only in weight, and its
+    // decile measured 4.46:1 where its regular neighbour `stationLabel` reached
+    // only 3.42:1. So the fix is weight, not opacity: `emphasisLow` is the
     // floor Theme.qml documents and there was never any room under it, and
     // going up instead would have bought contrast by spending the name's rank.
     //
@@ -50,12 +50,12 @@ ColumnLayout {
     //
     // Neither move costs the anchor, which is the constraint this replaced an
     // earlier fix to satisfy. The name keeps 11 pt bold at `emphasisFull` and
-    // measures 7.24:1 against the caption's 4.47:1, one rank larger and a third
-    // more ink, on the line above. It reads as the header; the caption reads as
-    // its predicate - which is why the wording in `location_notice.rs` is
-    // prepositional now. Directly under a place name, `OMARCHY SETTING` is a
-    // second noun and leaves the relation to be guessed; `VIA OMARCHY` finishes
-    // the sentence the name starts.
+    // its decile measures 7.24:1 against the caption's 4.45:1, one rank larger
+    // and half again more ink, on the line above. It reads as the header; the
+    // caption reads as its predicate - which is why the wording in
+    // `location_notice.rs` is prepositional now. Directly under a place name,
+    // `OMARCHY SETTING` is a second noun and leaves the relation to be guessed;
+    // `VIA OMARCHY` finishes the sentence the name starts.
     ColumnLayout {
         Layout.fillWidth: true
         spacing: 0
