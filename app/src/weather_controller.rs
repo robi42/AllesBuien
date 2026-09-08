@@ -222,11 +222,12 @@ impl ffi::WeatherController {
         let data = match result {
             Ok(data) => data,
             Err(error) => {
+                let stale = !self.forecast.is_empty();
                 eprintln!(
                     "allesbuien: weather refresh failed: {}",
                     error_chain::describe(&error)
                 );
-                self.set_status(status::weather_message(&error, false).into());
+                self.set_status(status::weather_message(&error, stale).into());
                 return;
             }
         };
