@@ -96,12 +96,19 @@ fn renders_and_advances_provider_frames_when_radar_is_playing() {
     )
     .boot()
     .expect("fake-wired GUI should boot");
-    pump_until("the radar run exposes both frames", SETTLE_BUDGET, || {
-        booted.process_events();
-        booted
-            .radar_controller()
-            .is_some_and(|controller| *controller.frame_count() == 2)
-    });
+    pump_until(
+        "the radar run exposes both frames and the window is focused",
+        SETTLE_BUDGET,
+        || {
+            booted.process_events();
+            let run_is_ready = booted
+                .radar_controller()
+                .is_some_and(|controller| *controller.frame_count() == 2);
+            // SAFETY: Category 8 — Qt owns the focus-window pointer and this call
+            // only tests it for null on the Qt GUI thread.
+            run_is_ready && unsafe { !focus_window().is_null() }
+        },
+    );
 
     // SAFETY: Category 8 — Qt owns the focused QQuickWindow and QObject tree for
     // `booted`'s lifetime; null pointers are rejected and calls stay on the GUI thread.

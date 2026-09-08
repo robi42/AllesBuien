@@ -112,18 +112,20 @@ fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
     .boot()
     .expect("fake-wired GUI should boot");
     pump_until(
-        "the model carries five forecast rows",
+        "the model carries five forecast rows and the window is focused",
         SETTLE_BUDGET,
         || {
             booted.process_events();
-            booted
+            let model_is_ready = booted
                 .weather_controller()
                 .expect("controller should exist")
                 .row_count(&cxx_qt_lib::QModelIndex::default())
-                == 5
+                == 5;
+            // SAFETY: Category 8 — Qt owns the focus-window pointer and this call
+            // only tests it for null on the Qt GUI thread.
+            model_is_ready && unsafe { !focus_window().is_null() }
         },
     );
-    booted.process_events();
 
     // SAFETY: Category 8 — Qt owns the focused QQuickWindow and its QObject tree for
     // `booted`'s lifetime. Null pointers are rejected before use, ABI types come from

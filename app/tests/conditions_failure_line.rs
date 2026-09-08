@@ -133,18 +133,24 @@ fn a_failed_fetch_states_itself_once_and_leaves_the_reading_whole() {
     let booted = boot_over_the_unreachable_feed();
 
     // When: that failure has reached the controller and the layout has settled.
-    pump_until("the cold failure reaches the panel", SETTLE_BUDGET, || {
-        booted.process_events();
-        booted
-            .weather_controller()
-            .is_some_and(|controller| controller.status().to_string().contains(" — "))
-    });
+    pump_until(
+        "the cold failure reaches the panel and the window is focused",
+        SETTLE_BUDGET,
+        || {
+            booted.process_events();
+            let failure_is_ready = booted
+                .weather_controller()
+                .is_some_and(|controller| controller.status().to_string().contains(" — "));
+            // SAFETY: Category 8 - Qt owns the focus-window pointer and this call
+            // only tests it for null on the Qt GUI thread.
+            failure_is_ready && unsafe { !focus_window().is_null() }
+        },
+    );
     let status = booted
         .weather_controller()
         .expect("controller should exist")
         .status()
         .to_string();
-
     // SAFETY: Category 8 - Qt owns the focused QQuickWindow and the QObject
     // tree under it for `booted`'s lifetime, and every call stays on the GUI
     // thread.

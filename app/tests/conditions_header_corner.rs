@@ -103,14 +103,17 @@ fn a_feed_naming_no_station_leaves_no_gap_beside_the_location() {
 
     // When: that answer has reached the controller and the layout has settled.
     pump_until(
-        "the nameless station reaches the header",
+        "the nameless station reaches the header and the window is focused",
         SETTLE_BUDGET,
         || {
             booted.process_events();
-            booted.weather_controller().is_some_and(|controller| {
+            let header_is_ready = booted.weather_controller().is_some_and(|controller| {
                 controller.station_name().is_empty()
                     && controller.temperature().to_string() == "11.5 °C"
-            })
+            });
+            // SAFETY: Category 8 - Qt owns the focus-window pointer and this call
+            // only tests it for null on the Qt GUI thread.
+            header_is_ready && unsafe { !focus_window().is_null() }
         },
     );
 
