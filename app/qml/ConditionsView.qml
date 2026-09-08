@@ -245,8 +245,20 @@ ColumnLayout {
             spacing: 0
             Layout.fillWidth: true
 
-            // Primary.
+            // Primary — and the only label in the window whose placeholder has
+            // to be chosen for its size rather than for its meaning. `elide`
+            // below is right for a real reading that outgrows the column, and
+            // wrong for a word standing in for one: at 38 pt `Unavailable` ran
+            // past the end and cut to `Unavaila…`, which does not read as a
+            // missing value at all — it reads as a value the app is too small
+            // to print. Rust sends `status.NO_READING` here instead, and the
+            // choice is made there rather than by a ternary on the string this
+            // label happens to be carrying. `objectName` lets
+            // `app/tests/conditions_failure_line.rs` read the elision off the
+            // rendered tree, which is a layout outcome and not a binding.
             Label {
+                id: heroReading
+                objectName: "heroReading"
                 text: conditionsView.weatherController.temperature
                 font.pointSize: conditionsView.theme.fontHero
                 font.bold: true
@@ -312,6 +324,12 @@ ColumnLayout {
         }
     }
 
+    // The single owner of a weather-feed failure. `ForecastView` used to bind
+    // the same `status` and print the same sentence a second time below this
+    // one; its copy is gone, and this line now scopes the whole right column,
+    // including the empty list under it. `RadarPanel` keeps its own status
+    // because `radarController.status` is a different fetch that fails
+    // separately — two sentences there would be two faults, not one repeated.
     Label {
         id: conditionsError
         objectName: "conditionsError"

@@ -9,7 +9,7 @@ use allesbuien_core::{
     location::LocationConfig,
     location_settings::LocationSettings,
     rain::RainPoint,
-    status::{RAIN_UNAVAILABLE, UNAVAILABLE, WEATHER_UNAVAILABLE},
+    status::{NO_READING, RAIN_UNAVAILABLE, UNAVAILABLE, WEATHER_UNAVAILABLE},
     weather::{FeedApi, ForecastDay},
 };
 use cxx_qt_lib::{QList, QString, QStringList};
@@ -72,7 +72,9 @@ impl Default for WeatherControllerRust {
             location_name: QString::default(),
             location_source: QString::default(),
             station_name: UNAVAILABLE.into(),
-            temperature: UNAVAILABLE.into(),
+            // The cold-failure hero comes from here, not from `ConditionsView`:
+            // `apply_result` returns early on error and never builds one.
+            temperature: NO_READING.into(),
             feels_like: QString::default(),
             wind: UNAVAILABLE.into(),
             humidity: QString::default(),

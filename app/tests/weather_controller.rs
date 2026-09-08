@@ -238,7 +238,7 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
         .expect("controller should exist");
     assert_eq!(feed.calls.load(Ordering::SeqCst), 2);
     assert_eq!(controller.station_name().to_string(), "Unavailable");
-    assert_eq!(controller.temperature().to_string(), "Unavailable");
+    assert_eq!(controller.temperature().to_string(), "—");
     assert!(controller.feels_like().is_empty());
     assert!(controller.humidity().is_empty());
     assert_eq!(controller.row_count(&QModelIndex::default()), 0);

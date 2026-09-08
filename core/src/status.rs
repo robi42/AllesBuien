@@ -22,6 +22,18 @@ use crate::{radar::RadarError, weather::WeatherError};
 
 /// Stands in for a single reading the station did not publish.
 pub const UNAVAILABLE: &str = "Unavailable";
+/// Stands in for the one reading that is set as a headline rather than a chip.
+///
+/// The same word cannot serve both ranks. The metric chips are captions with a
+/// column each and `Unavailable` fits them, but the temperature is rendered at
+/// 38 pt across a 380 px column, where the word runs past the end and elides to
+/// `Unavaila…` — which reads as a truncated measurement rather than an absent
+/// one, and is the worst of the three possible impressions: it looks like the
+/// app has a value it is too small to show. A dash is the shortest mark that
+/// says "no number here" without pretending to be a number, it cannot elide at
+/// any size this window can reach, and it leaves the sentence under it and the
+/// status line below to say *why* — which the word was never doing either.
+pub const NO_READING: &str = "—";
 /// Inline status lines shown before the first successful refresh.
 pub const CONDITIONS_UNAVAILABLE: &str = "Current conditions unavailable";
 pub const WEATHER_UNAVAILABLE: &str = "Weather unavailable";

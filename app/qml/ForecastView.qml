@@ -26,6 +26,26 @@ ListView {
     // short window, where the list clips rather than squashing the rows.
     readonly property int rowMinHeight: 40
 
+    // No status line here, deliberately, and the empty list is not an
+    // unexplained void. This view used to carry its own `forecastError` bound to
+    // `weatherController.status` — the same property `ConditionsView` binds —
+    // so one failed feed printed one sentence twice, about 190 px apart, and
+    // the repetition read as two separate faults rather than as one.
+    //
+    // Both labels answered for the same fetch, so only one of them could be the
+    // owner, and it is the one above: the conditions block is primary, it is
+    // where the eye lands first, and its sentence sits at the bottom edge of
+    // that block — directly above this list with one `spaceMd` between them.
+    // Whatever emptiness follows is already inside the scope of the line that
+    // just named the cause, in reading order, which is what the second copy was
+    // trying to say and could only say redundantly. Removing it beat adding a
+    // second condition, because the duplicate could not be suppressed without
+    // this view knowing about a sibling it otherwise has no reason to know.
+    //
+    // Empty for the other reason — a fetch that succeeded and returned no days,
+    // where the status is empty and there is nothing to explain — is unchanged:
+    // the old label was already hidden in that state by its own `text.length`
+    // guard, so nothing that ever rendered here has been taken away.
     clip: true
     model: forecastView.weatherController
     interactive: false
@@ -169,17 +189,5 @@ ListView {
             color: forecastView.theme.rowSeparator
             opacity: 0.6
         }
-    }
-
-    Label {
-        id: forecastError
-        objectName: "forecastError"
-        text: forecastView.weatherController.status
-        visible: forecastView.count === 0 && forecastError.text.length > 0
-        anchors.centerIn: parent
-        width: parent.width - forecastView.theme.spaceLg
-        color: forecastView.theme.error
-        wrapMode: Text.Wrap
-        horizontalAlignment: Text.AlignHCenter
     }
 }

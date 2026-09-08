@@ -5,7 +5,7 @@
 
 use allesbuien_core::{
     condition::describe,
-    status::{CONDITIONS_UNAVAILABLE, UNAVAILABLE},
+    status::{CONDITIONS_UNAVAILABLE, NO_READING, UNAVAILABLE},
     weather::CurrentConditions,
 };
 
@@ -31,7 +31,7 @@ impl Default for ConditionsView {
     fn default() -> Self {
         Self {
             station_name: UNAVAILABLE.to_owned(),
-            temperature: UNAVAILABLE.to_owned(),
+            temperature: NO_READING.to_owned(),
             feels_like: String::new(),
             wind: UNAVAILABLE.to_owned(),
             humidity: String::new(),
@@ -52,9 +52,9 @@ impl ConditionsView {
         };
         Self {
             station_name: current.station_name.clone(),
-            temperature: measurement(current.temperature, "°C"),
+            temperature: measurement(current.temperature, "°C", NO_READING),
             feels_like: optional_measurement(current.feel_temperature, "°C"),
-            wind: measurement(current.wind_speed, "m/s"),
+            wind: measurement(current.wind_speed, "m/s", UNAVAILABLE),
             humidity: optional_percentage(current.humidity),
             condition: describe(
                 &current.condition_code,
@@ -67,11 +67,15 @@ impl ConditionsView {
     }
 }
 
-fn measurement(value: Option<f64>, unit: &str) -> String {
-    value.map_or_else(
-        || UNAVAILABLE.to_owned(),
-        |value| format!("{value:.1} {unit}"),
-    )
+/// Formats a station measurement, or the placeholder its rank can carry.
+///
+/// `absent` is a parameter rather than one constant inside the body because the
+/// two callers render at ranks three scale steps apart, and the word that fits
+/// the chips overruns the hero. Deciding it here for everyone is what shipped
+/// `Unavaila…` as the largest thing in the window; deciding it at the call site
+/// puts the choice beside the field it is chosen for.
+fn measurement(value: Option<f64>, unit: &str, absent: &str) -> String {
+    value.map_or_else(|| absent.to_owned(), |value| format!("{value:.1} {unit}"))
 }
 
 /// Formats a secondary reading the panel simply omits when the station skips it.
@@ -137,12 +141,12 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_measurement_reports_every_field_as_unavailable() {
+    fn a_missing_measurement_dashes_the_reading_and_words_every_other_field() {
         // Given / When
         let view = ConditionsView::from_current(None);
 
         // Then
-        assert_eq!(view.temperature, "Unavailable");
+        assert_eq!(view.temperature, "—");
         assert_eq!(view.wind, "Unavailable");
         assert_eq!(view.condition, "Unavailable");
         assert!(view.feels_like.is_empty());
@@ -163,7 +167,7 @@ mod tests {
         let view = ConditionsView::from_current(Some(&current));
 
         // Then
-        assert_eq!(view.temperature, "Unavailable");
+        assert_eq!(view.temperature, "—");
         assert_eq!(view.wind, "Unavailable");
         assert_eq!(view.condition, "Clear");
         assert_eq!(view.feels_like, "");
