@@ -61,6 +61,7 @@ pub mod ffi {
         #[qproperty(QStringList, legend_buckets)]
         #[qproperty(QString, legend_unit)]
         #[qproperty(QString, coverage_notice)]
+        #[qproperty(QString, loading_notice)]
         #[qproperty(QString, status)]
         #[qproperty(i32, refresh_interval_ms)]
         #[qproperty(i32, playback_interval_ms)]
@@ -170,7 +171,9 @@ impl ffi::RadarController {
         self.as_mut().set_timestamps(QStringList::default());
         self.as_mut().set_current_frame_label(QString::default());
         self.as_mut().set_current_frame_url(QString::default());
-        self.as_mut().set_status(status::RADAR_LOADING.into());
+        self.as_mut().set_status(QString::default());
+        self.as_mut()
+            .set_loading_notice(status::RADAR_LOADING.into());
         image_provider::begin_generation(generation);
 
         let qt_thread = self.qt_thread();
@@ -211,6 +214,7 @@ impl ffi::RadarController {
         if generation.0 != *self.generation() {
             return;
         }
+        self.as_mut().set_loading_notice(QString::default());
         match result {
             Ok(loaded) => {
                 let set = FrameSet::from_loaded(loaded);

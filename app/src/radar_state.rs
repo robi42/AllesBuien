@@ -10,7 +10,6 @@ use allesbuien_core::{
     location_settings::LocationSettings,
     radar::RadarApi,
     radar_legend::{self, UNIT},
-    status::RADAR_UNAVAILABLE,
 };
 use cxx_qt_lib::{QString, QStringList};
 use tokio::runtime::Handle;
@@ -56,6 +55,9 @@ pub struct RadarControllerRust {
     pub(crate) legend_buckets: QStringList,
     pub(crate) legend_unit: QString,
     pub(crate) coverage_notice: QString,
+    /// Non-empty exactly while a refresh is in flight; never a failure.
+    pub(crate) loading_notice: QString,
+    /// Non-empty exactly when the last refresh failed; never a wait.
     pub(crate) status: QString,
     pub(crate) refresh_interval_ms: i32,
     pub(crate) location_poll_interval_ms: i32,
@@ -99,7 +101,8 @@ impl Default for RadarControllerRust {
                 .collect(),
             legend_unit: UNIT.into(),
             coverage_notice: QString::default(),
-            status: RADAR_UNAVAILABLE.into(),
+            loading_notice: QString::default(),
+            status: QString::default(),
             refresh_interval_ms: 300_000,
             location_poll_interval_ms: 2_000,
             configured_refresh_ms: 300_000,

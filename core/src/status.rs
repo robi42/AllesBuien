@@ -37,9 +37,18 @@ pub const NO_READING: &str = "—";
 /// Inline status lines shown before the first successful refresh.
 pub const CONDITIONS_UNAVAILABLE: &str = "Current conditions unavailable";
 pub const WEATHER_UNAVAILABLE: &str = "Weather unavailable";
-pub const RADAR_UNAVAILABLE: &str = "Radar unavailable";
 pub const RAIN_UNAVAILABLE: &str = "Rain forecast unavailable";
-/// Shown while the first radar run is still downloading its frames.
+/// Shown while a radar run is downloading its frames.
+///
+/// The radar has no entry in the group above on purpose. Those three stand in
+/// where a panel has nothing to draw and no fetch is under way; the radar
+/// always has one under way, because its bridge refreshes as it is
+/// constructed. Seeding its status line with `Radar unavailable` therefore
+/// announced a failure that had not happened — and this caption, which says
+/// what is actually true, spent that whole window wearing the failure's colour
+/// in the failure's slot. It is carried on its own property for that reason:
+/// a wait and a fault are different claims and cannot share one channel
+/// without the view having to guess which it is holding.
 pub const RADAR_LOADING: &str = "Loading radar frames";
 
 const CONNECTION_HINT: &str = "check your connection";

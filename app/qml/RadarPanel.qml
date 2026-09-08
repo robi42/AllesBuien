@@ -91,6 +91,38 @@ Item {
             anchors.topMargin: radarPanel.theme.spaceLg
         }
 
+        // A wait is not a fault, and until it had a property of its own it had
+        // no way to say so. The bridge published "Loading radar frames" through
+        // the same `status` the failures use, so for the whole pre-data window
+        // — 25.1 s on the cold start measured for this change, and
+        // network-bound, so a couple of seconds on one link and half a minute
+        // on another — an ordinary download wore the error colour in the error
+        // slot. Fetching and broken were one screen with different words.
+        //
+        // The rule is already stated above: a standing statement about what
+        // the panel is doing takes the text colour and stays out of the
+        // centre, which belongs to a failure. This one takes the bottom rather
+        // than the top because the top is the coverage notice's and the two
+        // can be true at once — a location outside the raster still refreshes.
+        //
+        // The legend lands in the same band (measured: legend 45..362 x
+        // 552..634, this caption 239..479 x 594..639), and that is not a
+        // collision. The legend binds `frameCount > 0`, and a refresh zeroes
+        // that count in the same call that sets this text, so the map's lower
+        // edge is only ever saying one of the two things: what it is fetching,
+        // or what the frames it fetched mean.
+        ScrimNotice {
+            objectName: "loadingNotice"
+            theme: radarPanel.theme
+            text: radarPanel.radarController.loadingNotice
+            color: radarPanel.theme.text
+            maximumLineCount: 1
+            anchors.bottom: parent.bottom
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottomMargin: radarPanel.theme.spaceLg
+        }
+
+        // The centre, which now only a fault reaches.
         ScrimNotice {
             objectName: "radarError"
             theme: radarPanel.theme
