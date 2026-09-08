@@ -28,15 +28,21 @@ ColumnLayout {
     // anchor, and what put three captions on this row is the corner filling up.
     //
     // 13 is `theme.fontBody`, and that matters past the number. The
-    // intermediate 12 was one point above `theme.fontLabel`, a size no step in
-    // Theme.qml held, so it had to be declared here as a local property and
-    // defended against that file's rule that a seventh step would mean two
-    // things competing at the same rank. 13 needs no such defence. It is an existing step, shared with
-    // the condition sentence, and the two cannot compete because they differ in
-    // weight, case, tracking, column and opacity - sharing a size step is what
-    // `fontCaption` already does four times over on this very row. So the local
-    // property is gone with the point it was invented for, the size is a token
-    // again, and the reading is still three scale steps clear at 38 pt.
+    // intermediate 12 matched `theme.fontValue`, but that step's job is a
+    // measured value - the wind and temperature figures - and a place name is
+    // no measurement, so taking its size would have conflated two kinds of
+    // thing. Hence the local property, declared here and defended against
+    // that file's rule that a seventh step would mean two things competing at
+    // the same rank. 13 needs no such defence. It is an existing step, shared
+    // with the condition sentence, and the two cannot compete because they
+    // differ in weight, case, tracking, column and opacity - sharing a size
+    // step is what `fontCaption` already does four times over on this very
+    // row. So the local property is gone with the point it was invented for,
+    // the size is a token again, and the reading keeps its rank at 38 pt. Two
+    // scale steps separate them now, `fontLead` the only rung between - one
+    // fewer than at the abandoned 12 - but rank never rode the step count
+    // alone: 38 against 13 is nearly three to one before weight and position
+    // say a word.
     //
     // Under the name rides the provenance, because the name on its own could
     // not tell a chosen place from a fallen-back one: Amsterdam-West rendered
