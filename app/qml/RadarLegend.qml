@@ -22,13 +22,25 @@ Rectangle {
     required property var radarController
     required property Theme theme
 
-    // The five bucket ranges sit a step under the unit that governs them: they
-    // are the key's data, the unit is its title, and at one shared size the
-    // block read as six equal captions. One point is the whole difference —
-    // enough to rank them, not enough to make the digits work to read. A
-    // seventh entry in the type scale would mean two things competing at the
-    // same rank, so a size used in exactly one place stays local to that file.
-    readonly property int legendRangeSize: radarLegend.theme.fontCaption - 1
+    // The five bucket ranges sit under the unit that governs them: they are the
+    // key's data, the unit is its title, and at one shared size the block read
+    // as six equal captions. It sat one point under until the longest range was
+    // measured against its own colour block: "10-100" came to 42.75 px in a
+    // 43 px cell, so its digits ran edge to edge with the block they label —
+    // nothing between glyph and boundary, against 13 px of air under "0-2".
+    // The widest label was setting the whole key's geometry and had no margin
+    // of its own, which is the one caption a reader has to work hardest at.
+    //
+    // Two points is what buys that margin back. Dropping the point alone does
+    // not: the floor below tracks the caption, so a smaller string simply gets
+    // a smaller cell and the clearance stays at zero — measured, and it came
+    // out marginally worse. The point is only worth spending alongside the
+    // reserved margin the floor now adds, and together they cost nothing: the
+    // card measures the same 255 px it did before and the five blocks are
+    // unchanged, while the longest range gained 4 px of air on either side.
+    // A seventh entry in the type scale would mean two things competing at the
+    // same rank, so a size used in exactly one place stays local to this file.
+    readonly property int legendRangeSize: radarLegend.theme.fontCaption - 2
 
     anchors.left: parent.left
     anchors.bottom: parent.bottom
@@ -84,7 +96,18 @@ Rectangle {
                     // own caption makes the widest one ("10-100") the
                     // floor for all five, which is also what widens the
                     // card enough to hold them.
+                    //
+                    // The margin is part of the floor rather than an
+                    // afterthought, because a floor set at the bare text
+                    // width is self-defeating: it hands the widest
+                    // caption a cell exactly as wide as its own glyphs,
+                    // at every font size, so that one label alone never
+                    // gets the air the other four have. Reserving a step
+                    // on each side is what makes the cell a block the
+                    // caption sits inside instead of a cast of its
+                    // longest string.
                     Layout.minimumWidth: rangeCaption.implicitWidth
+                        + radarLegend.theme.spaceXs * 2
                     spacing: 2
 
                     Rectangle {
