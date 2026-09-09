@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
 use allesbuien_core::datetime::LocalTimestamp;
 use allesbuien_testkit::{SETTLE_BUDGET, StubFeedApi, StubNotifier, amsterdam_west, pump_until};
-use radar_generations::{FakeRadarApi, Gate};
+use radar_generations::FakeRadarApi;
 
 mod radar_generations;
 
@@ -27,12 +27,11 @@ fn assert_local_clock_label(label: &str) {
 #[test]
 #[expect(
     clippy::too_many_lines,
-    reason = "this one-process GUI regression keeps generation replacement, playback, seeking, stale completion, and final-state assertions in one ordered narrative"
+    reason = "this one-process GUI regression keeps generation replacement, playback, seeking, cancellation, and final-state assertions in one ordered narrative"
 )]
-fn ignores_stale_generation_frame_and_refresh_started_resets_state() {
+fn cancels_and_awaits_superseded_refresh_before_starting_its_replacement() {
     // Given: one GUI application, deterministic radar generations, and injected timer intervals.
-    let stale_gate = Arc::new(Gate::new());
-    let radar = Arc::new(FakeRadarApi::new(Arc::clone(&stale_gate)));
+    let radar = Arc::new(FakeRadarApi::new());
     let cache = std::env::temp_dir().join(format!("allesbuien-radar-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&cache);
     let services = CoreServices::new(CoreServiceConfig {
@@ -147,20 +146,7 @@ fn ignores_stale_generation_frame_and_refresh_started_resets_state() {
                 .is_some_and(|controller| *controller.frame_count() == 3)
         },
     );
-    stale_gate.release();
-    pump_until(
-        "the released stale generation finishes",
-        SETTLE_BUDGET,
-        || {
-            booted.process_events();
-            radar
-                .recorded()
-                .iter()
-                .any(|event| event == "frame-fake://stale/0")
-        },
-    );
-
-    // Then: the stale completion ran after the fresh one but could not replace generation three.
+    // Then: generation two was cancelled before generation three touched the cache.
     let controller = booted.radar_controller().expect("controller should exist");
     assert_eq!(*controller.generation(), 3);
     assert_eq!(*controller.frame_count(), 3);
@@ -171,14 +157,19 @@ fn ignores_stale_generation_frame_and_refresh_started_resets_state() {
         "image://radar/3/0"
     );
     let ordering = radar.recorded();
-    let fresh_position = ordering
+    let cancelled_position = ordering
         .iter()
-        .position(|event| event == "frame-fake://fresh/2")
-        .expect("fresh generation should finish");
-    let stale_position = ordering
+        .position(|event| event == "metadata-stale-cancelled")
+        .expect("superseded metadata fetch should be cancelled");
+    let replacement_position = ordering
         .iter()
-        .position(|event| event == "frame-fake://stale/0")
-        .expect("stale generation should finish");
-    assert!(fresh_position < stale_position);
+        .position(|event| event == "metadata-3")
+        .expect("replacement metadata fetch should start");
+    assert!(cancelled_position < replacement_position);
+    assert!(
+        !ordering
+            .iter()
+            .any(|event| event.starts_with("frame-fake://stale/"))
+    );
     std::fs::remove_dir_all(cache).expect("radar test cache should be removable");
 }

@@ -158,12 +158,7 @@ impl ffi::RadarController {
         self.as_mut().rust_mut().location = Some(location.clone());
     }
 
-    pub fn refresh(mut self: Pin<&mut Self>) {
-        let (Some(api), Some(runtime)) = (&self.api, &self.runtime) else {
-            return;
-        };
-        let (api, runtime, state_dir) = (Arc::clone(api), runtime.clone(), self.state_dir.clone());
-        let generation = self.generation().saturating_add(1);
+    fn reset_for_refresh(mut self: Pin<&mut Self>, generation: u64) {
         self.as_mut().set_generation(generation);
         self.as_mut().set_frame_count(0);
         self.as_mut().set_current_frame_index(0);
@@ -174,10 +169,26 @@ impl ffi::RadarController {
         self.as_mut().set_status(QString::default());
         self.as_mut()
             .set_loading_notice(status::RADAR_LOADING.into());
+    }
+
+    pub fn refresh(mut self: Pin<&mut Self>) {
+        let (Some(api), Some(runtime)) = (&self.api, &self.runtime) else {
+            return;
+        };
+        let (api, runtime, state_dir) = (Arc::clone(api), runtime.clone(), self.state_dir.clone());
+        let generation = self.generation().saturating_add(1);
+        self.as_mut().reset_for_refresh(generation);
         image_provider::begin_generation(generation);
 
+        let previous = self.as_mut().rust_mut().pending_refresh.take();
+        if let Some(previous) = previous.as_ref() {
+            previous.abort();
+        }
         let qt_thread = self.qt_thread();
-        drop(runtime.spawn(async move {
+        let pending = runtime.spawn(async move {
+            if let Some(previous) = previous {
+                drop(previous.await);
+            }
             let client = RadarClient::new(api, state_dir);
             let mut result = client.refresh(GenerationId(generation)).await;
             for attempt in 2..=retry::MAX_ATTEMPTS {
@@ -203,7 +214,8 @@ impl ffi::RadarController {
             }) {
                 eprintln!("allesbuien: radar update never reached the window: {error}");
             }
-        }));
+        });
+        self.as_mut().rust_mut().pending_refresh = Some(pending);
     }
 
     fn apply_result(

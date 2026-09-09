@@ -12,7 +12,7 @@ use allesbuien_core::{
     radar_legend::{self, UNIT},
 };
 use cxx_qt_lib::{QString, QStringList};
-use tokio::runtime::Handle;
+use tokio::{runtime::Handle, task::JoinHandle};
 
 use crate::radar_frames::FrameSet;
 
@@ -70,6 +70,7 @@ pub struct RadarControllerRust {
     pub(crate) location: Option<LocationConfig>,
     pub(crate) location_settings: Option<Arc<LocationSettings>>,
     pub(crate) runtime: Option<Handle>,
+    pub(crate) pending_refresh: Option<JoinHandle<()>>,
     pub(crate) observed: Vec<bool>,
     pub(crate) last_good: Option<FrameSet>,
 }
@@ -112,6 +113,7 @@ impl Default for RadarControllerRust {
             location: None,
             location_settings: None,
             runtime: None,
+            pending_refresh: None,
             observed: Vec::new(),
             last_good: None,
         }

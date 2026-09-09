@@ -1,11 +1,9 @@
 //! The radar port `radar_controller` scripts across three consecutive runs.
 //!
-//! The harness it serves is about one thing: a frame that arrives late must not
-//! be allowed to overwrite a newer generation. Proving that needs a radar whose
-//! second run can be held open while a third overtakes it, so [`FakeRadarApi`]
-//! answers differently on every metadata call — two frames, then one behind a
-//! [`Gate`], then three — and logs the order every completion actually landed
-//! in, which is the ordering the test reads back.
+//! The harness it serves is about one thing: a replacement refresh must cancel
+//! and finish dropping its predecessor before touching the shared cache. The
+//! second metadata fetch therefore stays pending forever and records its own
+//! cancellation, while the third records when replacement work actually starts.
 //!
 //! This lives beside its one consumer rather than in `allesbuien-testkit`.
 //! Nothing else wants a radar that contradicts itself on purpose, and a double
@@ -17,68 +15,44 @@ use std::{
     pin::Pin,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
     },
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
 };
 
 use allesbuien_core::radar::{RadarApi, RadarError, RadarFuture};
 
-/// A one-way switch that a pending future parks its waker on.
-pub(crate) struct Gate {
-    open: AtomicBool,
-    waker: Mutex<Option<Waker>>,
+struct PendingBytes {
+    ordering: Arc<Mutex<Vec<String>>>,
 }
 
-impl Gate {
-    pub(crate) fn new() -> Self {
-        Self {
-            open: AtomicBool::new(false),
-            waker: Mutex::new(None),
-        }
-    }
-
-    pub(crate) fn release(&self) {
-        self.open.store(true, Ordering::SeqCst);
-        if let Ok(mut slot) = self.waker.lock()
-            && let Some(waker) = slot.take()
-        {
-            waker.wake();
-        }
-    }
-}
-
-struct GatedBytes {
-    gate: Arc<Gate>,
-    bytes: Option<Vec<u8>>,
-}
-
-impl Future for GatedBytes {
+impl Future for PendingBytes {
     type Output = Result<Vec<u8>, RadarError>;
 
-    fn poll(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.gate.open.load(Ordering::SeqCst) {
-            return Poll::Ready(Ok(self.bytes.take().unwrap_or_default()));
-        }
-        if let Ok(mut slot) = self.gate.waker.lock() {
-            *slot = Some(context.waker().clone());
-        }
+    fn poll(self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<Self::Output> {
         Poll::Pending
+    }
+}
+
+impl Drop for PendingBytes {
+    fn drop(&mut self) {
+        self.ordering
+            .lock()
+            .expect("ordering log lock should be healthy")
+            .push("metadata-stale-cancelled".into());
     }
 }
 
 pub(crate) struct FakeRadarApi {
     metadata_calls: AtomicUsize,
-    stale_gate: Arc<Gate>,
-    ordering: Mutex<Vec<String>>,
+    ordering: Arc<Mutex<Vec<String>>>,
 }
 
 impl FakeRadarApi {
-    pub(crate) fn new(stale_gate: Arc<Gate>) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             metadata_calls: AtomicUsize::new(0),
-            stale_gate,
-            ordering: Mutex::new(Vec::new()),
+            ordering: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -122,9 +96,8 @@ impl RadarApi for FakeRadarApi {
         self.record(format!("metadata-{call}"));
         match call {
             1 => Box::pin(async { Ok(Self::metadata("202608300900", "initial", 2)) }),
-            2 => Box::pin(GatedBytes {
-                gate: Arc::clone(&self.stale_gate),
-                bytes: Some(Self::metadata("202608300905", "stale", 1)),
+            2 => Box::pin(PendingBytes {
+                ordering: Arc::clone(&self.ordering),
             }),
             _ => Box::pin(async { Ok(Self::metadata("202608300910", "fresh", 3)) }),
         }
