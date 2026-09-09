@@ -1,4 +1,4 @@
-//! Retry policy for radar refreshes.
+//! Retry policy for weather and radar refreshes.
 //!
 //! Buienradar's metadata endpoint is fast almost always and occasionally
 //! stalls hard: sampled sequentially it answered in 0.05-0.36 s nineteen times
@@ -17,7 +17,7 @@
 
 use std::time::Duration;
 
-use crate::radar::RadarError;
+use crate::{radar::RadarError, weather::WeatherError};
 
 /// Total attempts, including the first.
 ///
@@ -53,6 +53,27 @@ pub fn is_retryable(error: &RadarError) -> bool {
     }
 }
 
+/// Whether a weather `error` is worth another attempt.
+///
+/// Building the client cannot recover when the controller repeats `fetch` on
+/// the same feed, and malformed JSON reproduces from the same vendor payload,
+/// so both surface immediately. Feed and raintext request errors retain the
+/// status produced by `error_for_status`: a missing status is a request that
+/// failed before a reply, and a 5xx is a transient service fault, while a 4xx
+/// means the request itself is wrong and must not hold the viewer behind waits.
+/// The status split follows the radar precedent and reqwest's contract but is
+/// not unit-tested here: constructing that error requires driving reqwest's
+/// async client inside Tokio, while core deliberately has no async runtime.
+#[must_use]
+pub fn is_weather_retryable(error: &WeatherError) -> bool {
+    match error {
+        WeatherError::FeedRequest(error) | WeatherError::RaintextRequest(error) => {
+            error.status().is_none_or(|status| status.is_server_error())
+        }
+        WeatherError::ClientBuild(_) | WeatherError::FeedDecode(_) => false,
+    }
+}
+
 /// How long to wait before `attempt`, which is 1-based and counts the first try.
 ///
 /// Doubles per attempt: 400 ms, then 800 ms. Deliberately short — someone is
@@ -69,8 +90,8 @@ pub fn backoff(attempt: u32) -> Duration {
 mod tests {
     use std::{io, time::Duration};
 
-    use super::{MAX_ATTEMPTS, backoff, is_retryable};
-    use crate::radar::RadarError;
+    use super::{MAX_ATTEMPTS, backoff, is_retryable, is_weather_retryable};
+    use crate::{radar::RadarError, weather::WeatherError};
 
     #[test]
     fn retries_a_transport_fault_because_the_endpoint_stalls_intermittently() {
@@ -102,6 +123,28 @@ mod tests {
     }
 
     #[test]
+    fn retries_a_weather_request_that_received_no_http_status() {
+        // Given: the no-response shape used by a failed weather request.
+        let error = WeatherError::FeedRequest(endpoint_error());
+
+        // When / Then
+        assert!(is_weather_retryable(&error));
+    }
+
+    #[test]
+    fn gives_up_on_weather_failures_that_repeat_identically() {
+        // Given: failures caused before requests start and after a body arrives.
+        let client = WeatherError::ClientBuild(endpoint_error());
+        let malformed = WeatherError::FeedDecode(
+            serde_json::from_str::<u8>("not json").expect_err("fixture must be malformed"),
+        );
+
+        // When / Then
+        assert!(!is_weather_retryable(&client));
+        assert!(!is_weather_retryable(&malformed));
+    }
+
+    #[test]
     fn waits_nothing_before_the_first_attempt_then_backs_off() {
         // Given / When / Then
         assert_eq!(backoff(1), Duration::ZERO);
@@ -126,5 +169,12 @@ mod tests {
 
         // Then
         assert_eq!(total, Duration::from_millis(1200));
+    }
+
+    fn endpoint_error() -> reqwest::Error {
+        reqwest::Client::new()
+            .get("not a URL")
+            .build()
+            .expect_err("the fixture URL must be invalid")
     }
 }

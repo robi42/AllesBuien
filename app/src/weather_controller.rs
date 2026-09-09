@@ -14,7 +14,7 @@ use std::{pin::Pin, sync::Arc};
 use allesbuien_core::{
     error_chain,
     location::LocationConfig,
-    location_notice, status,
+    location_notice, retry, status,
     weather::{WeatherData, WeatherError},
 };
 use cxx_qt::{CxxQtType, Threading};
@@ -200,7 +200,15 @@ impl ffi::WeatherController {
         );
         let qt_thread = self.qt_thread();
         drop(runtime.spawn(async move {
-            let result = feed.fetch(location.latitude, location.longitude).await;
+            let mut result = feed.fetch(location.latitude, location.longitude).await;
+            for attempt in 2..=retry::MAX_ATTEMPTS {
+                match &result {
+                    Err(error) if retry::is_weather_retryable(error) => {}
+                    _ => break,
+                }
+                tokio::time::sleep(retry::backoff(attempt)).await;
+                result = feed.fetch(location.latitude, location.longitude).await;
+            }
             if let Ok(data) = &result {
                 // Warms the provider before the URLs reach QML, so the icons are
                 // already decodable when the bindings below fire.

@@ -1,15 +1,15 @@
 //! Weather failure wording follows the data that remains visible.
 //!
 //! A failed refresh retains the previous forecast rows, so only the controller
-//! pathway can prove whether the status describes those rows as stale or calls
-//! them unavailable. This harness exercises both the cold and warm failure
-//! states through one real Qt object.
+//! pathway can prove both the retry count and whether the status describes those
+//! rows as stale or calls them unavailable. This harness exercises retryable and
+//! terminal failures through one real Qt object.
 
 use std::{
     path::PathBuf,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -20,14 +20,25 @@ use allesbuien_testkit::{SETTLE_BUDGET, StubNotifier, StubRadarApi, amsterdam_we
 use cxx_qt_lib::QModelIndex;
 
 struct SwitchableFeedApi {
+    calls: AtomicUsize,
     failing: AtomicBool,
+    client_build_failure: AtomicBool,
 }
 
 impl FeedApi for SwitchableFeedApi {
     fn fetch(&self, _latitude: f64, _longitude: f64) -> FeedFuture<'_> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let failing = self.failing.load(Ordering::SeqCst);
+        let client_build_failure = self.client_build_failure.load(Ordering::SeqCst);
         Box::pin(async move {
             if failing {
+                if client_build_failure {
+                    let error = reqwest::Client::builder()
+                        .user_agent("\n")
+                        .build()
+                        .expect_err("the invalid user agent must prevent client construction");
+                    return Err(WeatherError::ClientBuild(error));
+                }
                 let error = reqwest::Client::new()
                     .get("not a URL")
                     .send()
@@ -54,7 +65,9 @@ impl FeedApi for SwitchableFeedApi {
 fn weather_failure_wording_tracks_whether_a_forecast_is_visible() {
     // Given: a GUI whose first feed request fails before any forecast exists.
     let feed = Arc::new(SwitchableFeedApi {
+        calls: AtomicUsize::new(0),
         failing: AtomicBool::new(true),
+        client_build_failure: AtomicBool::new(false),
     });
     let services = CoreServices::new(CoreServiceConfig {
         feed: feed.clone(),
@@ -95,6 +108,7 @@ fn weather_failure_wording_tracks_whether_a_forecast_is_visible() {
         cold_status.starts_with("Weather unavailable"),
         "{cold_status}"
     );
+    assert_eq!(feed.calls.load(Ordering::SeqCst), 3);
 
     // When: a successful refresh populates a row, then the next refresh fails.
     feed.failing.store(false, Ordering::SeqCst);
@@ -106,6 +120,8 @@ fn weather_failure_wording_tracks_whether_a_forecast_is_visible() {
                 && controller.status().to_string() == "Current conditions unavailable"
         })
     });
+    feed.calls.store(0, Ordering::SeqCst);
+    feed.client_build_failure.store(true, Ordering::SeqCst);
     feed.failing.store(true, Ordering::SeqCst);
     booted.refresh_weather();
     pump_until("the warm failure reports its cause", SETTLE_BUDGET, || {
@@ -124,5 +140,6 @@ fn weather_failure_wording_tracks_whether_a_forecast_is_visible() {
         warm_status.starts_with("Weather may be out of date"),
         "{warm_status}"
     );
+    assert_eq!(feed.calls.load(Ordering::SeqCst), 1);
     assert_eq!(controller.row_count(&QModelIndex::default()), 1);
 }
