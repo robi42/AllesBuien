@@ -66,7 +66,7 @@ ColumnLayout {
     // height is still the left column's height and the card is one row shorter
     // than it was.
     //
-    // That corner now says `SCHIPHOL` and `14:10`, two words fewer than the
+    // That corner now says `SCHIPHOL` and `@ 14:10`, two words fewer than the
     // `STATION SCHIPHOL` / `OBSERVED 14:10` it arrived as, and the reversal is
     // a change of premise rather than a change of mind. Both qualifiers were
     // argued for, and `core/src/station.rs` still carries the original argument
@@ -86,6 +86,33 @@ ColumnLayout {
     // which is a distinction this timestamp is not making, and a duplicate
     // invites it to be read as one. That label keeps the word; this one has no
     // claim on it.
+    //
+    // What the corner does keep is the RELATION, and it now costs one character
+    // instead of eight. Dropping `OBSERVED` bought width and took the "at" with
+    // it: `SCHIPHOL` over a bare `12:30` names an instrument and a number and
+    // leaves the reader to supply the preposition between them. The pairing
+    // argument above only ever gets as far as "these two answer one question
+    // together", which is exactly why the word was defensible to begin with.
+    // `@ ` finishes the sentence the station starts, in the one glyph a caption
+    // row can afford, and it is the same move `location_notice.rs` makes on the
+    // opposite column - `VIA OMARCHY` rather than `OMARCHY SETTING` - so both
+    // halves of this header now read as predicates of the name above them.
+    //
+    // It is prefixed here rather than in `conditions_view.rs` because it is
+    // typography, not data. The controller keeps carrying a plain `hh:mm`,
+    // which is what `app/tests/weather_controller.rs` asserts and what a
+    // notification title would want; the decorated string exists only where it
+    // is drawn.
+    //
+    // And it is a guarded ternary rather than a plain `"@ " + text`, because
+    // the guard is the only thing that lets this corner still disappear.
+    // `visible` binds this label's OWN text length, so an unconditional prefix
+    // would pin that length at two, leave an `@` with nothing behind it on
+    // screen for a feed that reports no time, and take `headerCorner` down with
+    // it - the collapse `app/tests/conditions_header_corner.rs` exists to hold.
+    // The uppercasing stays for the reason it was ever there: `datetime.rs`'s
+    // fallback passes through the first five characters of a feed value it
+    // could not parse, so this label is not guaranteed to be digits.
     //
     // They stay a pair, and they stack. A pair because they answer one
     // question between them - which instrument, at what time - and splitting
@@ -126,11 +153,36 @@ ColumnLayout {
     //   SCHIPHOL            4.47:1 / 4.43:1    930    88 px      after
     //   OBSERVED hh:mm      4.47:1 / 4.45:1   1570   147 px      before
     //   hh:mm               4.47:1 / 4.44:1    517    49 px      after
+    //   @ hh:mm             4.52:1 / 4.45:1    653    71 px      with the `@`
     //
     // Only the timestamp's ink is not reproducible to the pixel across runs -
-    // it is live data, and 490 to 517 is the spread over which digits the clock
-    // happened to be showing. Its width is fixed: the label asks for tabular
-    // figures for exactly this reason.
+    // it is live data, and 490 to 653 is the spread over which digits the clock
+    // happened to be showing and whether the `@` is in front of them. Its width
+    // is fixed per state: the label asks for tabular figures for exactly this
+    // reason, and the digit columns land on the same pixels either way - `12:30`
+    // occupied x 1126..1174 before the glyph and `12:40` occupies x 1126..1174
+    // after it, with the `@` added at x 1104..1119 and a six-pixel space behind
+    // it against the one pixel that separates two digits.
+    //
+    // So the glyph costs 22 device px on this line and NOTHING on the corner,
+    // which was the thing worth checking. A `ColumnLayout` is as wide as its
+    // widest child, `SCHIPHOL` is 88 px against the timestamp's 71, and every
+    // other label re-measured to the pixel across that pair - the name's ink
+    // bbox at (740,54,892,71), its provenance at (740,79,864,91), the station
+    // at (1087,53,1174,65), unmoved - with the hero glyph reading (213,219,230)
+    // in both frames as the control that says the two captures are comparable
+    // at all. The corner only widens for a station short enough to lose to
+    // `@ hh:mm`, which is roughly six characters; the half-header cap measured
+    // 218 px against a 435 px header row, so there is no arrangement of these
+    // two lines that crowds anything.
+    //
+    // That `@ hh:mm` row comes from its own capture pair, taken the same way on
+    // a later day, which is why the widths above it reproduce and the ink counts
+    // do not: the name re-measured 153 px at 2191 ink against 2229, the station
+    // 88 px at 887 against 930, the bare timestamp 49 px, and the provenance
+    // 125 px against 126. Widths are the figures to compare between the two
+    // pairs; ink swings a few percent with the device-row phase a window
+    // happens to land on, which is why the origin is pinned within a pair.
     //
     // Read the contrast column first, because it is the one that did not move:
     // a point of type size buys ink and width, never contrast, so 13 pt is not
@@ -206,6 +258,7 @@ ColumnLayout {
 
             Label {
                 id: stationLabel
+                objectName: "stationLabel"
                 text: conditionsView.weatherController.stationName.toUpperCase()
                 visible: stationLabel.text.length > 0
                 font.pointSize: conditionsView.theme.fontCaption
@@ -220,7 +273,10 @@ ColumnLayout {
 
             Label {
                 id: observedLabel
-                text: conditionsView.weatherController.observedLabel.toUpperCase()
+                objectName: "observedLabel"
+                text: conditionsView.weatherController.observedLabel.length > 0
+                    ? "@ " + conditionsView.weatherController.observedLabel.toUpperCase()
+                    : ""
                 visible: observedLabel.text.length > 0
                 font.pointSize: conditionsView.theme.fontCaption
                 font.bold: true

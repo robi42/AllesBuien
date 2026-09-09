@@ -8,6 +8,14 @@
 //! no stated reason. That is a layout outcome, so this reads it off the
 //! rendered tree - the left column has to end exactly where the header row
 //! does.
+//!
+//! It also guards the corner timestamp's `@`. That glyph is prefixed in QML,
+//! and an unguarded `"@ " + observedLabel` would leave `text.length` at 2 with
+//! no time behind it, so the caption would never go blank and this whole
+//! collapse would stop happening - silently, because nothing else asserts the
+//! empty case. The populated corner is `app/tests/conditions_observed_time.rs`;
+//! the two scenarios contradict each other in one process, and `AGENTS.md`
+//! allows each file one GUI test and one `QGuiApplication`.
 
 use std::{
     ffi::{CString, c_char},
