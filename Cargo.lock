@@ -18,6 +18,7 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "futures",
  "reqwest",
  "tempfile",
  "tokio",
