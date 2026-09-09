@@ -1,3 +1,5 @@
+//! Regression coverage for persistent, fail-fast, bounded frame materialisation.
+
 use std::{
     future::Future,
     path::Path,

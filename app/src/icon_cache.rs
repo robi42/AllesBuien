@@ -9,7 +9,7 @@
 //!
 //! Every failure degrades to "no icon" rather than to an error: a miss, an
 //! unreachable CDN, an oversized body, or a damaged file all leave the code
-//! unwarmed, and the QML slot collapses exactly as it does for an unknown code.
+//! unwarmed, and the reserved QML slot stays empty instead of moving the text.
 
 use std::{collections::BTreeSet, future::Future, path::PathBuf, pin::Pin, sync::Arc};
 

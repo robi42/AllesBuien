@@ -139,12 +139,11 @@ Item {
             //   part that competes for attention.
             //
             //   Floor — `emphasisLow`, not a fainter number invented here.
-            //   The theme already documents 0.7 as its legibility floor
-            //   (`text` over `surface` measures 5.2:1 there and 4.3:1 at 0.6 on
-            //   Nord), so pulsing to it dims the caption without ever taking it
-            //   below the contrast the rest of the tree is held to. It is also
-            //   why this needs no new theme token: both ends of the pulse are
-            //   emphasis steps the scale already carries.
+            //   The theme already documents 0.7 as its legibility floor, so
+            //   pulsing to it dims the caption without ever taking it below the
+            //   contrast the rest of the tree is held to. It is also why this
+            //   needs no new theme token: both ends of the pulse are emphasis
+            //   steps the scale already carries.
             //
             // `running` binds the notice's own visibility rather than a state
             // of its own, so the pulse cannot outlive the sentence it belongs
