@@ -7,6 +7,7 @@ pub mod location_notice;
 pub mod location_settings;
 pub mod notify;
 pub mod radar;
+mod radar_cache;
 pub mod radar_freshness;
 pub mod radar_legend;
 pub mod radar_projection;

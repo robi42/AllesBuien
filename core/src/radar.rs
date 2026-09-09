@@ -13,14 +13,11 @@
 //!
 //! The network itself lives in [`crate::radar_transport`], behind [`RadarApi`].
 
-use std::{
-    future::Future,
-    path::{Path, PathBuf},
-    pin::Pin,
-    sync::Arc,
-};
+use std::{future::Future, path::PathBuf, pin::Pin, sync::Arc};
 
 use serde::Deserialize;
+
+use crate::radar_cache::RadarCache;
 
 /// Runs kept on disk. Frames measure 94 KiB and a run holds 26 of them, so this
 /// bounds the cache at roughly 5.5 MiB.
@@ -96,22 +93,10 @@ impl RadarClient {
             });
         }
 
-        let run_dir = self.state_dir.join("runs").join(&run_id);
-        std::fs::create_dir_all(&run_dir)?;
         let time_offset_hours = metadata.time_offset;
-        let mut frames = Vec::with_capacity(metadata.times.len());
-        for (index, time) in metadata.times.into_iter().enumerate() {
-            let path = run_dir.join(format!("frame-{index}.png"));
-            if !path.exists() {
-                std::fs::write(&path, self.api.frame(&time.url).await?)?;
-            }
-            frames.push(RadarFrame {
-                timestamp: time.timestamp,
-                url: time.url,
-                path,
-            });
-        }
-        prune_runs(&self.state_dir)?;
+        let frames = RadarCache::new(&self.state_dir)
+            .materialize(self.api.as_ref(), &run_id, metadata.times)
+            .await?;
         Ok(RadarRefresh {
             generation,
             frames,
@@ -129,26 +114,9 @@ struct Metadata {
 }
 
 #[derive(Deserialize)]
-struct MetadataTime {
-    timestamp: String,
-    url: String,
-}
-
-fn prune_runs(state_dir: &Path) -> Result<(), RadarError> {
-    let runs = state_dir.join("runs");
-    let mut run_dirs = Vec::new();
-    for entry in std::fs::read_dir(&runs)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            run_dirs.push(entry.path());
-        }
-    }
-    run_dirs.sort();
-    let remove_count = run_dirs.len().saturating_sub(MAX_CACHED_RUNS);
-    for old_run in run_dirs.into_iter().take(remove_count) {
-        std::fs::remove_dir_all(old_run)?;
-    }
-    Ok(())
+pub(crate) struct MetadataTime {
+    pub(crate) timestamp: String,
+    pub(crate) url: String,
 }
 
 #[cfg(test)]
@@ -161,7 +129,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::test_support::block_on;
+    use crate::{radar_cache::prune_runs, test_support::block_on};
 
     const METADATA: &[u8] = br#"{
         "timestamp":"2026-08-29T21:15:00",
@@ -245,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn prune_removes_two_oldest_runs_when_eight_exist() {
+    fn prune_removes_oldest_runs_when_eight_exist() {
         // Given
         let state = tempdir().expect("temp state");
         let runs = state.path().join("runs");
@@ -255,7 +223,7 @@ mod tests {
         }
 
         // When
-        prune_runs(state.path()).expect("prune succeeds");
+        prune_runs(state.path(), &runs.join("run-07")).expect("prune succeeds");
 
         // Then
         let remaining = std::fs::read_dir(runs).expect("read runs").count();
