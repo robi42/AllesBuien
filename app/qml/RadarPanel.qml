@@ -112,6 +112,7 @@ Item {
         // edge is only ever saying one of the two things: what it is fetching,
         // or what the frames it fetched mean.
         ScrimNotice {
+            id: loadingNotice
             objectName: "loadingNotice"
             theme: radarPanel.theme
             text: radarPanel.radarController.loadingNotice
@@ -120,6 +121,55 @@ Item {
             anchors.bottom: parent.bottom
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottomMargin: radarPanel.theme.spaceLg
+
+            // The sentence above says a wait is not a fault; this says the wait
+            // is still going. The words alone cannot: a caption that has not
+            // changed in twenty seconds is exactly what a frozen window looks
+            // like, and the wait here is network-bound and has measured
+            // anywhere from ~2 s to ~34 s on this machine.
+            //
+            // Both numbers are deliberate, and both are chosen to keep the
+            // motion out of the way of the map rather than to draw the eye:
+            //
+            //   Period — 1000 ms per leg, so one full breath every 2 s. Under
+            //   about a second per leg the turns come often enough to read as
+            //   blinking, which is an alarm; at 2 s the eye resolves it as
+            //   breathing and stops tracking it. Easing is InOutSine because a
+            //   linear ramp reverses on a visible corner, and that tick is the
+            //   part that competes for attention.
+            //
+            //   Floor — `emphasisLow`, not a fainter number invented here.
+            //   The theme already documents 0.7 as its legibility floor
+            //   (`text` over `surface` measures 5.2:1 there and 4.3:1 at 0.6 on
+            //   Nord), so pulsing to it dims the caption without ever taking it
+            //   below the contrast the rest of the tree is held to. It is also
+            //   why this needs no new theme token: both ends of the pulse are
+            //   emphasis steps the scale already carries.
+            //
+            // `running` binds the notice's own visibility rather than a state
+            // of its own, so the pulse cannot outlive the sentence it belongs
+            // to: `ScrimNotice` is `visible: text.length > 0`, and the bridge
+            // clears `loadingNotice` in the same call that publishes a result.
+            // An animation left running behind an invisible item is a battery
+            // cost that nothing on screen can account for.
+            SequentialAnimation on opacity {
+                running: loadingNotice.visible
+                loops: Animation.Infinite
+
+                NumberAnimation {
+                    from: radarPanel.theme.emphasisFull
+                    to: radarPanel.theme.emphasisLow
+                    duration: 1000
+                    easing.type: Easing.InOutSine
+                }
+
+                NumberAnimation {
+                    from: radarPanel.theme.emphasisLow
+                    to: radarPanel.theme.emphasisFull
+                    duration: 1000
+                    easing.type: Easing.InOutSine
+                }
+            }
         }
 
         // The centre, which now only a fault reaches.
