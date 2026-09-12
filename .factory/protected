@@ -1,0 +1,31 @@
+# Paths the factory refuses agent changes to, one glob per line. Blank lines and
+# comment lines are ignored. "Protected" means a human reads this diff, not that
+# the file can never change: a branch that has to touch one of these still lands,
+# it just cannot be approved and closed without somebody looking. Adding a gate
+# to bin/test is expected work and will show up here on purpose.
+#
+# .factory/gate and .factory/protected are always protected by the factory
+# itself. The list below exists because .factory/gate only delegates, so
+# protecting the wrapper alone protects nothing.
+
+# The gate body. bin/test is the whole gate list and the one CI runs; the other
+# three are the scripts it delegates to. Deleting a gate here, or a fixture
+# beside it, passes every remaining check in this tree - which is exactly the
+# move that has to be seen rather than inferred.
+bin/test
+bin/check-fast
+bin/check-qml-contract
+bin/check-gates
+
+# The allowlist that excuses a gate from having a fixture. bin/check-fast reads
+# it in both directions, so it cannot silently fill up - but adding a name to it
+# is still how a gate stops being proven.
+tests/gates/uncovered
+
+# SHA-pinned CI and release automation. A workflow holds this repository's
+# contents, and a mutable action reference hands that to whoever owns the action.
+.github/workflows/*.yml
+
+# cargo-deny's advisory policy, enforced by .github/workflows/audit.yml.
+# Relaxing an entry here is a suppression wearing a config file's name.
+deny.toml

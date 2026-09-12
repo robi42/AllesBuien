@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# The factory's definition of done. It wraps bin/test, the whole gate list and the one CI runs.
+set -euo pipefail
+./bin/test
