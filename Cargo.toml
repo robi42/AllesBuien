@@ -23,3 +23,7 @@ cargo = { level = "warn", priority = -1 }
 # workspace picks either version, so the only lever here is a version bound on a
 # dependency we do not own; the fix belongs upstream and arrives with their bumps.
 multiple_crate_versions = "allow"
+# Already warn by default once clippy.toml sets a threshold; named here so the
+# nesting budget is written down beside the other lints rather than found only
+# in a config key.
+excessive_nesting = "warn"
