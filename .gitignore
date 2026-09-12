@@ -14,3 +14,4 @@
 # scratch copy - which reads tracked and untracked-but-not-ignored files - never
 # picks up a run's artefacts.
 /.factory/run/
+.beads/interactions.jsonl
