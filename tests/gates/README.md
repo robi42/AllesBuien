@@ -31,11 +31,12 @@ those declarations to work out which gates have a fixture at all, and it reads
 them by shape rather than by search — exactly as the slicer reads a gate header
 — so an indented or reworded copy is prose to both of them.
 
-New fixtures carry no ShellCheck directive. The runner reads `gate`,
-`script`, `outcome`, and `expect` after sourcing the file, which ShellCheck
-cannot see, so each ends with one line that uses them instead:
+New fixtures keep the `shell=bash` declaration on their first line, which
+the runner's contract needs, but silence no ShellCheck warning. The runner
+reads `gate`, `script`, `outcome`, and `expect` after sourcing the file, which
+ShellCheck cannot see, so each ends with one line that uses them instead:
 `: "$gate" "$script" "$outcome" "${expect[@]}"`, under a comment saying why.
-The older fixtures keep the directive they were written with.
+The older fixtures keep the SC2034 directive they were written with.
 
 `args` optionally passes arguments to the gate script, which is how the two
 contract fixtures point `bin/check-qml-contract` at a deliberately broken copy
