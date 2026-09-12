@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# The factory's definition of done. It wraps bin/test, which is the whole gate
+# list and the one CI runs; everything language-specific lives there.
+set -euo pipefail
+./bin/test

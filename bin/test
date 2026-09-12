@@ -25,10 +25,12 @@ require_tool() {
 # for its own sake; it is the only reader that checks the checkers. The
 # violation fixtures under tests/gates are shell too, and they are read by the
 # same argument twice over: a fixture with a quoting bug proves nothing about
-# the gate it names.
+# the gate it names. .factory/gate is in the list for the same reason: it is the
+# software factory's entrypoint into this file, so a shell bug there disables
+# every gate below at once.
 echo "==> gate: shell scripts"
 require_tool shellcheck
-shellcheck bin/* tests/gates/*.sh
+shellcheck bin/* tests/gates/*.sh .factory/gate
 
 echo "==> gate: workflow syntax"
 require_tool actionlint

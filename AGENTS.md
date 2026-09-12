@@ -4,6 +4,28 @@
 
 AllesBuien is a native Omarchy weather application built as a Rust workspace with a Qt Quick/CXX-Qt desktop shell. It shows Buienradar current conditions, a five-day forecast, minute rain predictions, an animated Dutch radar, and best-effort rain-soon notifications while following the active Omarchy theme.
 
+## Run and verify
+
+Run from the repository root:
+
+```bash
+bash .factory/gate          # the definition of done: wraps bin/test
+bin/check-fast              # bin/test's text-only first step, ~0.25s
+bin/build                   # release build
+bin/install                 # (cd pkgbuild && makepkg -f), then install
+lefthook run pre-commit     # cargo fmt --check and bin/check-fast
+```
+
+`bash .factory/gate` is the definition of done and runs nothing but `bin/test`, which is the full workspace gate and the one CI runs — over twenty minutes from cold, because CXX-Qt regenerates C++. `bin/check-fast` is its text-only first step and what `lefthook` runs on every commit, so the hook can never hold a weaker opinion than the server. Tools are pinned in `mise.toml`; run `mise install` first.
+
+Do not change `.factory/gate` or any path listed in `.factory/protected` — a branch that touches one cannot be approved without a human reading the diff. `.factory/run/` is factory scratch and is git-ignored.
+
+## Tasks and memory
+
+- Work is filed as [beads](https://github.com/steveyegge/beads) in `.beads/`: `bd ready` lists what is actionable, `bd show <id>` reads one issue.
+- The software factory claims and closes beads itself, so do not open, re-assign, or close them by hand during a run.
+- Leave `bd remember "..."` notes only for what the code cannot tell a reader: a decision and its reason. Anything the tree already states belongs in a comment beside it, not in memory.
+
 ## Structure
 
 ```
@@ -12,8 +34,11 @@ AllesBuien/
 ├── app/                  Qt/CXX-Qt application, controllers, QML UI, assets, and GUI integration tests
 ├── assets/gen-basemap/   Deterministic pure-Rust Natural Earth basemap generator and checker
 ├── bin/                  Canonical build, test, package-install, and gate entrypoints
+├── tests/gates/          One known-bad input per gate, plus the allowlist of gates without one
 ├── pkgbuild/             Arch PKGBUILD, desktop entry, icon, and ignored package artifacts
 ├── .github/              SHA-pinned CI, release automation, and Dependabot configuration
+├── .factory/             Software-factory gate and protected-path list; ignored run/ scratch
+├── .beads/               Tracked issue-tracker config and history; the Dolt database is ignored
 ├── .qmllint.ini          Committed qmllint strictness, so a Qt bump is a reviewable diff
 ├── mise.toml             Rust 1.98.0, actionlint, and shellcheck pins
 └── lefthook.yml          Pre-commit rustfmt and the text-only gates
@@ -41,38 +66,29 @@ AllesBuien/
 | Packaging | `pkgbuild/PKGBUILD`, `pkgbuild/allesbuien.desktop` | Static package metadata and four installed payloads |
 | Quality gates | `bin/test`, `bin/check-fast`, `bin/check-qml-contract` | `bin/test` is the whole list and CI runs it; the other two are its cheap and post-build halves |
 | Proof that the gates can fail | `bin/check-gates`, `tests/gates/` | One known-bad input per gate, run in a scratch copy; `tests/gates/README.md` records what is covered and what is not |
-
-## Commands
-
-Run from the repository root:
-
-```bash
-bin/build
-bin/test
-lefthook run pre-commit
-```
+| The gate agents are held to | `.factory/gate`, `.factory/protected` | The wrapper around `bin/test`, and the paths whose diffs a human has to read |
 
 ## Conventions
 
-- **Core-purity seam:** `allesbuien-core` is platform-independent pure Rust and has zero CXX, CXX-Qt, or Qt dependencies. Qt objects, timers, threads, image delivery, and process adapters belong in `app`.
+- **Core-purity seam:** `allesbuien-core` is platform-independent pure Rust with zero CXX, CXX-Qt, or Qt dependencies. Qt objects, timers, threads, image delivery, and process adapters belong in `app`.
 - **Dependency injection:** Keep network and notification side effects behind the object-safe `FeedApi`, `RadarApi`, and `Notifier` traits. Pass services, paths, location, and timer intervals through the existing construction seams; do not introduce globals.
-- **Fakes over mocks:** Tests use small deterministic fake trait implementations with call counters or in-memory values. They do not hit production networks and do not mutate process-global environment state. A fake several GUI harnesses need lives in `allesbuien-testkit`, where `pub` keeps it reachable and no harness needs `#[allow(dead_code)]` for the ones it does not use; a fake one harness scripts stays beside the assertions it serves, as a private module under `app/tests/` if it is large enough to want a name.
-- **Waiting on Qt:** GUI harnesses wait with `pump_until(condition, budget, attempt)` from `allesbuien-testkit`, never a hardcoded spin count. An iteration cap says nothing about how long the wait may take and cannot tell falling out of the loop from succeeding in it, so an unreachable condition used to surface as whichever later assertion happened to read the unfinished state.
+- **Fakes over mocks:** Tests use small deterministic fake trait implementations with call counters or in-memory values; they never hit production networks or mutate process-global environment state. A fake several GUI harnesses need lives in `allesbuien-testkit`, so no harness has to silence a dead-code warning for the doubles it does not use; a fake one harness scripts stays beside the assertions it serves.
+- **Waiting on Qt:** GUI harnesses wait with `pump_until(condition, budget, attempt)` from `allesbuien-testkit`, never a hardcoded spin count. An iteration cap cannot tell falling out of the loop from succeeding in it, so an unreachable condition surfaces as whichever later assertion happens to read the unfinished state.
 - **Qt threading:** HTTP, file reads, and notification dispatch run off the Qt thread; QObject changes return through the CXX-Qt thread queue.
-- **Theme-watch re-arm:** Omarchy replaces `~/.local/state/omarchy/current/theme` by removing and renaming a directory. Poll every 2000 ms, re-resolve the path on each changed read, and tolerate disappearance/recreation; an inode-bound watcher cannot survive replacement.
+- **Theme-watch re-arm:** Poll `~/.local/state/omarchy/current/theme` every 2000 ms, re-resolving the path on each changed read and tolerating disappearance. Omarchy replaces that directory by removing and renaming, which no inode-bound watcher survives.
 - **Theme fallback:** Rust exposes `themeAvailable`; QML uses `SystemPalette` when unavailable. Theme colors otherwise come from the controller.
-- **Location following:** `~/.local/state/omarchy/settings/weather.json` is a desktop-wide setting that `omarchy-weather-location` rewrites and `--clear` removes, so it is polled every 2000 ms and never watched — `--clear` unlinks the file and a later `--set` writes a new one, which defeats an inode-bound watcher exactly as a theme replacement does. `LocationSettings` holds the inputs rather than the answer, and the weather and radar bridges each re-resolve on the same tick and compare against the location they last adopted. Neither tells the other, so there is no shared cell to race over and the order of the two `pollLocation()` calls carries no meaning. An `ALLESBUIEN_LAT`/`ALLESBUIEN_LON` pair is captured once at construction and outranks every later file change: a viewer who pinned this app to a coordinate did not ask the desktop to move it.
-- **No location auto-detection, deliberately:** Omarchy's own weather widget treats a missing `weather.json` as "detect from the IP address", because wttr.in resolves an empty query that way and its widget can render any city on Earth. AllesBuien draws Dutch radar and only Dutch radar, so an IP that resolves to Berlin would yield a correct-looking window over an empty map — a worse answer than a Dutch default that at least shows rain. A missing setting therefore falls back to Amsterdam-West, and `core/src/location_notice.rs` labels it as a default so the state reads as unconfigured rather than chosen. The same reasoning rules out geocoding a name-only entry: `omarchy-weather-location --set Malibu` writes no coordinates, and inventing them is a second source of truth for a setting the desktop already owns.
+- **Location following:** Poll `~/.local/state/omarchy/settings/weather.json` every 2000 ms and never watch it — it is a desktop-wide setting that `omarchy-weather-location` rewrites and `--clear` unlinks. `LocationSettings` holds the inputs rather than the answer, and the weather and radar bridges each re-resolve and compare against the location they last adopted, so there is no shared cell to race and the order of the two `pollLocation()` calls carries no meaning. An `ALLESBUIEN_LAT`/`ALLESBUIEN_LON` pair is captured once at construction and outranks every later file change; `core/src/location_settings.rs`'s module doc argues all three points.
+- **No location auto-detection, deliberately:** A missing `weather.json` falls back to Amsterdam-West, labelled as a default by `core/src/location_notice.rs`, and never to IP detection: this app draws Dutch radar and only Dutch radar, so a detected Berlin would be a confident-looking window over a permanently empty map. A name-only entry such as `--set Malibu` carries no coordinates and counts as no setting, because inventing them would be a second source of truth for a setting the desktop owns. README.md's *Location* section states the divergence from Omarchy's own widget in full.
 - **Radar coverage:** A location outside `core/src/radar_projection`'s bounding box gets no marker and a stated notice, because a raster that paints its base and nothing else is indistinguishable from a failed frame request. The bounds are named once, in `radar_projection`; `location_notice` asks that module rather than restating them.
 - **Radar delivery:** Metadata `times[]` determines frame order and cadence. Transparent frame PNGs are served without Rust-side composition through generation-keyed `image://radar/<generation>/<index>` URLs.
 - **Error UX:** Retain last-good data and expose one minimal inline status per view. Malformed or missing optional input must not panic.
-- **GUI tests:** Every file directly under `app/tests/` contains exactly one GUI test and constructs exactly one `QGuiApplication`, giving each Qt application its own process.
-- **Module size:** No tracked `.rs` file exceeds **250 pure lines** — non-blank, non-comment, measured by `grep -cvE '^[[:space:]]*(//|$)' <file>` and enforced by `bin/test`. Past that a module has outgrown one reviewer's working memory and is doing more than one thing. One number governs the whole tree, GUI harnesses included: they held a 350-line variant while each of the seven carried its own copy of the same test doubles, and `app/testkit` retired it by giving those doubles one home. The number is a symptom and cohesion is the goal: the only sanctioned fix is extracting a module with a name describing one responsibility, its own module doc, and its own tests.
-- **Toolchain and gates:** Use pinned Rust 1.98.0. `bin/test` is the source of truth for workspace verification and keeps core coverage at or above 85%. It runs `bin/check-fast` first — the text-only gates, which `lefthook` also runs on every commit — and `bin/check-qml-contract` last, because that one reads what the build registered. A gate that cannot be watched to fail is not a gate, and watching it once by hand proves nothing a month later: `bin/check-gates` runs the fixtures in `tests/gates/` on every `bin/test`, overlaying one known-bad input per gate onto a scratch copy of the tree and asserting the gate goes red **with the message that names the offender**, and green on the tree untouched. Sixteen of the twenty gates are covered; the four that need a full build are excused by name in `tests/gates/uncovered` and `tests/gates/README.md` says why. Add a fixture with any new gate — an unproven gate is a decoration, and this repository has already shipped one — and `bin/check-fast`'s `gate coverage` gate now refuses a gate that has neither a fixture nor an entry in that allowlist, because `bin/check-gates` counts the gates its fixtures named and is therefore blind to the gate nobody wrote a fixture for.
-- **CXX-Qt name binding:** Every `extern "RustQt"` block carries `#[auto_cxx_name]`, with no exceptions, so multi-word members reach C++ in the camelCase QML reads them by. Without it nothing fails to compile and no test fails; the window simply comes up unthemed and unbound. `bin/check-fast` asserts the source shape and `bin/check-qml-contract` asserts the generated type registry still answers every member name `app/qml` asks it for.
-- **Clock-reading tests:** `core/src/radar_timeline.rs` and `core/src/datetime.rs` read the host clock on purpose, so banning `now()` would condemn the wrong lines. Tests instead have to hold in any zone, and `bin/test` re-runs the suite under UTC, `Asia/Kolkata`, `Pacific/Auckland`, and `America/New_York` to prove it. Kolkata's half-hour offset is in the list because it is what catches an assertion that pinned the minutes to `:00` in Amsterdam.
+- **GUI tests:** Every file directly under `app/tests/` contains exactly one GUI test and constructs exactly one `QGuiApplication`, giving each Qt application its own process. A second test in the same file meets a `QGuiApplication` that already exists and dies with a SIGSEGV that reads like a product bug.
+- **Module size:** No tracked `.rs` file exceeds **250 pure lines** — non-blank, non-comment — because past that a module has outgrown one reviewer's working memory and is doing more than one thing. One number governs the whole tree, GUI harnesses included; `bin/check-fast`'s comment records why they lost their exception. The number is a symptom and cohesion is the goal, so the only sanctioned fix is extracting a module with a name describing one responsibility, its own doc, and its own tests.
+- **Toolchain and gates:** Use pinned Rust 1.98.0. `bin/test` is the source of truth for workspace verification, keeps core coverage at or above 85%, and runs `bin/check-fast` first and `bin/check-qml-contract` last for reasons its own comments give. A gate that cannot be watched to fail is a decoration, so `bin/check-gates` replays every fixture in `tests/gates/` on each run and asserts the gate goes red **with the message that names the offender**; ship a fixture with any new gate or excuse it by name in `tests/gates/uncovered`, which `bin/check-fast`'s `gate coverage` gate enforces in both directions, and read `tests/gates/README.md` for the count and the per-gate argument.
+- **CXX-Qt name binding:** Every `extern "RustQt"` block carries `#[auto_cxx_name]`, with no exceptions, so multi-word members reach C++ in the camelCase QML reads them by. Without it nothing fails to compile and no test fails; the window simply comes up unthemed and unbound. `bin/check-fast` asserts the source shape and `bin/check-qml-contract` asserts the generated type registry still answers every member name `app/qml` asks for.
+- **Clock-reading tests:** `core/src/radar_timeline.rs` and `core/src/datetime.rs` read the host clock on purpose, so banning `now()` would condemn the wrong lines. Tests have to hold in any zone instead, and `bin/test` re-runs the suite under UTC, `Asia/Kolkata`, `Pacific/Auckland`, and `America/New_York` to prove it — Kolkata's half-hour offset being what catches an assertion that pinned the minutes to `:00`.
 - **Packaging:** `pkgver` is static. The canonical package build is exactly `(cd pkgbuild && makepkg -f)` as invoked by `bin/install` and automation.
-- **Attribution:** Buienradar free data is for non-commercial use with attribution, and the terms name exactly two visible obligations: the words `Buienradar.nl` are shown, and they link to the root domain `https://www.buienradar.nl`. Keep both in the app and in the README. Any label wrapped around them is ours to word or drop; the GUI test asserts the domain text and the link, not a sentence.
+- **Attribution:** Buienradar's free-data terms name exactly two visible obligations: the words `Buienradar.nl` are shown, and they link to `https://www.buienradar.nl`. Keep both in the app and in the README. Any label wrapped around them is ours to word or drop; the GUI test asserts the domain text and the link, not a sentence.
 
 ## Anti-Patterns
 
@@ -99,3 +115,4 @@ lefthook run pre-commit
 - Do NOT use mutable GitHub Action references such as tags or branches; pin every third-party action to a full 40-character commit SHA and record the release tag in a comment.
 - Do NOT use pre-release Qt Rust bridges, qmetaobject-rs, or mix CXX-Qt family versions; the workspace pins the complete 0.10.0 family.
 - Do NOT reduce agreed scope behind “MVP” or “phase 1” language, and do not port third-party source code; external projects are pattern references only.
+- Do NOT edit `.factory/gate`, `.factory/protected`, or the paths that file lists — the gate body, `tests/gates/uncovered`, the workflows, and `deny.toml`. Weakening a check is the one change no check can catch, so those diffs are read by a human rather than approved by a run.
