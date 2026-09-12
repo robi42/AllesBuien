@@ -93,8 +93,10 @@ process-global mutable state, and allows each in exactly one home; it reads
 only files under a `src/` directory and skips `#[cfg(test)]` blocks, because
 build scripts must read the environment and test fakes build failing clients on
 purpose. `trait surface` refuses a trait with more than four methods, required
-and default alike. Five red fixtures give each seam row its own, so a broken row
-cannot hide behind a working one. Nesting depth is bounded by clippy's
+and default alike, counting only the methods one level inside the trait so a
+helper declared in a default body is not surface. Each constructor row has its
+own red fixture and the static row has two, at column zero and inside an inline
+module, so a broken row cannot hide behind a working one. Nesting depth is bounded by clippy's
 `excessive_nesting`, which rides on the excused `clippy` gate. The open-closed
 and Liskov principles have no fixture and no gate: nothing in the text of a
 Rust file says whether an extension needed an edit or a subtype broke a
@@ -127,8 +129,8 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-thirty-five it runs, each of which fails loudly if its gate stops biting. One
-of those thirty-five aims at the runner rather than at a gate: the slicer
+thirty-seven it runs, each of which fails loudly if its gate stops biting. One
+of those thirty-seven aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That

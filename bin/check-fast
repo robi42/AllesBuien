@@ -155,6 +155,8 @@ unpinned=$(grep -rnE '^\s*-?\s*uses:' .github/workflows/*.yml | grep -vE '@[0-9a
 # - files under a src/ directory - because build scripts have to read the
 # environment and harness fakes build failing HTTP clients on purpose; a
 # #[cfg(test)] block inside a scanned file is skipped for the same reason.
+# Rules read the trimmed line, so a static in an inline module is as visible as
+# one at column zero.
 #
 # Rows are `extended regex<TAB>allowed files`. The regex travels through awk -v,
 # which unescapes backslashes, so every literal parenthesis is a bracket class.
@@ -199,7 +201,7 @@ pending {
     next
   }
 }
-$0 ~ pat && !(FILENAME in ok) { printf "  %s:%d: %s\n", FILENAME, FNR, line }
+line ~ pat && !(FILENAME in ok) { printf "  %s:%d: %s\n", FILENAME, FNR, line }
 AWK
 )
 misplaced_effects=$(for rule in "${seam_rules[@]}"; do
@@ -213,7 +215,9 @@ done)
 # trait doing more than one job. Required and default methods count alike -
 # a default still widens what an implementor has to reason about. The input
 # contract is rustfmt output, which the formatting gate enforces: a trait's
-# closing brace sits alone at the trait's own indentation.
+# closing brace sits alone at the trait's own indentation, and its methods sit
+# exactly one level inside it - so a helper fn declared in a default method's
+# body is deeper and is not surface.
 echo "==> gate: trait surface"
 trait_limit=4
 trait_scan=$(
@@ -228,6 +232,7 @@ FNR == 1 { open = 0 }
   name = $0
   sub(/^[[:space:]]*(pub([(][a-z]+[)])?[[:space:]]+)?trait[[:space:]]+/, "", name)
   sub(/[^A-Za-z0-9_].*$/, "", name)
+  member = "^" indent "    (pub([(][a-z]+[)])?[[:space:]]+)?(async[[:space:]]+)?(unsafe[[:space:]]+)?fn[[:space:]]"
   next
 }
 !open { next }
@@ -236,7 +241,7 @@ $0 == indent "}" {
   if (count > limit) printf "  %s:%d: trait %s has %d methods (limit %d)\n", FILENAME, start, name, count, limit
   next
 }
-$0 ~ /^[[:space:]]*(pub([(][a-z]+[)])?[[:space:]]+)?(async[[:space:]]+)?(unsafe[[:space:]]+)?fn[[:space:]]/ { count++ }
+$0 ~ member { count++ }
 AWK
 )
 fat_traits=$(git ls-files '*.rs' | xargs -r awk -v limit="$trait_limit" "$trait_scan")
