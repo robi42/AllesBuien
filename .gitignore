@@ -8,3 +8,10 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Software-factory scratch: plans, reviews, and gate logs for one run. Ignored
+# here rather than only in the checkout the factory runs in, so bin/check-gates'
+# scratch copy - which reads tracked and untracked-but-not-ignored files - never
+# picks up a run's artefacts.
+/.factory/run/
+.beads/interactions.jsonl
