@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 
+use allesbuien::BootedApp;
 use allesbuien_core::{
     notify::{Notifier, NotifyConfig, NotifyError},
     weather::{FeedApi, FeedFuture, WeatherData},
@@ -56,6 +57,13 @@ impl Notifier for FakeNotifier {
     }
 }
 
+/// Whether the window's rain summary names the feed's `call`th answer.
+fn shows_refresh(booted: &BootedApp, call: usize) -> bool {
+    booted.weather_controller().is_some_and(|controller| {
+        controller.rain_summary().to_string() == format!("refresh {call}")
+    })
+}
+
 #[test]
 fn dispatches_once_when_same_rain_event_refreshes_within_cooldown() {
     // Given: one GUI application with rain inside the configured threshold and fake ports.
@@ -78,25 +86,18 @@ fn dispatches_once_when_same_rain_event_refreshes_within_cooldown() {
     // When: the initial refresh succeeds, then the same event refreshes again.
     pump_until("the boot refresh lands and notifies", SETTLE_BUDGET, || {
         booted.process_events();
-        notifier.calls().len() == 1
-            && booted
-                .weather_controller()
-                .is_some_and(|controller| controller.rain_summary().to_string() == "refresh 1")
+        notifier.calls().len() == 1 && shows_refresh(&booted, 1)
     });
     booted.refresh_weather();
     pump_until("the second refresh reaches the view", SETTLE_BUDGET, || {
         booted.process_events();
-        booted
-            .weather_controller()
-            .is_some_and(|controller| controller.rain_summary().to_string() == "refresh 2")
+        shows_refresh(&booted, 2)
     });
     feed.rain.store(false, Ordering::SeqCst);
     booted.refresh_weather();
     pump_until("the dry refresh reaches the view", SETTLE_BUDGET, || {
         booted.process_events();
-        booted
-            .weather_controller()
-            .is_some_and(|controller| controller.rain_summary().to_string() == "refresh 3")
+        shows_refresh(&booted, 3)
     });
 
     // Then: cooldown dedup suppresses the repeated event and dry data adds no dispatch.

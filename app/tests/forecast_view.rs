@@ -3,7 +3,7 @@ use std::sync::Arc;
 use allesbuien_core::weather::{FeedApi, FeedFuture};
 use allesbuien_harness::{
     HarnessBuilder,
-    probe::{child, focused_window, grab_window, property},
+    probe::{child, focused_window, grab_window, property, text_of},
 };
 use allesbuien_testkit::{SETTLE_BUDGET, fixtures::five_day_weather, pump_until};
 use cxx_qt_lib::QString;
@@ -51,13 +51,7 @@ fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
         // on whatever sentence the UI happens to word it with today.
         assert_eq!(property(forecast, "count").value::<i32>(), Some(5));
         assert_eq!(property(attribution, "visible").value::<bool>(), Some(true));
-        assert_eq!(
-            property(attribution, "text")
-                .value::<QString>()
-                .map(|text| text.to_string())
-                .as_deref(),
-            Some("Buienradar.nl")
-        );
+        assert_eq!(text_of(attribution), "Buienradar.nl");
         assert_eq!(
             property(attribution, "link")
                 .value::<QString>()
