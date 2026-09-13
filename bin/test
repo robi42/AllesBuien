@@ -72,7 +72,7 @@ if grep -qi cxx <<<"$core_tree"; then
 fi
 
 echo "==> gate: core coverage"
-cargo llvm-cov -p allesbuien-core --fail-under-lines 85
+cargo llvm-cov -p allesbuien-core --fail-under-lines 90
 
 # Capture, then match, for the reason the gate above spells out. The hazard runs
 # the other way here - grep -q exits at the first match, cargo takes SIGPIPE,

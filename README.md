@@ -101,7 +101,7 @@ Build the release application with:
 bin/build
 ```
 
-`bin/test` checks the per-file module-size budget, rustfmt, Clippy with warnings denied, offscreen Qt workspace tests, the zero-CXX core dependency seam, at least 85% line coverage for `allesbuien-core`, the pinned `cargo-llvm-cov` version, and Qt 6 QML lint.
+`bin/test` checks the per-file module-size budget, rustfmt, Clippy with warnings denied, offscreen Qt workspace tests, the zero-CXX core dependency seam, at least 90% line coverage for `allesbuien-core`, the pinned `cargo-llvm-cov` version, and Qt 6 QML lint.
 
 Issues are tracked in-repo as [beads](https://github.com/steveyegge/beads): `bd ready` lists what is actionable, `bd show <id>` reads one.
 
