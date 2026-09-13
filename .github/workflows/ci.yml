@@ -1,7 +1,12 @@
 name: CI
 
 on:
+  # push is scoped to main so a branch that has an open pull request runs once,
+  # through the pull_request event, instead of once per event with the same
+  # SHA. Fork branches only ever fire pull_request, so nothing is lost there,
+  # and tag pushes belong to release.yml.
   push:
+    branches: [main]
   pull_request:
 
 permissions:
