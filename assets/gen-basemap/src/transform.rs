@@ -46,6 +46,23 @@ impl MapProjection {
             * f64::from(HEIGHT - 1);
         ScreenPoint { x, y }
     }
+
+    /// The canvas pixel nearest to `point`, as `(column, row)` image indices.
+    ///
+    /// Rounding selects the pixel whose centre is closest. A point outside the
+    /// projection extent does not wrap: float-to-integer casts saturate, so a
+    /// point west or north of the extent lands on index 0 and one far east or
+    /// south lands past the canvas, where image accessors refuse it.
+    #[must_use]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "rounding to the nearest pixel is the intent, and a float-to-integer cast saturates rather than wrapping for points outside the extent"
+    )]
+    pub fn to_pixel_index(self, point: GeoPoint) -> (u32, u32) {
+        let pixel = self.to_pixel(point);
+        (pixel.x.round() as u32, pixel.y.round() as u32)
+    }
 }
 
 fn mercator_x(longitude: f64) -> f64 {

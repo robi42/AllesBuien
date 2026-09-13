@@ -2,6 +2,7 @@ use gen_basemap::{
     LAND, MapProjection, WATER,
     geojson::{GeoPoint, Polygon},
     raster::fill_polygon,
+    repository_root,
 };
 use image::{Rgb, RgbImage};
 
@@ -22,11 +23,6 @@ fn projection_maps_extent_corners_to_canvas_when_using_web_mercator() {
 }
 
 #[test]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "the fixed land and hole samples are inside the test projection extent, so rounding deliberately selects their non-negative canvas pixels"
-)]
 fn scanline_fill_leaves_hole_water_when_polygon_has_interior_ring() {
     // Given
     let projection = MapProjection::default();
@@ -52,14 +48,31 @@ fn scanline_fill_leaves_hole_water_when_polygon_has_interior_ring() {
     fill_polygon(&mut image, &projection, &polygon, Rgb(LAND));
 
     // Then
-    let land = projection.to_pixel(GeoPoint::new(2.0, 52.0));
-    let hole = projection.to_pixel(GeoPoint::new(5.0, 52.0));
-    assert_eq!(
-        *image.get_pixel(land.x.round() as u32, land.y.round() as u32),
-        Rgb(LAND)
-    );
-    assert_eq!(
-        *image.get_pixel(hole.x.round() as u32, hole.y.round() as u32),
-        Rgb(WATER)
-    );
+    let (land_column, land_row) = projection.to_pixel_index(GeoPoint::new(2.0, 52.0));
+    let (hole_column, hole_row) = projection.to_pixel_index(GeoPoint::new(5.0, 52.0));
+    assert_eq!(*image.get_pixel(land_column, land_row), Rgb(LAND));
+    assert_eq!(*image.get_pixel(hole_column, hole_row), Rgb(WATER));
+}
+
+#[test]
+fn pixel_index_rounds_to_the_nearest_pixel_and_saturates_outside_the_extent() {
+    // Given
+    let projection = MapProjection::default();
+
+    // When
+    let southeast = projection.to_pixel_index(GeoPoint::new(10.0, 49.5));
+    let beyond_northwest = projection.to_pixel_index(GeoPoint::new(-1.0, 56.0));
+
+    // Then
+    assert_eq!(southeast, (1057, 914));
+    assert_eq!(beyond_northwest, (0, 0));
+}
+
+#[test]
+fn repository_root_is_the_checkout_holding_the_basemap_licence() {
+    // Given / When
+    let root = repository_root().expect("the crate sits two levels below the root");
+
+    // Then
+    assert!(root.join("assets/BASEMAP-LICENSE").is_file());
 }

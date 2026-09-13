@@ -71,15 +71,23 @@ pub fn draw_line(
         let start = projection.to_pixel(pair[0]);
         let end = projection.to_pixel(pair[1]);
         if let Some((clipped_start, clipped_end)) = clip_to_canvas(start, end) {
-            bresenham(image, clipped_start, clipped_end, color);
+            draw_clipped_segment(image, clipped_start, clipped_end, color);
         }
     }
 }
 
+/// Clips a segment to the canvas with the Liang-Barsky algorithm.
+///
+/// The segment is `start + t * (end - start)` for `t` in `0..=1`. Each canvas
+/// edge contributes one `(p, q)` test: `p` is the segment's direction across
+/// that edge and `q` the start point's distance inside it. A negative `p` means
+/// the segment enters through that edge and raises the entry `t`; a positive one
+/// means it leaves and lowers the exit `t`. A zero `p` runs parallel to the edge
+/// and is either wholly inside (`q >= 0`) or wholly outside it.
 fn clip_to_canvas(start: ScreenPoint, end: ScreenPoint) -> Option<(ScreenPoint, ScreenPoint)> {
     let delta_x = end.x - start.x;
     let delta_y = end.y - start.y;
-    let checks = [
+    let edge_tests = [
         (-delta_x, start.x),
         (delta_x, f64::from(WIDTH - 1) - start.x),
         (-delta_y, start.y),
@@ -87,7 +95,7 @@ fn clip_to_canvas(start: ScreenPoint, end: ScreenPoint) -> Option<(ScreenPoint, 
     ];
     let mut enter = 0.0_f64;
     let mut leave = 1.0_f64;
-    for (direction, distance) in checks {
+    for (direction, distance) in edge_tests {
         if direction.abs() < f64::EPSILON {
             if distance < 0.0 {
                 return None;
@@ -120,7 +128,13 @@ fn clip_to_canvas(start: ScreenPoint, end: ScreenPoint) -> Option<(ScreenPoint, 
     clippy::cast_possible_truncation,
     reason = "Liang-Barsky clipping bounds both endpoints to the 1058x915 canvas before Bresenham rounds them to integer pixels"
 )]
-fn bresenham(image: &mut RgbImage, start: ScreenPoint, end: ScreenPoint, color: Rgb<u8>) {
+/// Draws an already-clipped segment pixel by pixel with Bresenham's algorithm.
+fn draw_clipped_segment(
+    image: &mut RgbImage,
+    start: ScreenPoint,
+    end: ScreenPoint,
+    color: Rgb<u8>,
+) {
     let mut x = start.x.round() as i32;
     let mut y = start.y.round() as i32;
     let target_x = end.x.round() as i32;

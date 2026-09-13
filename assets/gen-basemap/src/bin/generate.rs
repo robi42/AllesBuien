@@ -8,35 +8,57 @@ use std::{
 
 use gen_basemap::{
     BOUNDARY, HEIGHT, LAND, MapProjection, WATER, WIDTH,
-    geojson::{parse_lines, parse_polygons},
+    geojson::{GeoPoint, Polygon, parse_lines, parse_polygons},
     raster::{draw_line, fill_polygon},
-    sha256_hex,
+    repository_root, sha256_hex,
 };
 use image::{Rgb, RgbImage};
 
 const NATURAL_EARTH_SHA: &str = "ca96624a56bd078437bca8184e78163e5039ad19";
 const CACHE_DIR: &str = "/tmp/gen-basemap-cache";
-const SOURCES: [(&str, &str); 3] = [
-    (
-        "ne_10m_land.geojson",
-        "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_land.geojson",
-    ),
-    (
-        "ne_10m_lakes.geojson",
-        "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_lakes.geojson",
-    ),
-    (
-        "ne_10m_admin_0_boundary_lines_land.geojson",
-        "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_admin_0_boundary_lines_land.geojson",
-    ),
-];
+const LAND_SOURCE: NaturalEarthFile = NaturalEarthFile {
+    name: "ne_10m_land.geojson",
+    url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_land.geojson",
+};
+const LAKES_SOURCE: NaturalEarthFile = NaturalEarthFile {
+    name: "ne_10m_lakes.geojson",
+    url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_lakes.geojson",
+};
+const BOUNDARIES_SOURCE: NaturalEarthFile = NaturalEarthFile {
+    name: "ne_10m_admin_0_boundary_lines_land.geojson",
+    url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_admin_0_boundary_lines_land.geojson",
+};
+
+/// One pinned Natural Earth download: its cache file name and source URL.
+struct NaturalEarthFile {
+    name: &'static str,
+    url: &'static str,
+}
+
+/// The three parsed layers the basemap is painted from, in painting order.
+struct Sources {
+    land: Vec<Polygon>,
+    lakes: Vec<Polygon>,
+    boundaries: Vec<Vec<GeoPoint>>,
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let keep_intermediate = parse_arguments()?;
     let root = repository_root()?;
     let cache = Path::new(CACHE_DIR).join(NATURAL_EARTH_SHA);
     fs::create_dir_all(&cache)?;
-    let agent: ureq::Agent = ureq::Agent::config_builder()
+    let sources = fetch_sources(&download_agent(), &cache)?;
+
+    let output_dir = root.join("app/assets");
+    fs::create_dir_all(&output_dir)?;
+    let intermediate = keep_intermediate.then(|| output_dir.join("basemap-nl-pre-lakes.png"));
+    let image = render_basemap(&sources, intermediate.as_deref())?;
+    publish(&root, &output_dir, &image)
+}
+
+/// An HTTPS-only client with one generous timeout for the largest download.
+fn download_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(120)))
         .https_only(true)
         .user_agent(concat!(
@@ -45,34 +67,51 @@ fn main() -> Result<(), Box<dyn Error>> {
             env!("CARGO_PKG_VERSION")
         ))
         .build()
-        .into();
+        .into()
+}
 
-    let source_paths = SOURCES
-        .iter()
-        .map(|(name, url)| ensure_cached(&agent, &cache, name, url))
-        .collect::<Result<Vec<_>, _>>()?;
-    let land = parse_polygons(&fs::read(&source_paths[0])?)?;
-    let lakes = parse_polygons(&fs::read(&source_paths[1])?)?;
-    let boundaries = parse_lines(&fs::read(&source_paths[2])?)?;
+/// Downloads any source missing from `cache`, then parses all three layers.
+///
+/// Every download finishes before the first parse, so a network failure is
+/// reported before any time is spent decoding the files already present.
+fn fetch_sources(agent: &ureq::Agent, cache: &Path) -> Result<Sources, Box<dyn Error>> {
+    let land = ensure_cached(agent, cache, &LAND_SOURCE)?;
+    let lakes = ensure_cached(agent, cache, &LAKES_SOURCE)?;
+    let boundaries = ensure_cached(agent, cache, &BOUNDARIES_SOURCE)?;
+    Ok(Sources {
+        land: parse_polygons(&fs::read(land)?)?,
+        lakes: parse_polygons(&fs::read(lakes)?)?,
+        boundaries: parse_lines(&fs::read(boundaries)?)?,
+    })
+}
 
+/// Paints land over water, then lakes back to water, then the land boundaries.
+///
+/// When `intermediate` names a path, the canvas is saved there after the land
+/// pass and before the lakes, which is the stage a lake-fill regression shows.
+fn render_basemap(
+    sources: &Sources,
+    intermediate: Option<&Path>,
+) -> Result<RgbImage, image::ImageError> {
     let projection = MapProjection::default();
     let mut image = RgbImage::from_pixel(WIDTH, HEIGHT, Rgb(WATER));
-    for polygon in &land {
+    for polygon in &sources.land {
         fill_polygon(&mut image, &projection, polygon, Rgb(LAND));
     }
-
-    let output_dir = root.join("app/assets");
-    fs::create_dir_all(&output_dir)?;
-    if keep_intermediate {
-        image.save(output_dir.join("basemap-nl-pre-lakes.png"))?;
+    if let Some(path) = intermediate {
+        image.save(path)?;
     }
-    for polygon in &lakes {
+    for polygon in &sources.lakes {
         fill_polygon(&mut image, &projection, polygon, Rgb(WATER));
     }
-    for line in &boundaries {
+    for line in &sources.boundaries {
         draw_line(&mut image, &projection, line, Rgb(BOUNDARY));
     }
+    Ok(image)
+}
 
+/// Writes the shipped basemap and records its digest in `BASEMAP-LICENSE`.
+fn publish(root: &Path, output_dir: &Path, image: &RgbImage) -> Result<(), Box<dyn Error>> {
     let output = output_dir.join("basemap-nl.png");
     image.save(&output)?;
     let digest = sha256_hex(&fs::read(&output)?);
@@ -90,20 +129,12 @@ fn parse_arguments() -> Result<bool, Box<dyn Error>> {
     }
 }
 
-fn repository_root() -> Result<PathBuf, io::Error> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .map(Path::to_path_buf)
-        .ok_or_else(|| io::Error::other("crate is not nested under the repository root"))
-}
-
 fn ensure_cached(
     agent: &ureq::Agent,
     cache: &Path,
-    name: &str,
-    url: &str,
+    source: &NaturalEarthFile,
 ) -> Result<PathBuf, Box<dyn Error>> {
+    let NaturalEarthFile { name, url } = *source;
     let destination = cache.join(name);
     if destination
         .metadata()
