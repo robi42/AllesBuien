@@ -13,6 +13,7 @@ name = "allesbuien"
 version = "0.1.0"
 dependencies = [
  "allesbuien-core",
+ "allesbuien-harness",
  "allesbuien-testkit",
  "cxx",
  "cxx-qt",
@@ -39,10 +40,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "allesbuien-harness"
+version = "0.1.0"
+dependencies = [
+ "allesbuien",
+ "allesbuien-core",
+ "allesbuien-testkit",
+ "cxx-qt-lib",
+ "tempfile",
+]
+
+[[package]]
 name = "allesbuien-testkit"
 version = "0.1.0"
 dependencies = [
  "allesbuien-core",
+ "tempfile",
 ]
 
 [[package]]

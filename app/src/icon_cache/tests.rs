@@ -1,15 +1,15 @@
 //! Regression coverage for persistent, fail-soft, bounded icon warming.
 
 use std::{
-    future::Future,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    task::{Context, Poll, Waker},
+    task::Poll,
 };
 
 use allesbuien_core::weather::{CurrentConditions, ForecastDay, WeatherData};
+use allesbuien_testkit::block_on;
 use tempfile::{TempDir, tempdir};
 
 use super::{IconCache, IconFuture, IconSource, condition_codes};
@@ -62,17 +62,6 @@ impl IconSource for CountingSource {
 
 fn cache(directory: &TempDir, source: Arc<CountingSource>) -> IconCache {
     IconCache::new(directory.path().to_path_buf(), source)
-}
-
-fn block_on<F: Future>(future: F) -> F::Output {
-    let mut context = Context::from_waker(Waker::noop());
-    let mut future = Box::pin(future);
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(output) => return output,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
 }
 
 #[test]

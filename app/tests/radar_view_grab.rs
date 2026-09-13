@@ -1,49 +1,13 @@
-use std::{
-    ffi::{CString, c_char},
-    path::PathBuf,
-    ptr::NonNull,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 
-use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
+use allesbuien::TimerIntervals;
 use allesbuien_core::radar::{RadarApi, RadarFuture};
-use allesbuien_testkit::{SETTLE_BUDGET, StubFeedApi, StubNotifier, amsterdam_west, pump_until};
-use cxx_qt_lib::{QImage, QString, QUrl, QVariant};
-
-#[repr(C)]
-struct QObject {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct QMetaObject {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct QQuickWindow {
-    _private: [u8; 0],
-}
-
-unsafe extern "C" {
-    #[link_name = "_ZN15QGuiApplication11focusWindowEv"]
-    fn focus_window() -> *mut QQuickWindow;
-    #[link_name = "_Z20qt_qFindChild_helperPK7QObjectRK7QStringRK11QMetaObject6QFlagsIN2Qt15FindChildOptionEE"]
-    fn find_child(
-        parent: *const QObject,
-        name: &QString,
-        meta_object: &QMetaObject,
-        options: i32,
-    ) -> *mut QObject;
-    #[link_name = "_ZNK7QObject8propertyEPKc"]
-    fn object_property(object: *const QObject, name: *const c_char) -> QVariant;
-    #[link_name = "_ZN12QQuickWindow10grabWindowEv"]
-    fn grab_window(window: *mut QQuickWindow) -> QImage;
-
-    #[link_name = "_ZN7QObject16staticMetaObjectE"]
-    static QOBJECT_STATIC_META_OBJECT: QMetaObject;
-}
+use allesbuien_harness::{
+    HarnessBuilder,
+    probe::{child, focused_window, grab_window, property},
+};
+use allesbuien_testkit::{SETTLE_BUDGET, StubFeedApi, pump_until};
+use cxx_qt_lib::QUrl;
 
 struct AnimatedRadarApi;
 
@@ -72,16 +36,6 @@ impl RadarApi for AnimatedRadarApi {
 )]
 fn renders_and_advances_provider_frames_when_radar_is_playing() {
     // Given: two visibly distinct PNG frames and a short injected playback interval.
-    let cache =
-        std::env::temp_dir().join(format!("allesbuien-radar-view-test-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&cache);
-    let services = CoreServices::new(CoreServiceConfig {
-        feed: Arc::new(StubFeedApi),
-        radar: Arc::new(AnimatedRadarApi),
-        notifier: Arc::new(StubNotifier),
-        location: amsterdam_west(),
-        radar_state_dir: cache.clone(),
-    });
     let intervals = TimerIntervals {
         radar_refresh: Duration::from_secs(300),
         radar_playback: Duration::from_millis(50),
@@ -89,13 +43,10 @@ fn renders_and_advances_provider_frames_when_radar_is_playing() {
     };
 
     // When: the real QML image binds the first provider URL and its Timer advances it.
-    let booted = AppBuilder::new(
-        services,
-        PathBuf::from("/nonexistent/test-theme"),
-        intervals,
-    )
-    .boot()
-    .expect("fake-wired GUI should boot");
+    let booted = HarnessBuilder::with_feed(Arc::new(StubFeedApi))
+        .radar(Arc::new(AnimatedRadarApi))
+        .intervals(intervals)
+        .boot();
     pump_until(
         "the radar run exposes both frames and the window is focused",
         SETTLE_BUDGET,
@@ -104,62 +55,45 @@ fn renders_and_advances_provider_frames_when_radar_is_playing() {
             let run_is_ready = booted
                 .radar_controller()
                 .is_some_and(|controller| *controller.frame_count() == 2);
-            // SAFETY: Category 8 — Qt owns the focus-window pointer and this call
-            // only tests it for null on the Qt GUI thread.
-            run_is_ready && unsafe { !focus_window().is_null() }
+            // SAFETY: on the GUI thread of the live booted app.
+            run_is_ready && unsafe { focused_window() }.is_some()
         },
     );
 
-    // SAFETY: Category 8 — Qt owns the focused QQuickWindow and QObject tree for
-    // `booted`'s lifetime; null pointers are rejected and calls stay on the GUI thread.
+    // SAFETY: the window and every item come from the probes on `booted`, which
+    // outlives this block, and every call stays on the GUI thread.
     unsafe {
-        let window = NonNull::new(focus_window()).expect("root QQuickWindow should be focused");
-        let overlay = NonNull::new(find_child(
-            window.as_ptr().cast::<QObject>(),
-            &QString::from("radarOverlay"),
-            &QOBJECT_STATIC_META_OBJECT,
-            1,
-        ))
-        .expect("radarOverlay should exist");
-        let source_name = CString::new("source").expect("static property name is valid");
-        let status_name = CString::new("status").expect("static property name is valid");
-
-        let deadline = Instant::now() + Duration::from_secs(1);
-        let first_source = loop {
-            booted.process_events();
-            let source = object_property(overlay.as_ptr(), source_name.as_ptr())
+        let window = focused_window().expect("root QQuickWindow should be focused");
+        let overlay = child(window, "radarOverlay").expect("radarOverlay should exist");
+        let source = || {
+            property(overlay, "source")
                 .value::<QUrl>()
-                .expect("Image source should be a QUrl");
-            if source.to_string().starts_with("image://radar/") {
-                break source;
-            }
-            assert!(Instant::now() < deadline, "provider URL should reach QML");
-            std::thread::yield_now();
+                .expect("Image source should be a QUrl")
         };
-        let first_image = grab_window(window.as_ptr());
 
-        let deadline = Instant::now() + Duration::from_secs(1);
-        let second_source = loop {
+        let mut first_source = None;
+        pump_until("the provider URL reaches QML", SETTLE_BUDGET, || {
             booted.process_events();
-            let source = object_property(overlay.as_ptr(), source_name.as_ptr())
-                .value::<QUrl>()
-                .expect("Image source should be a QUrl");
-            if source != first_source {
-                break source;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "playback Timer should advance the URL"
-            );
-            std::thread::yield_now();
-        };
+            first_source =
+                Some(source()).filter(|url| url.to_string().starts_with("image://radar/"));
+            first_source.is_some()
+        });
+        let first_source = first_source.expect("the wait returned with a provider URL");
+        let first_image = grab_window(window);
+        let mut second_source = None;
+        pump_until("the playback Timer advances the URL", SETTLE_BUDGET, || {
+            booted.process_events();
+            second_source = Some(source()).filter(|url| *url != first_source);
+            second_source.is_some()
+        });
+        let second_source = second_source.expect("the wait returned with an advanced URL");
         booted.process_events();
-        let second_image = grab_window(window.as_ptr());
+        let second_image = grab_window(window);
 
         // Then: Qt decoded both provider frames and their rendered pixels differ.
         assert!(second_source.to_string().starts_with("image://radar/"));
         assert_eq!(
-            object_property(overlay.as_ptr(), status_name.as_ptr()).value::<i32>(),
+            property(overlay, "status").value::<i32>(),
             Some(1),
             "radar overlay should report Image.Ready"
         );
@@ -170,6 +104,4 @@ fn renders_and_advances_provider_frames_when_radar_is_playing() {
             "rendered radar frames should differ"
         );
     }
-
-    std::fs::remove_dir_all(cache).expect("radar view cache should be removable");
 }

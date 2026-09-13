@@ -13,3 +13,6 @@ workspace = true
 # without a Qt toolchain and `pump_until` keeps a plain-Rust unit test.
 [dependencies]
 allesbuien-core = { path = "../../core" }
+
+[dev-dependencies]
+tempfile = "3"
