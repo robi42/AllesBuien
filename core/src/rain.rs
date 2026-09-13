@@ -113,12 +113,12 @@ fn summarise(points: Vec<RainPoint>) -> RainSeries {
         };
     };
     let peak_mmh = peak.mmh;
-    let peak_label = display_label(&peak.time_label);
+    let peak_label = time_label_or_unknown(&peak.time_label);
     let first = points
         .iter()
         .find(|point| point.code > 0)
         .expect("a positive peak implies a first wet sample");
-    let first_label = display_label(&first.time_label).to_owned();
+    let first_label = time_label_or_unknown(&first.time_label).to_owned();
     let line = format!("starts around {first_label}, max {peak_mmh:.2} mm/h at {peak_label}");
     let rain_soon = Some(RainSoon {
         minutes_until: first.minutes_from_start,
@@ -133,7 +133,8 @@ fn summarise(points: Vec<RainPoint>) -> RainSeries {
     }
 }
 
-fn display_label(label: &str) -> &str {
+/// A sample's clock label, or `?` for a row that carried none.
+fn time_label_or_unknown(label: &str) -> &str {
     if label.is_empty() { "?" } else { label }
 }
 

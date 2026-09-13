@@ -22,11 +22,11 @@ impl ffi::WeatherController {
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        cell(&self.forecast, index.row(), role)
+        role_value(&self.forecast, index.row(), role)
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
-        role_names()
+        forecast_role_names()
     }
 
     pub(crate) fn replace_forecast(mut self: Pin<&mut Self>, forecast: Vec<ForecastDay>) {
@@ -67,8 +67,7 @@ impl ForecastRow {
 }
 
 /// Reads one role of one row, or an invalid variant for anything out of range.
-#[must_use]
-pub fn cell(forecast: &[ForecastDay], row: i32, role: i32) -> QVariant {
+fn role_value(forecast: &[ForecastDay], row: i32, role: i32) -> QVariant {
     let Some(row) = usize::try_from(row)
         .ok()
         .and_then(|row| forecast.get(row))
@@ -88,9 +87,8 @@ pub fn cell(forecast: &[ForecastDay], row: i32, role: i32) -> QVariant {
     }
 }
 
-/// The QML-facing name of every role [`cell`] answers.
-#[must_use]
-pub fn role_names() -> QHash<QHashPair_i32_QByteArray> {
+/// The QML-facing name of every role [`role_value`] answers.
+fn forecast_role_names() -> QHash<QHashPair_i32_QByteArray> {
     let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
     for (role, name) in [
         (ForecastRole::Day.repr, "day"),

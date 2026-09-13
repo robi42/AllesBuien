@@ -240,7 +240,7 @@ impl ffi::RadarController {
             .set_observed_fraction(observed_fraction(first, count));
         self.as_mut()
             .set_forecast_boundary_visible(boundary_visible(first, count));
-        self.as_mut().rust_mut().observed = timeline.observed;
+        self.as_mut().rust_mut().observed_by_frame = timeline.observed;
         self.as_mut()
             .set_frame_count(i32::try_from(set.timestamps.len()).unwrap_or(i32::MAX));
         self.as_mut().set_current_frame_index(0);

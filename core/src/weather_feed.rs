@@ -79,21 +79,21 @@ pub(crate) fn parse_feed(
     longitude: f64,
 ) -> Result<WeatherData, WeatherError> {
     let payload: FeedPayload = serde_json::from_str(feed)?;
-    let station = nearest_station(&payload.actual.stationmeasurements, latitude, longitude);
-    let current = station.map(|value| {
-        let code = condition::code_from_icon_url(&value.icon_url).unwrap_or_default();
-        let dutch = value.condition.as_deref().unwrap_or_default();
+    let nearest = nearest_station(&payload.actual.stationmeasurements, latitude, longitude);
+    let current = nearest.map(|measurement| {
+        let code = condition::code_from_icon_url(&measurement.icon_url).unwrap_or_default();
+        let dutch = measurement.condition.as_deref().unwrap_or_default();
         CurrentConditions {
-            station_name: station_place_name(&value.station_name),
-            temperature: value.temperature,
-            feel_temperature: value.feel_temperature,
-            wind_speed: value.wind_speed,
-            wind_bft: value.wind_bft,
-            humidity: value.humidity,
-            condition: value.condition.clone(),
+            station_name: station_place_name(&measurement.station_name),
+            temperature: measurement.temperature,
+            feel_temperature: measurement.feel_temperature,
+            wind_speed: measurement.wind_speed,
+            wind_bft: measurement.wind_bft,
+            humidity: measurement.humidity,
+            condition: measurement.condition.clone(),
             condition_english: condition::describe(&code, dutch),
             condition_code: code,
-            observed_at: LocalTimestamp::from_feed(&value.timestamp),
+            observed_at: LocalTimestamp::from_feed(&measurement.timestamp),
         }
     });
     let mut forecast = payload.forecast.fivedayforecast;
@@ -118,23 +118,23 @@ fn nearest_station(
     longitude: f64,
 ) -> Option<&StationMeasurement> {
     stations.iter().min_by(|left, right| {
-        haversine_distance(left, latitude, longitude)
-            .total_cmp(&haversine_distance(right, latitude, longitude))
+        angular_separation(left, latitude, longitude)
+            .total_cmp(&angular_separation(right, latitude, longitude))
     })
 }
 
-/// Great-circle separation in radians.
+/// Great-circle separation in radians, by the haversine formula.
 ///
 /// The Earth's radius is deliberately left out: the result is only ever compared
 /// against another one, and a shared constant factor cannot change that ordering.
-fn haversine_distance(station: &StationMeasurement, latitude: f64, longitude: f64) -> f64 {
+fn angular_separation(station: &StationMeasurement, latitude: f64, longitude: f64) -> f64 {
     let latitude_delta = (station.lat - latitude).to_radians();
     let longitude_delta = (station.lon - longitude).to_radians();
     let station_latitude = station.lat.to_radians();
     let target_latitude = latitude.to_radians();
-    let a = (latitude_delta / 2.0).sin().powi(2)
+    let half_chord_squared = (latitude_delta / 2.0).sin().powi(2)
         + station_latitude.cos() * target_latitude.cos() * (longitude_delta / 2.0).sin().powi(2);
-    2.0 * a.sqrt().asin()
+    2.0 * half_chord_squared.sqrt().asin()
 }
 
 #[cfg(test)]

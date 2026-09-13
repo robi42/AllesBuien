@@ -155,7 +155,7 @@ mod tests {
     fn blames_the_connection_for_transport_faults_and_the_service_for_5xx() {
         // Given / When
         let service = radar_message(&RadarError::HttpStatus { status: 502 }, false);
-        let data = radar_message(
+        let malformed_metadata_message = radar_message(
             &RadarError::InvalidRunTimestamp {
                 timestamp: "bad".to_owned(),
             },
@@ -164,7 +164,10 @@ mod tests {
 
         // Then
         assert!(service.contains("not responding"), "{service}");
-        assert!(data.contains("unexpected data"), "{data}");
+        assert!(
+            malformed_metadata_message.contains("unexpected data"),
+            "{malformed_metadata_message}"
+        );
     }
 
     #[test]

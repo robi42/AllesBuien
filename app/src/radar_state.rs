@@ -70,7 +70,8 @@ pub struct RadarControllerRust {
     pub(crate) location_settings: Option<Arc<LocationSettings>>,
     pub(crate) runtime: Option<Handle>,
     pub(crate) pending_refresh: Option<JoinHandle<()>>,
-    pub(crate) observed: Vec<bool>,
+    /// Whether each frame of the current run is an observation rather than a forecast.
+    pub(crate) observed_by_frame: Vec<bool>,
     pub(crate) last_good: Option<FrameSet>,
 }
 
@@ -113,7 +114,7 @@ impl Default for RadarControllerRust {
             location_settings: None,
             runtime: None,
             pending_refresh: None,
-            observed: Vec::new(),
+            observed_by_frame: Vec::new(),
             last_good: None,
         }
     }

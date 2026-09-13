@@ -59,7 +59,7 @@ impl IconCache {
         stream::iter(keys)
             .map(|key| async move {
                 if !image_provider::has_icon(&key)
-                    && let Some(bytes) = self.entry(&key).await
+                    && let Some(bytes) = self.read_or_download(&key).await
                 {
                     image_provider::store_icon(&key, bytes.into());
                 }
@@ -70,7 +70,7 @@ impl IconCache {
     }
 
     /// Reads one icon off disk, downloading and persisting it on a miss.
-    async fn entry(&self, key: &str) -> Option<Vec<u8>> {
+    async fn read_or_download(&self, key: &str) -> Option<Vec<u8>> {
         let (directory, source) = (self.directory.as_ref()?, self.source.as_ref()?);
         let path = icon_store::entry_path(directory, key);
         if let Some(cached) = icon_store::read(&path) {
