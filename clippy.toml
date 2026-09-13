@@ -1,1 +1,5 @@
 too-many-lines-threshold = 50
+# Keep It Simple, measured on the syntax tree rather than on indentation: every
+# block counts - mod, impl, fn, closure, and control flow - and six deep is where
+# a function has stopped reading top to bottom.
+excessive-nesting-threshold = 6

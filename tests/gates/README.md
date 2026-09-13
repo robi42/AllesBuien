@@ -31,6 +31,13 @@ those declarations to work out which gates have a fixture at all, and it reads
 them by shape rather than by search — exactly as the slicer reads a gate header
 — so an indented or reworded copy is prose to both of them.
 
+New fixtures keep the `shell=bash` declaration on their first line, which
+the runner's contract needs, but silence no ShellCheck warning. The runner
+reads `gate`, `script`, `outcome`, and `expect` after sourcing the file, which
+ShellCheck cannot see, so each ends with one line that uses them instead:
+`: "$gate" "$script" "$outcome" "${expect[@]}"`, under a comment saying why.
+The older fixtures keep the SC2034 directive they were written with.
+
 `args` optionally passes arguments to the gate script, which is how the two
 contract fixtures point `bin/check-qml-contract` at a deliberately broken copy
 of `plugin.qmltypes` rather than at the real one.
@@ -70,7 +77,7 @@ commands would keep passing long after the real gate changed underneath it.
 
 ## Coverage
 
-Sixteen of the twenty gates are covered. The four that are not all need a
+Eighteen of the twenty-two gates are covered. The four that are not all need a
 compiled workspace, and a cold CXX-Qt build on this host is over twenty minutes:
 
 | gate | why it is out of scope |
@@ -79,6 +86,22 @@ compiled workspace, and a cold CXX-Qt build on this host is over twenty minutes:
 | workspace tests | same, plus a fixture would have to break a test to prove the runner reports it, which `cargo test` demonstrates on every red run anyway |
 | timezone matrix | runs the whole suite four more times; the property it guards is proven by the suite it re-runs, not by the loop |
 | core coverage | an instrumented rebuild, and the threshold is a number `cargo llvm-cov` enforces rather than a check written here |
+
+Two of the covered gates are design checks, and each is a proxy rather than a
+proof. `side-effect seams` names the constructors for processes, environment
+reads, HTTP clients, and the Tokio runtime, plus the ordinary spellings of
+process-global mutable state, and allows each in exactly one home; it reads
+only files under a `src/` directory and skips `#[cfg(test)]` blocks, because
+build scripts must read the environment and test fakes build failing clients on
+purpose. `trait surface` refuses a trait with more than four methods, required
+and default alike, counting only the methods one level inside the trait so a
+helper declared in a default body is not surface. Each constructor row has its
+own red fixture and the static row has two, at column zero and inside an inline
+module, so a broken row cannot hide behind a working one. Nesting depth is bounded by clippy's
+`excessive_nesting`, which rides on the excused `clippy` gate. The open-closed
+and Liskov principles have no fixture and no gate: nothing in the text of a
+Rust file says whether an extension needed an edit or a subtype broke a
+contract, and a gate that guessed would be a decoration.
 
 The trade is deliberate. All four are stock invocations of tools whose failure
 behaviour is not in question, whereas every gate covered here is either
@@ -107,8 +130,8 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-twenty-seven it runs, each of which fails loudly if its gate stops biting. One
-of those twenty-seven aims at the runner rather than at a gate: the slicer
+thirty-seven it runs, each of which fails loudly if its gate stops biting. One
+of those thirty-seven aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That

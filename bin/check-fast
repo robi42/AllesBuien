@@ -140,6 +140,113 @@ echo "==> gate: pinned action SHAs"
 unpinned=$(grep -rnE '^\s*-?\s*uses:' .github/workflows/*.yml | grep -vE '@[0-9a-f]{40} #' | sed 's/^/  /' || true)
 [[ -z "$unpinned" ]] || report 'workflow steps not pinned to a 40-character SHA with a tag comment:' "$unpinned"
 
+# Side-effect seams. Dependency inversion in this tree has a concrete shape:
+# processes, environment reads, HTTP clients, and the Tokio runtime are each
+# built in one named home behind FeedApi, RadarApi, Notifier, or a construction
+# seam, and nothing holds process-global mutable state but the image provider's
+# frame store, which Qt's C++ trampoline gives no other way to reach. A second
+# reqwest client in a controller compiles, passes every test that injects a
+# fake, and quietly stops being injectable. This gate names each constructor and
+# the one file allowed to call it.
+#
+# It is a belt over the spellings this tree uses, not a proof of injection: a
+# plain `static X: T` whose interior mutability hides inside T gets through, as
+# does a constructor reached under a re-export. Scope is production source only
+# - files under a src/ directory - because build scripts have to read the
+# environment and harness fakes build failing HTTP clients on purpose; a
+# #[cfg(test)] block inside a scanned file is skipped for the same reason.
+# Rules read the trimmed line, so a static in an inline module is as visible as
+# one at column zero.
+#
+# Rows are `extended regex<TAB>allowed files`. The regex travels through awk -v,
+# which unescapes backslashes, so every literal parenthesis is a bracket class.
+echo "==> gate: side-effect seams"
+seam_rules=(
+  $'Command::new[(]\tcore/src/notify.rs'
+  $'env::var\tcore/src/config.rs app/src/lib.rs'
+  $'reqwest::Client::(new|builder)[(]\tcore/src/weather.rs core/src/radar_transport.rs app/src/icon_cache.rs'
+  $'new_(multi|current)_thread[(]\tapp/src/services.rs'
+  $'^(pub([(][a-z]+[)])?[[:space:]]+)?static[[:space:]]+(mut[[:space:]]|[A-Z0-9_]+:[[:space:]]*([a-z_]+::)*(OnceLock|LazyLock|Mutex|RwLock|Atomic|RefCell|Cell))\tapp/src/image_provider.rs'
+  $'thread_local!\tapp/src/image_provider.rs'
+)
+seam_scan=$(
+  cat <<'AWK'
+BEGIN {
+  split(allowed, names, " ")
+  for (i in names) ok[names[i]] = 1
+}
+FNR == 1 { skip = 0; pending = 0 }
+{
+  line = $0
+  sub(/^[[:space:]]+/, "", line)
+  sub(/[[:space:]]+$/, "", line)
+}
+line ~ /^\/\// { next }
+skip {
+  if ($0 == closer) skip = 0
+  next
+}
+line == "#[cfg(test)]" {
+  pending = 1
+  indent = $0
+  sub(/[^[:space:]].*$/, "", indent)
+  next
+}
+pending && line ~ /^#\[/ { next }
+pending {
+  pending = 0
+  if (line ~ /\{$/) {
+    skip = 1
+    closer = indent "}"
+    next
+  }
+}
+line ~ pat && !(FILENAME in ok) { printf "  %s:%d: %s\n", FILENAME, FNR, line }
+AWK
+)
+misplaced_effects=$(for rule in "${seam_rules[@]}"; do
+  git ls-files '*/src/*.rs' | xargs -r awk -v pat="${rule%%$'\t'*}" -v allowed="${rule#*$'\t'}" "$seam_scan"
+done)
+[[ -z "$misplaced_effects" ]] || report 'side effects outside their one home (see the table in this gate):' "$misplaced_effects"
+
+# Trait surface. Interface segregation, measured the cheap way: every trait in
+# this tree has one or two methods, because each one is a seam a test fakes,
+# and a fake that has to stub five methods to exercise one is the smell of a
+# trait doing more than one job. Required and default methods count alike -
+# a default still widens what an implementor has to reason about. The input
+# contract is rustfmt output, which the formatting gate enforces: a trait's
+# closing brace sits alone at the trait's own indentation, and its methods sit
+# exactly one level inside it - so a helper fn declared in a default method's
+# body is deeper and is not surface.
+echo "==> gate: trait surface"
+trait_limit=4
+trait_scan=$(
+  cat <<'AWK'
+FNR == 1 { open = 0 }
+!open && $0 ~ /^[[:space:]]*(pub([(][a-z]+[)])?[[:space:]]+)?trait[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ && $0 !~ /[};][[:space:]]*$/ {
+  open = 1
+  start = FNR
+  count = 0
+  indent = $0
+  sub(/[^[:space:]].*$/, "", indent)
+  name = $0
+  sub(/^[[:space:]]*(pub([(][a-z]+[)])?[[:space:]]+)?trait[[:space:]]+/, "", name)
+  sub(/[^A-Za-z0-9_].*$/, "", name)
+  member = "^" indent "    (pub([(][a-z]+[)])?[[:space:]]+)?(async[[:space:]]+)?(unsafe[[:space:]]+)?fn[[:space:]]"
+  next
+}
+!open { next }
+$0 == indent "}" {
+  open = 0
+  if (count > limit) printf "  %s:%d: trait %s has %d methods (limit %d)\n", FILENAME, start, name, count, limit
+  next
+}
+$0 ~ member { count++ }
+AWK
+)
+fat_traits=$(git ls-files '*.rs' | xargs -r awk -v limit="$trait_limit" "$trait_scan")
+[[ -z "$fat_traits" ]] || report 'traits wider than one seam:' "$fat_traits"
+
 # Gate coverage. bin/check-gates says how many gates it proved by counting the
 # ones its fixtures named, so a gate that ships without a fixture is not merely
 # unproven, it is invisible: the summary keeps printing the same totals, every
