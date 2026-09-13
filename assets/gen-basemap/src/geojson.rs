@@ -62,30 +62,7 @@ impl Error for GeoJsonError {}
 /// Returns [`GeoJsonError`] when the document is invalid or contains a missing,
 /// malformed, or unsupported geometry.
 pub fn parse_polygons(bytes: &[u8]) -> Result<Vec<Polygon>, GeoJsonError> {
-    let document: Value = serde_json::from_slice(bytes)
-        .map_err(|error| GeoJsonError(format!("invalid GeoJSON: {error}")))?;
-    let geometries = feature_geometries(&document)?;
-    let mut polygons = Vec::new();
-    for geometry in geometries {
-        let geometry_type = string_field(geometry, "type")?;
-        let coordinates = geometry
-            .get("coordinates")
-            .ok_or_else(|| GeoJsonError("geometry has no coordinates".to_owned()))?;
-        match geometry_type {
-            "Polygon" => polygons.push(parse_polygon(coordinates)?),
-            "MultiPolygon" => {
-                for polygon in array(coordinates, "MultiPolygon coordinates")? {
-                    polygons.push(parse_polygon(polygon)?);
-                }
-            }
-            other => {
-                return Err(GeoJsonError(format!(
-                    "expected Polygon or MultiPolygon, found {other}"
-                )));
-            }
-        }
-    }
-    Ok(polygons)
+    parse_features(bytes, "Polygon", "MultiPolygon", parse_polygon)
 }
 
 /// Parses line-string and multiline-string features from a `GeoJSON` document.
@@ -94,30 +71,43 @@ pub fn parse_polygons(bytes: &[u8]) -> Result<Vec<Polygon>, GeoJsonError> {
 /// Returns [`GeoJsonError`] when the document is invalid or contains a missing,
 /// malformed, or unsupported geometry.
 pub fn parse_lines(bytes: &[u8]) -> Result<Vec<Vec<GeoPoint>>, GeoJsonError> {
+    parse_features(bytes, "LineString", "MultiLineString", parse_ring)
+}
+
+/// Collects every feature whose geometry is `single`, or `multi` of it.
+///
+/// `GeoJSON` pairs each geometry with a multi- form whose coordinates are an
+/// array of the single form's, so one walk serves both feature kinds: a single
+/// geometry parses once, a multi geometry parses each member, and any other type
+/// is refused by name rather than skipped.
+fn parse_features<T>(
+    bytes: &[u8],
+    single: &str,
+    multi: &str,
+    parse_one: impl Fn(&Value) -> Result<T, GeoJsonError>,
+) -> Result<Vec<T>, GeoJsonError> {
     let document: Value = serde_json::from_slice(bytes)
         .map_err(|error| GeoJsonError(format!("invalid GeoJSON: {error}")))?;
     let geometries = feature_geometries(&document)?;
-    let mut lines = Vec::new();
+    let mut parsed = Vec::new();
     for geometry in geometries {
         let geometry_type = string_field(geometry, "type")?;
         let coordinates = geometry
             .get("coordinates")
             .ok_or_else(|| GeoJsonError("geometry has no coordinates".to_owned()))?;
-        match geometry_type {
-            "LineString" => lines.push(parse_ring(coordinates)?),
-            "MultiLineString" => {
-                for line in array(coordinates, "MultiLineString coordinates")? {
-                    lines.push(parse_ring(line)?);
-                }
+        if geometry_type == single {
+            parsed.push(parse_one(coordinates)?);
+        } else if geometry_type == multi {
+            for member in array(coordinates, &format!("{multi} coordinates"))? {
+                parsed.push(parse_one(member)?);
             }
-            other => {
-                return Err(GeoJsonError(format!(
-                    "expected LineString or MultiLineString, found {other}"
-                )));
-            }
+        } else {
+            return Err(GeoJsonError(format!(
+                "expected {single} or {multi}, found {geometry_type}"
+            )));
         }
     }
-    Ok(lines)
+    Ok(parsed)
 }
 
 fn feature_geometries(document: &Value) -> Result<Vec<&Value>, GeoJsonError> {
@@ -171,4 +161,59 @@ fn string_field<'a>(value: &'a Value, name: &str) -> Result<&'a str, GeoJsonErro
         .get(name)
         .and_then(Value::as_str)
         .ok_or_else(|| GeoJsonError(format!("missing string field {name}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GeoPoint, parse_lines, parse_polygons};
+
+    #[test]
+    fn a_single_and_a_multi_geometry_both_yield_their_members() {
+        // Given
+        let document = br#"{"features":[
+            {"geometry":{"type":"LineString","coordinates":[[1,50],[2,51]]}},
+            {"geometry":{"type":"MultiLineString","coordinates":[[[3,52],[4,53]],[[5,54],[6,55]]]}}
+        ]}"#;
+
+        // When
+        let lines = parse_lines(document).expect("both geometry forms parse");
+
+        // Then
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[2][1], GeoPoint::new(6.0, 55.0));
+    }
+
+    #[test]
+    fn a_geometry_of_the_other_family_is_refused_by_name() {
+        // Given
+        let document = br#"{"features":[
+            {"geometry":{"type":"LineString","coordinates":[[1,50],[2,51]]}}
+        ]}"#;
+
+        // When
+        let error = parse_polygons(document).expect_err("a line is not a polygon");
+
+        // Then
+        assert_eq!(
+            error.to_string(),
+            "expected Polygon or MultiPolygon, found LineString"
+        );
+    }
+
+    #[test]
+    fn a_multi_geometry_whose_coordinates_are_not_an_array_names_its_type() {
+        // Given
+        let document = br#"{"features":[
+            {"geometry":{"type":"MultiPolygon","coordinates":7}}
+        ]}"#;
+
+        // When
+        let error = parse_polygons(document).expect_err("coordinates must be an array");
+
+        // Then
+        assert_eq!(
+            error.to_string(),
+            "MultiPolygon coordinates is not an array"
+        );
+    }
 }

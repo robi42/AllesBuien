@@ -96,7 +96,7 @@ mod tests {
     use std::io;
 
     use super::{radar_message, weather_message};
-    use crate::{radar::RadarError, weather::WeatherError};
+    use crate::{radar::RadarError, test_support::json_decode_error, weather::WeatherError};
 
     fn radar_samples() -> Vec<RadarError> {
         vec![
@@ -115,7 +115,7 @@ mod tests {
             WeatherError::ClientBuild(endpoint_error()),
             WeatherError::FeedRequest(endpoint_error()),
             WeatherError::RaintextRequest(endpoint_error()),
-            WeatherError::FeedDecode(decode_error()),
+            WeatherError::FeedDecode(json_decode_error()),
         ]
     }
 
@@ -155,7 +155,7 @@ mod tests {
     fn blames_the_connection_for_transport_faults_and_the_service_for_5xx() {
         // Given / When
         let service = radar_message(&RadarError::HttpStatus { status: 502 }, false);
-        let data = radar_message(
+        let malformed_metadata_message = radar_message(
             &RadarError::InvalidRunTimestamp {
                 timestamp: "bad".to_owned(),
             },
@@ -164,7 +164,10 @@ mod tests {
 
         // Then
         assert!(service.contains("not responding"), "{service}");
-        assert!(data.contains("unexpected data"), "{data}");
+        assert!(
+            malformed_metadata_message.contains("unexpected data"),
+            "{malformed_metadata_message}"
+        );
     }
 
     #[test]
@@ -185,15 +188,11 @@ mod tests {
     fn names_its_own_subject_so_the_two_panels_stay_distinguishable() {
         // Given / When
         let radar = radar_message(&RadarError::HttpStatus { status: 500 }, false);
-        let weather = weather_message(&WeatherError::FeedDecode(decode_error()), false);
+        let weather = weather_message(&WeatherError::FeedDecode(json_decode_error()), false);
 
         // Then
         assert!(radar.starts_with("Radar"), "{radar}");
         assert!(weather.starts_with("Weather"), "{weather}");
-    }
-
-    fn decode_error() -> serde_json::Error {
-        serde_json::from_str::<u8>("nope").expect_err("invalid json")
     }
 
     /// A reqwest error carrying the endpoint it failed on, as a live one does.

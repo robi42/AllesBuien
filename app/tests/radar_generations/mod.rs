@@ -43,12 +43,12 @@ impl Drop for PendingBytes {
     }
 }
 
-pub(crate) struct FakeRadarApi {
+pub(crate) struct SupersededRunRadarApi {
     metadata_calls: AtomicUsize,
     ordering: Arc<Mutex<Vec<String>>>,
 }
 
-impl FakeRadarApi {
+impl SupersededRunRadarApi {
     pub(crate) fn new() -> Self {
         Self {
             metadata_calls: AtomicUsize::new(0),
@@ -90,7 +90,7 @@ impl FakeRadarApi {
     }
 }
 
-impl RadarApi for FakeRadarApi {
+impl RadarApi for SupersededRunRadarApi {
     fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
         let call = self.metadata_calls.fetch_add(1, Ordering::SeqCst) + 1;
         self.record(format!("metadata-{call}"));

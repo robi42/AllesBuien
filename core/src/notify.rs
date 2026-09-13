@@ -8,12 +8,13 @@
 //! inside it.
 //!
 //! [`Notifier`] is the process boundary. `notify-send` is a subprocess, so it is
-//! the one thing here a test must not actually do; [`FakeNotifier`] records the
-//! calls instead, and it is what the wiring tests assert against.
+//! the one thing here a test must not actually do; the tests below record the
+//! calls through a fake instead.
 
-use std::cell::RefCell;
 use std::process::Command;
 use std::time::{Duration, Instant};
+
+use crate::rain::RainSoon;
 
 #[derive(Debug, thiserror::Error)]
 pub enum NotifyError {
@@ -33,27 +34,6 @@ pub trait Notifier {
 }
 
 #[derive(Debug, Default)]
-pub struct FakeNotifier {
-    calls: RefCell<Vec<(String, String)>>,
-}
-
-impl FakeNotifier {
-    #[must_use]
-    pub fn calls(&self) -> Vec<(String, String)> {
-        self.calls.borrow().clone()
-    }
-}
-
-impl Notifier for FakeNotifier {
-    fn send(&self, title: &str, body: &str) -> Result<(), NotifyError> {
-        self.calls
-            .borrow_mut()
-            .push((title.to_owned(), body.to_owned()));
-        Ok(())
-    }
-}
-
-#[derive(Debug, Default)]
 pub struct NotifySend;
 
 impl Notifier for NotifySend {
@@ -70,15 +50,8 @@ impl Notifier for NotifySend {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct RainSoon<'a> {
-    pub minutes_until: u32,
-    pub time_label: &'a str,
-    pub max_mmh: f64,
-}
-
-#[derive(Clone, Copy, Debug)]
 pub struct NotificationInput<'a> {
-    pub rain: Option<&'a RainSoon<'a>>,
+    pub rain: Option<&'a RainSoon>,
     pub location_label: &'a str,
 }
 
@@ -102,7 +75,7 @@ pub struct NotifyState {
 }
 
 #[must_use]
-pub fn should_notify(rain: Option<&RainSoon<'_>>, notify_state: &NotifyState) -> Option<String> {
+pub(crate) fn should_notify(rain: Option<&RainSoon>, notify_state: &NotifyState) -> Option<String> {
     if !notify_state.config.enabled {
         return None;
     }
@@ -135,7 +108,7 @@ pub fn should_notify(rain: Option<&RainSoon<'_>>, notify_state: &NotifyState) ->
 /// the adapter refused it. The cooldown and event key stay untouched in that
 /// case, so the next refresh retries the same announcement.
 pub fn maybe_send_rain_notification(
-    notifier: &impl Notifier,
+    notifier: &dyn Notifier,
     input: NotificationInput<'_>,
     notify_state: &mut NotifyState,
 ) -> Result<(), NotifyError> {
@@ -168,10 +141,33 @@ pub fn maybe_send_rain_notification(
 #[cfg(test)]
 mod tests {
     use super::{
-        FakeNotifier, NotificationInput, NotifyConfig, NotifyState, RainSoon,
+        NotificationInput, Notifier, NotifyConfig, NotifyError, NotifyState,
         maybe_send_rain_notification, should_notify,
     };
+    use crate::rain::RainSoon;
+    use std::cell::RefCell;
     use std::time::{Duration, Instant};
+
+    /// Records every dispatch instead of spawning `notify-send`.
+    #[derive(Debug, Default)]
+    struct FakeNotifier {
+        calls: RefCell<Vec<(String, String)>>,
+    }
+
+    impl FakeNotifier {
+        fn calls(&self) -> Vec<(String, String)> {
+            self.calls.borrow().clone()
+        }
+    }
+
+    impl Notifier for FakeNotifier {
+        fn send(&self, title: &str, body: &str) -> Result<(), NotifyError> {
+            self.calls
+                .borrow_mut()
+                .push((title.to_owned(), body.to_owned()));
+            Ok(())
+        }
+    }
 
     fn base_state() -> NotifyState {
         NotifyState {
@@ -185,10 +181,10 @@ mod tests {
         }
     }
 
-    fn rain(minutes_until: u32, time_label: &str, max_mmh: f64) -> RainSoon<'_> {
+    fn rain(minutes_until: u32, time_label: &str, max_mmh: f64) -> RainSoon {
         RainSoon {
             minutes_until,
-            time_label,
+            time_label: time_label.to_owned(),
             max_mmh,
         }
     }
@@ -197,7 +193,7 @@ mod tests {
     ///
     /// The wording has no accessor of its own — a dispatch is the only place it
     /// is observable — so every wording test has to arrange one.
-    fn dispatched(rain: &RainSoon<'_>) -> (String, String) {
+    fn dispatched(rain: &RainSoon) -> (String, String) {
         let notifier = FakeNotifier::default();
         let mut state = base_state();
         let input = NotificationInput {

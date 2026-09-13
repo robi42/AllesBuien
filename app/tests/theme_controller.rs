@@ -1,32 +1,13 @@
 use std::{
     fs::{self, FileTimes},
-    path::{Path, PathBuf},
+    path::Path,
     sync::Arc,
     time::{Duration, SystemTime},
 };
 
-use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
-use allesbuien_testkit::{StubFeedApi, StubNotifier, StubRadarApi, amsterdam_west};
-
-struct TestDirectory(PathBuf);
-
-impl TestDirectory {
-    fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "allesbuien-theme-controller-{}",
-            std::process::id()
-        ));
-        let _ = fs::remove_dir_all(&path);
-        fs::create_dir(&path).expect("theme test root should be created");
-        Self(path)
-    }
-}
-
-impl Drop for TestDirectory {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
+use allesbuien::TimerIntervals;
+use allesbuien_harness::HarnessBuilder;
+use allesbuien_testkit::StubFeedApi;
 
 struct ThemeFixture<'a> {
     name: &'a str,
@@ -69,8 +50,8 @@ fn replace_theme(root: &Path, current: &Path, fixture: &ThemeFixture<'_>) {
 )]
 fn exposes_colors_across_replacements_and_unavailability() {
     // Given: one GUI application and an injected Omarchy theme directory.
-    let root = TestDirectory::new();
-    let current = root.0.join("current-theme");
+    let root = tempfile::tempdir().expect("theme test root should be created");
+    let current = root.path().join("current-theme");
     write_theme(
         &current,
         &ThemeFixture {
@@ -81,22 +62,16 @@ fn exposes_colors_across_replacements_and_unavailability() {
             modified: Duration::from_secs(1),
         },
     );
-    let services = CoreServices::new(CoreServiceConfig {
-        feed: Arc::new(StubFeedApi),
-        radar: Arc::new(StubRadarApi),
-        notifier: Arc::new(StubNotifier),
-        location: amsterdam_west(),
-        radar_state_dir: root.0.join("radar"),
-    });
     let intervals = TimerIntervals {
         theme_poll: Duration::from_millis(25),
         ..TimerIntervals::default()
     };
 
     // When: construction reads Nord, two rm+rename switches occur, then the path vanishes/returns.
-    let mut booted = AppBuilder::new(services, current.clone(), intervals)
-        .boot()
-        .expect("theme-wired GUI should boot");
+    let mut booted = HarnessBuilder::with_feed(Arc::new(StubFeedApi))
+        .theme_path(current.clone())
+        .intervals(intervals)
+        .boot();
     let controller = booted.theme_controller().expect("controller should exist");
     assert!(*controller.theme_available());
     assert_eq!(controller.theme_mode().to_string(), "dark");
@@ -109,7 +84,7 @@ fn exposes_colors_across_replacements_and_unavailability() {
     assert_eq!(*controller.poll_interval_ms(), 25);
 
     replace_theme(
-        &root.0,
+        root.path(),
         &current,
         &ThemeFixture {
             name: "theme-b",
@@ -130,7 +105,7 @@ fn exposes_colors_across_replacements_and_unavailability() {
     );
 
     replace_theme(
-        &root.0,
+        root.path(),
         &current,
         &ThemeFixture {
             name: "theme-c",

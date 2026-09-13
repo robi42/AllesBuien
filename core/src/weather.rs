@@ -17,11 +17,11 @@ use thiserror::Error;
 
 use crate::{
     datetime::{LocalTimestamp, clock_shift_minutes},
-    rain::{self, RainSeries},
+    rain::parse_series,
     weather_feed::parse_feed,
 };
 
-pub use crate::rain::{RainPoint, RainSoon, code_to_mmh as rain_code_to_mmh};
+pub use crate::rain::{RainPoint, RainSoon};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -92,7 +92,7 @@ impl FeedApi for ReqwestFeedApi {
                 .await
                 .map_err(WeatherError::RaintextRequest)?;
             let parsed = parse_feed(&feed, latitude, longitude)?;
-            let rain = summarize_raintext_detail(&raintext, clock_shift_minutes());
+            let rain = parse_series(&raintext, clock_shift_minutes());
             Ok(WeatherData {
                 current: parsed.current,
                 forecast: parsed.forecast,
@@ -179,14 +179,9 @@ pub struct WeatherData {
     pub rain_series: Vec<RainPoint>,
 }
 
-/// Names this module's use of the raintext parser, so a refresh reads as one step.
-fn summarize_raintext_detail(raw: &str, clock_shift_minutes: i32) -> RainSeries {
-    rain::parse_series(raw, clock_shift_minutes)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{ReqwestFeedApi, parse_feed, rain_code_to_mmh, summarize_raintext_detail};
+    use super::{ReqwestFeedApi, parse_feed, parse_series};
     use crate::config::{DEFAULT_FEED_URL, DEFAULT_RAINTEXT_URL};
 
     const FEED_FIXTURE: &str = include_str!(concat!(
@@ -199,48 +194,10 @@ mod tests {
     ));
 
     #[test]
-    fn raintext_reports_a_dry_window_when_every_sample_is_zero() {
-        // Given
-        let raw = "000|12:00\n000|12:05\n";
-
-        // When
-        let summary = summarize_raintext_detail(raw, 0);
-
-        // Then
-        assert_eq!(summary.line, "next 2h: dry");
-        assert!(summary.rain_soon.is_none());
-    }
-
-    #[test]
-    fn raintext_reports_the_first_wet_minute_and_the_peak_intensity() {
-        // Given
-        let raw = "000|12:00\n050|12:05\n080|12:10\n060|12:15\n";
-
-        // When
-        let summary = summarize_raintext_detail(raw, 0);
-
-        // Then
-        let rain = summary.rain_soon.expect("expected rain_soon");
-        assert_eq!(rain.minutes_until, 5);
-        assert_eq!(rain.time_label, "12:05");
-        assert!(rain.max_mmh > 0.0);
-    }
-
-    #[test]
-    fn rain_code_conversion_rises_with_the_code_value() {
-        // Given / When
-        let low = rain_code_to_mmh(70);
-        let high = rain_code_to_mmh(90);
-
-        // Then
-        assert!(high > low);
-    }
-
-    #[test]
     fn live_fixtures_parse_offline() {
         // Given / When
         let weather = parse_feed(FEED_FIXTURE, 52.37, 4.84).expect("fixture should parse");
-        let rain = summarize_raintext_detail(RAINTEXT_FIXTURE, 0);
+        let rain = parse_series(RAINTEXT_FIXTURE, 0);
 
         // Then
         assert_eq!(weather.forecast.len(), 5);
@@ -256,22 +213,5 @@ mod tests {
         // Then
         assert_eq!(client.feed_url, DEFAULT_FEED_URL);
         assert_eq!(client.raintext_url, DEFAULT_RAINTEXT_URL);
-    }
-
-    #[test]
-    #[expect(
-        clippy::float_cmp,
-        reason = "the summary must carry the conversion's own result and its own peak through unchanged, so identity is the assertion; a tolerance would let a rounded or recomputed value pass"
-    )]
-    fn raintext_summary_exposes_the_whole_series_alongside_rain_soon() {
-        // Given / When
-        let summary = summarize_raintext_detail(RAINTEXT_FIXTURE, 0);
-
-        // Then
-        assert_eq!(summary.points.len(), 24);
-        assert_eq!(summary.points[0].source_time_label, "23:25");
-        assert_eq!(summary.points[1].mmh, rain_code_to_mmh(87));
-        let rain = summary.rain_soon.expect("expected rain_soon");
-        assert_eq!(rain.max_mmh, summary.peak_mmh);
     }
 }

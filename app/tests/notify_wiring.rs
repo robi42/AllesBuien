@@ -1,5 +1,4 @@
 use std::{
-    path::PathBuf,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -7,26 +6,24 @@ use std::{
     time::Duration,
 };
 
-use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
+use allesbuien::BootedApp;
 use allesbuien_core::{
     notify::{Notifier, NotifyConfig, NotifyError},
-    weather::{FeedApi, FeedFuture, RainSoon, WeatherData},
+    weather::{FeedApi, FeedFuture, WeatherData},
 };
-use allesbuien_testkit::{SETTLE_BUDGET, StubRadarApi, amsterdam_west, pump_until};
+use allesbuien_harness::HarnessBuilder;
+use allesbuien_testkit::{SETTLE_BUDGET, fixtures::rain_soon, pump_until};
 
-struct FakeFeedApi {
+/// A feed that numbers its answers and reports rain soon until switched dry.
+struct RainToggleFeedApi {
     calls: AtomicUsize,
     rain: AtomicBool,
 }
 
-impl FeedApi for FakeFeedApi {
+impl FeedApi for RainToggleFeedApi {
     fn fetch(&self, _latitude: f64, _longitude: f64) -> FeedFuture<'_> {
         let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
-        let rain = self.rain.load(Ordering::SeqCst).then(|| RainSoon {
-            minutes_until: 10,
-            time_label: String::from("14:10"),
-            max_mmh: 1.5,
-        });
+        let rain = self.rain.load(Ordering::SeqCst).then(rain_soon);
         Box::pin(async move {
             Ok(WeatherData {
                 current: None,
@@ -60,62 +57,47 @@ impl Notifier for FakeNotifier {
     }
 }
 
+/// Whether the window's rain summary names the feed's `call`th answer.
+fn shows_refresh(booted: &BootedApp, call: usize) -> bool {
+    booted.weather_controller().is_some_and(|controller| {
+        controller.rain_summary().to_string() == format!("refresh {call}")
+    })
+}
+
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "this single-process GUI scenario keeps setup, two refreshes, cooldown observation, and notifier assertions in one ordered narrative"
-)]
 fn dispatches_once_when_same_rain_event_refreshes_within_cooldown() {
     // Given: one GUI application with rain inside the configured threshold and fake ports.
-    let feed = Arc::new(FakeFeedApi {
+    let feed = Arc::new(RainToggleFeedApi {
         calls: AtomicUsize::new(0),
         rain: AtomicBool::new(true),
     });
     let notifier = Arc::new(FakeNotifier::default());
-    let services = CoreServices::new_with_notify(
-        CoreServiceConfig {
-            feed: feed.clone(),
-            radar: Arc::new(StubRadarApi),
-            notifier: notifier.clone(),
-            location: amsterdam_west(),
-            radar_state_dir: PathBuf::from("/nonexistent/test-radar"),
-        },
-        NotifyConfig {
-            enabled: true,
-            threshold_minutes: 30,
-            cooldown: Duration::from_secs(3_600),
-        },
-    );
-    let mut booted = AppBuilder::new(
-        services,
-        PathBuf::from("/nonexistent/test-theme"),
-        TimerIntervals::default(),
-    )
-    .boot()
-    .expect("fake-wired GUI should boot");
+    let mut booted = HarnessBuilder::with_feed(feed.clone())
+        .notifications(
+            notifier.clone(),
+            NotifyConfig {
+                enabled: true,
+                threshold_minutes: 30,
+                cooldown: Duration::from_secs(3_600),
+            },
+        )
+        .boot();
 
     // When: the initial refresh succeeds, then the same event refreshes again.
     pump_until("the boot refresh lands and notifies", SETTLE_BUDGET, || {
         booted.process_events();
-        notifier.calls().len() == 1
-            && booted
-                .weather_controller()
-                .is_some_and(|controller| controller.rain_summary().to_string() == "refresh 1")
+        notifier.calls().len() == 1 && shows_refresh(&booted, 1)
     });
     booted.refresh_weather();
     pump_until("the second refresh reaches the view", SETTLE_BUDGET, || {
         booted.process_events();
-        booted
-            .weather_controller()
-            .is_some_and(|controller| controller.rain_summary().to_string() == "refresh 2")
+        shows_refresh(&booted, 2)
     });
     feed.rain.store(false, Ordering::SeqCst);
     booted.refresh_weather();
     pump_until("the dry refresh reaches the view", SETTLE_BUDGET, || {
         booted.process_events();
-        booted
-            .weather_controller()
-            .is_some_and(|controller| controller.rain_summary().to_string() == "refresh 3")
+        shows_refresh(&booted, 3)
     });
 
     // Then: cooldown dedup suppresses the repeated event and dry data adds no dispatch.

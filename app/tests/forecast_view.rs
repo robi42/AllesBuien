@@ -1,116 +1,27 @@
-use std::{
-    ffi::{CString, c_char},
-    path::{Path, PathBuf},
-    ptr::NonNull,
-    sync::Arc,
+use std::sync::Arc;
+
+use allesbuien_core::weather::{FeedApi, FeedFuture};
+use allesbuien_harness::{
+    HarnessBuilder,
+    probe::{child, focused_window, grab_window, property, text_of},
 };
+use allesbuien_testkit::{SETTLE_BUDGET, fixtures::five_day_weather, pump_until};
+use cxx_qt_lib::QString;
 
-use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
-use allesbuien_core::weather::{
-    CurrentConditions, FeedApi, FeedFuture, ForecastDay, RainSoon, WeatherData,
-};
-use allesbuien_testkit::{SETTLE_BUDGET, StubNotifier, StubRadarApi, amsterdam_west, pump_until};
-use cxx_qt_lib::{QImage, QString, QVariant};
+/// A feed that always answers with the shared five-day fixture.
+struct FiveDayFeedApi;
 
-#[repr(C)]
-struct QObject {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct QMetaObject {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct QQuickWindow {
-    _private: [u8; 0],
-}
-
-unsafe extern "C" {
-    #[link_name = "_ZN15QGuiApplication11focusWindowEv"]
-    fn focus_window() -> *mut QQuickWindow;
-    #[link_name = "_Z20qt_qFindChild_helperPK7QObjectRK7QStringRK11QMetaObject6QFlagsIN2Qt15FindChildOptionEE"]
-    fn find_child(
-        parent: *const QObject,
-        name: &QString,
-        meta_object: &QMetaObject,
-        options: i32,
-    ) -> *mut QObject;
-    #[link_name = "_ZNK7QObject8propertyEPKc"]
-    fn object_property(object: *const QObject, name: *const c_char) -> QVariant;
-    #[link_name = "_ZN12QQuickWindow10grabWindowEv"]
-    fn grab_window(window: *mut QQuickWindow) -> QImage;
-    #[link_name = "_ZNK6QImage4saveERK7QStringPKci"]
-    fn save_image(image: &QImage, path: &QString, format: *const c_char, quality: i32) -> bool;
-
-    #[link_name = "_ZN7QObject16staticMetaObjectE"]
-    static QOBJECT_STATIC_META_OBJECT: QMetaObject;
-}
-
-struct FakeFeedApi;
-
-impl FeedApi for FakeFeedApi {
+impl FeedApi for FiveDayFeedApi {
     fn fetch(&self, _latitude: f64, _longitude: f64) -> FeedFuture<'_> {
-        Box::pin(async {
-            Ok(WeatherData {
-                current: Some(CurrentConditions {
-                    station_name: String::from("Amsterdam-West"),
-                    temperature: Some(19.5),
-                    feel_temperature: Some(18.8),
-                    wind_speed: Some(3.2),
-                    wind_bft: Some(2),
-                    humidity: Some(71.0),
-                    condition: Some(String::from("Half bewolkt")),
-                    ..CurrentConditions::default()
-                }),
-                forecast: (1..=5)
-                    .map(|day| ForecastDay {
-                        day: format!("2026-09-0{day}T00:00:00"),
-                        min_temperature_min: 10 + day,
-                        min_temperature_max: 11 + day,
-                        max_temperature_min: 18 + day,
-                        max_temperature_max: 19 + day,
-                        rain_chance: 20,
-                        condition: String::from("Bewolkt"),
-                        ..ForecastDay::default()
-                    })
-                    .collect(),
-                rain_line: String::from("starts around 14:10"),
-                rain_soon: Some(RainSoon {
-                    minutes_until: 10,
-                    time_label: String::from("14:10"),
-                    max_mmh: 1.5,
-                }),
-                rain_series: Vec::new(),
-            })
-        })
+        Box::pin(async { Ok(five_day_weather()) })
     }
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "this one-process GUI regression keeps forecast settling, QObject inspection, attribution checks, and rendered-image evidence in one ordered narrative"
-)]
 fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
-    // Given: the real QML window backed by the donor's five-day fake feed.
-    let services = CoreServices::new(CoreServiceConfig {
-        feed: Arc::new(FakeFeedApi),
-        radar: Arc::new(StubRadarApi),
-        notifier: Arc::new(StubNotifier),
-        location: amsterdam_west(),
-        radar_state_dir: PathBuf::from("/nonexistent/test-radar"),
-    });
-
+    // Given: the real QML window backed by a five-day fake feed.
     // When: boot and Qt event processing populate and render the forecast view.
-    let booted = AppBuilder::new(
-        services,
-        PathBuf::from("/nonexistent/test-theme"),
-        TimerIntervals::default(),
-    )
-    .boot()
-    .expect("fake-wired GUI should boot");
+    let booted = HarnessBuilder::with_feed(Arc::new(FiveDayFeedApi)).boot();
     pump_until(
         "the model carries five forecast rows and the window is focused",
         SETTLE_BUDGET,
@@ -121,83 +32,38 @@ fn shows_five_forecast_rows_and_visible_attribution_when_feed_is_available() {
                 .expect("controller should exist")
                 .row_count(&cxx_qt_lib::QModelIndex::default())
                 == 5;
-            // SAFETY: Category 8 — Qt owns the focus-window pointer and this call
-            // only tests it for null on the Qt GUI thread.
-            model_is_ready && unsafe { !focus_window().is_null() }
+            // SAFETY: on the GUI thread of the live booted app.
+            model_is_ready && unsafe { focused_window() }.is_some()
         },
     );
 
-    // SAFETY: Category 8 — Qt owns the focused QQuickWindow and its QObject tree for
-    // `booted`'s lifetime. Null pointers are rejected before use, ABI types come from
-    // cxx-qt-lib, and all calls stay on the Qt GUI thread.
+    // SAFETY: the window and every item come from the probes on `booted`, which
+    // outlives this block, and every call stays on the GUI thread.
     unsafe {
-        let window = NonNull::new(focus_window()).expect("root QQuickWindow should be focused");
-        let root = window.as_ptr().cast::<QObject>();
-        let forecast = NonNull::new(find_child(
-            root,
-            &QString::from("forecastView"),
-            &QOBJECT_STATIC_META_OBJECT,
-            1,
-        ))
-        .expect("forecastView should exist");
-        let attribution = NonNull::new(find_child(
-            root,
-            &QString::from("attribution"),
-            &QOBJECT_STATIC_META_OBJECT,
-            1,
-        ))
-        .expect("attribution should exist");
+        let window = focused_window().expect("root QQuickWindow should be focused");
+        let forecast = child(window, "forecastView").expect("forecastView should exist");
+        let attribution = child(window, "attribution").expect("attribution should exist");
 
         // Then: the rendered object tree exposes five rows, and the attribution
         // carries what Buienradar's free-data terms actually require — the
         // visible domain, hyperlinked to the root domain. Reading both off the
         // rendered Label is what makes this a licence check rather than a pin
         // on whatever sentence the UI happens to word it with today.
-        let count_name = CString::new("count").expect("static property name is valid");
-        let visible_name = CString::new("visible").expect("static property name is valid");
-        let text_name = CString::new("text").expect("static property name is valid");
-        let link_name = CString::new("link").expect("static property name is valid");
+        assert_eq!(property(forecast, "count").value::<i32>(), Some(5));
+        assert_eq!(property(attribution, "visible").value::<bool>(), Some(true));
+        assert_eq!(text_of(attribution), "Buienradar.nl");
         assert_eq!(
-            object_property(forecast.as_ptr(), count_name.as_ptr()).value::<i32>(),
-            Some(5)
-        );
-        assert_eq!(
-            object_property(attribution.as_ptr(), visible_name.as_ptr()).value::<bool>(),
-            Some(true)
-        );
-        assert_eq!(
-            object_property(attribution.as_ptr(), text_name.as_ptr())
-                .value::<QString>()
-                .map(|text| text.to_string())
-                .as_deref(),
-            Some("Buienradar.nl")
-        );
-        assert_eq!(
-            object_property(attribution.as_ptr(), link_name.as_ptr())
+            property(attribution, "link")
                 .value::<QString>()
                 .map(|link| link.to_string())
                 .as_deref(),
             Some("https://www.buienradar.nl")
         );
 
-        let image = grab_window(window.as_ptr());
+        let image = grab_window(window);
         assert!(
             !image.is_null(),
             "offscreen window grab should contain pixels"
         );
-        let evidence_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../.omo/evidence/task-18-omarchy-weather-app.png");
-        if evidence_path.parent().is_some_and(Path::exists) {
-            let evidence_path = QString::from(
-                evidence_path
-                    .to_str()
-                    .expect("evidence path should be valid UTF-8"),
-            );
-            let png = CString::new("PNG").expect("static image format is valid");
-            assert!(
-                save_image(&image, &evidence_path, png.as_ptr(), -1),
-                "offscreen window grab should save as PNG"
-            );
-        }
     }
 }

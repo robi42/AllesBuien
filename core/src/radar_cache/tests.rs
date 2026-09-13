@@ -13,9 +13,11 @@ use std::{
 
 use tempfile::tempdir;
 
+use super::{MAX_CACHED_RUNS, prune_runs};
+
 use crate::{
     radar::{GenerationId, RadarApi, RadarClient, RadarError, RadarFuture},
-    test_support::block_on,
+    test_support::{StaticRadarApi, block_on},
 };
 
 const ONE_FRAME_METADATA: &[u8] = br#"{
@@ -41,33 +43,6 @@ const OUT_OF_ORDER_METADATA: &[u8] = br#"{
         {"timestamp":"2026-08-29T21:40:00","url":"fake://frame-5"}
     ]
 }"#;
-
-struct StaticRadarApi {
-    metadata: &'static [u8],
-    downloads: AtomicUsize,
-}
-
-impl StaticRadarApi {
-    const fn serving(metadata: &'static [u8]) -> Self {
-        Self {
-            metadata,
-            downloads: AtomicUsize::new(0),
-        }
-    }
-}
-
-impl RadarApi for StaticRadarApi {
-    fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
-        Box::pin(async { Ok(self.metadata.to_vec()) })
-    }
-
-    fn frame<'a>(&'a self, _url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-        Box::pin(async move {
-            self.downloads.fetch_add(1, Ordering::Relaxed);
-            Ok(b"png".to_vec())
-        })
-    }
-}
 
 struct DelayedRadarApi {
     active: AtomicUsize,
@@ -241,4 +216,24 @@ fn refresh_never_prunes_the_run_it_just_materialised() {
         runs.join("202001010000/frame-0.png").exists(),
         "the current run must be excluded from pruning candidates"
     );
+}
+
+#[test]
+fn prune_removes_oldest_runs_when_eight_exist() {
+    // Given
+    let state = tempdir().expect("temp state");
+    let runs = state.path().join("runs");
+    std::fs::create_dir(&runs).expect("runs directory");
+    for index in 0..8 {
+        std::fs::create_dir(runs.join(format!("run-{index:02}"))).expect("run directory");
+    }
+
+    // When
+    prune_runs(state.path(), &runs.join("run-07")).expect("prune succeeds");
+
+    // Then
+    let remaining = std::fs::read_dir(runs).expect("read runs").count();
+    assert_eq!(remaining, MAX_CACHED_RUNS);
+    assert!(!state.path().join("runs/run-00").exists());
+    assert!(!state.path().join("runs/run-01").exists());
 }

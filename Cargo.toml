@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "app", "app/testkit", "assets/gen-basemap"]
+members = ["core", "app", "app/testkit", "app/harness", "assets/gen-basemap"]
 resolver = "2"
 
 [workspace.dependencies]

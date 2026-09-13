@@ -59,6 +59,7 @@ mod tests {
     };
 
     use super::{FrameSet, LoadedRefresh};
+    use crate::radar_clock::minutes_of;
 
     fn loaded(stamps: &[&str], time_offset_hours: Option<i32>) -> LoadedRefresh {
         LoadedRefresh {
@@ -76,11 +77,6 @@ mod tests {
             },
             frames: stamps.iter().map(|_| Vec::new().into()).collect(),
         }
-    }
-
-    fn minutes_of(label: &str) -> i32 {
-        let (hours, minutes) = label.split_once(':').expect("expected a HH:MM label");
-        hours.parse::<i32>().expect("hours") * 60 + minutes.parse::<i32>().expect("minutes")
     }
 
     #[test]

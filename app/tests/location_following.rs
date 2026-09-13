@@ -1,15 +1,11 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
-use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
 use allesbuien_core::{
     location_settings::LocationSettings,
     weather::{FeedApi, FeedFuture, WeatherData},
 };
-use allesbuien_testkit::{SETTLE_BUDGET, StubNotifier, StubRadarApi, pump_until};
+use allesbuien_harness::HarnessBuilder;
+use allesbuien_testkit::{SETTLE_BUDGET, clear_weather, pump_until, write_weather};
 
 /// A feed that answers with nothing and remembers where it was asked about.
 struct RecordingFeedApi {
@@ -38,17 +34,6 @@ impl FeedApi for RecordingFeedApi {
             })
         })
     }
-}
-
-fn set_location(home: &Path, json: &str) {
-    let path = home.join(".local/state/omarchy/settings/weather.json");
-    fs::create_dir_all(path.parent().expect("settings parent")).expect("create settings");
-    fs::write(path, json).expect("write the desktop location");
-}
-
-fn clear_location(home: &Path) {
-    fs::remove_file(home.join(".local/state/omarchy/settings/weather.json"))
-        .expect("remove the desktop location");
 }
 
 /// The five bound values this harness reads back out of the two bridges.
@@ -81,27 +66,16 @@ fn shown(booted: &allesbuien::BootedApp) -> Shown {
 fn follows_the_desktop_location_setting_while_the_window_stays_open() {
     // Given: one GUI application over a temporary home that already names Utrecht.
     let home = tempfile::tempdir().expect("temporary home");
-    set_location(
+    write_weather(
         home.path(),
         r#"{"name":"Utrecht","latitude":52.09,"longitude":5.12}"#,
     );
     let feed = Arc::new(RecordingFeedApi {
         asked: Mutex::new(Vec::new()),
     });
-    let services = CoreServices::new(CoreServiceConfig {
-        feed: feed.clone(),
-        radar: Arc::new(StubRadarApi),
-        notifier: Arc::new(StubNotifier),
-        location: LocationSettings::watching(home.path().to_owned()),
-        radar_state_dir: home.path().join("radar"),
-    });
-    let mut booted = AppBuilder::new(
-        services,
-        PathBuf::from("/nonexistent/test-theme"),
-        TimerIntervals::default(),
-    )
-    .boot()
-    .expect("location-wired GUI should boot");
+    let mut booted = HarnessBuilder::with_feed(feed.clone())
+        .location(LocationSettings::watching(home.path().to_owned()))
+        .boot();
 
     let opened = shown(&booted);
     let (utrecht_x, utrecht_y) = opened.marker.expect("Utrecht is on the Dutch radar");
@@ -118,7 +92,7 @@ fn follows_the_desktop_location_setting_while_the_window_stays_open() {
     );
 
     // When: `omarchy-weather-location --set Groningen 53.22,6.57` rewrites it.
-    set_location(
+    write_weather(
         home.path(),
         r#"{"name":"Groningen","latitude":53.22,"longitude":6.57}"#,
     );
@@ -148,7 +122,7 @@ fn follows_the_desktop_location_setting_while_the_window_stays_open() {
     assert_eq!(feed.asked(), [(52.09, 5.12), (53.22, 6.57)]);
 
     // When: `omarchy-weather-location --clear` removes the file outright.
-    clear_location(home.path());
+    clear_weather(home.path());
     booted.poll_location();
     let cleared = shown(&booted);
 
@@ -159,7 +133,7 @@ fn follows_the_desktop_location_setting_while_the_window_stays_open() {
     assert!(cleared.marker.is_some(), "Amsterdam-West is on the radar");
 
     // When: the desktop is set to a place this app's radar cannot cover.
-    set_location(
+    write_weather(
         home.path(),
         r#"{"name":"Berlin","latitude":52.52,"longitude":13.4}"#,
     );

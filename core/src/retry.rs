@@ -91,7 +91,7 @@ mod tests {
     use std::{io, time::Duration};
 
     use super::{MAX_ATTEMPTS, backoff, is_retryable, is_weather_retryable};
-    use crate::{radar::RadarError, weather::WeatherError};
+    use crate::{radar::RadarError, test_support::json_decode_error, weather::WeatherError};
 
     #[test]
     fn retries_a_transport_fault_because_the_endpoint_stalls_intermittently() {
@@ -135,9 +135,7 @@ mod tests {
     fn gives_up_on_weather_failures_that_repeat_identically() {
         // Given: failures caused before requests start and after a body arrives.
         let client = WeatherError::ClientBuild(endpoint_error());
-        let malformed = WeatherError::FeedDecode(
-            serde_json::from_str::<u8>("not json").expect_err("fixture must be malformed"),
-        );
+        let malformed = WeatherError::FeedDecode(json_decode_error());
 
         // When / Then
         assert!(!is_weather_retryable(&client));

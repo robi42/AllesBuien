@@ -1,6 +1,6 @@
 use std::{error::Error, path::PathBuf};
 
-use gen_basemap::{HEIGHT, LAND, MapProjection, WATER, WIDTH, geojson::GeoPoint};
+use gen_basemap::{HEIGHT, LAND, MapProjection, WATER, WIDTH, geojson::GeoPoint, repository_root};
 use image::{GenericImageView as _, Rgb};
 
 const TOLERANCE: u8 = 12;
@@ -13,11 +13,6 @@ const SAMPLES: [(&str, GeoPoint, [u8; 3]); 6] = [
     ("Groningen", GeoPoint::new(6.57, 53.22), LAND),
 ];
 
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "the six fixed geography samples are inside the projection extent, so rounding deliberately selects their non-negative canvas pixels"
-)]
 fn main() -> Result<(), Box<dyn Error>> {
     let input = input_path()?;
     let image = image::open(&input)?;
@@ -36,8 +31,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let projection = MapProjection::default();
     let mut failures = Vec::new();
     for (name, point, expected) in SAMPLES {
-        let pixel = projection.to_pixel(point);
-        let actual = *rgb.get_pixel(pixel.x.round() as u32, pixel.y.round() as u32);
+        let (column, row) = projection.to_pixel_index(point);
+        let actual = *rgb.get_pixel(column, row);
         if !matches_color(actual, Rgb(expected)) {
             failures.push(format!(
                 "{name}: expected #{:02X}{:02X}{:02X}, found #{:02X}{:02X}{:02X}",
@@ -62,14 +57,6 @@ fn input_path() -> Result<PathBuf, Box<dyn Error>> {
         [flag, path] if flag == "--input" => Ok(PathBuf::from(path)),
         _ => Err("usage: check [--input <path>]".into()),
     }
-}
-
-fn repository_root() -> Result<PathBuf, Box<dyn Error>> {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .map(std::path::Path::to_path_buf)
-        .ok_or_else(|| "crate is not nested under the repository root".into())
 }
 
 fn matches_color(actual: Rgb<u8>, expected: Rgb<u8>) -> bool {

@@ -9,13 +9,18 @@ use allesbuien_core::{
     location::LocationConfig,
     location_settings::LocationSettings,
     rain::RainPoint,
-    status::{NO_READING, RAIN_UNAVAILABLE, UNAVAILABLE, WEATHER_UNAVAILABLE},
+    status::{RAIN_UNAVAILABLE, WEATHER_UNAVAILABLE},
     weather::{FeedApi, ForecastDay},
 };
 use cxx_qt_lib::{QList, QString, QStringList};
 use tokio::runtime::Handle;
 
-use crate::{icon_cache::IconCache, services::NotificationService};
+use crate::{
+    conditions_view::ConditionsView,
+    icon_cache::IconCache,
+    qt_values::interval_ms,
+    services::{NotificationService, TimerIntervals},
+};
 
 pub(crate) struct WeatherControllerConfig {
     pub(crate) feed: Arc<dyn FeedApi>,
@@ -68,19 +73,22 @@ pub struct WeatherControllerRust {
 
 impl Default for WeatherControllerRust {
     fn default() -> Self {
+        // The cold-failure panel is `ConditionsView`'s own default: `apply_result`
+        // returns early on error and never builds a view, so these are what a
+        // first failed fetch leaves on screen.
+        let conditions = ConditionsView::default();
+        let defaults = TimerIntervals::default();
         Self {
             location_name: QString::default(),
             location_source: QString::default(),
-            station_name: UNAVAILABLE.into(),
-            // The cold-failure hero comes from here, not from `ConditionsView`:
-            // `apply_result` returns early on error and never builds one.
-            temperature: NO_READING.into(),
-            feels_like: QString::default(),
-            wind: UNAVAILABLE.into(),
-            humidity: QString::default(),
-            condition: UNAVAILABLE.into(),
-            condition_icon_url: QString::default(),
-            observed_label: QString::default(),
+            station_name: (&conditions.station_name).into(),
+            temperature: (&conditions.temperature).into(),
+            feels_like: (&conditions.feels_like).into(),
+            wind: (&conditions.wind).into(),
+            humidity: (&conditions.humidity).into(),
+            condition: (&conditions.condition).into(),
+            condition_icon_url: (&conditions.icon_url).into(),
+            observed_label: (&conditions.observed_label).into(),
             rain_summary: RAIN_UNAVAILABLE.into(),
             rain_wet: false,
             rain_levels: QList::<f64>::default(),
@@ -88,8 +96,8 @@ impl Default for WeatherControllerRust {
             rain_cursor_fraction: 0.0,
             rain_cursor_visible: false,
             status: WEATHER_UNAVAILABLE.into(),
-            refresh_interval_ms: 600_000,
-            location_poll_interval_ms: 2_000,
+            refresh_interval_ms: interval_ms(defaults.weather_refresh),
+            location_poll_interval_ms: interval_ms(defaults.location_poll),
             forecast: Vec::new(),
             rain_points: Vec::new(),
             radar_frame_label: String::new(),

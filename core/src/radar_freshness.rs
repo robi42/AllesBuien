@@ -37,7 +37,7 @@ use crate::radar_timeline::instant;
 /// Erring high is deliberate. Accepting a slightly old run costs a few minutes
 /// of slightly old past; refusing a healthy one costs a second HTTP request on
 /// every single refresh, forever, for nothing.
-pub const STALE_RUN_THRESHOLD_MINUTES: i64 = 30;
+pub(crate) const STALE_RUN_THRESHOLD_MINUTES: i64 = 30;
 
 /// Offsets a real civil timezone can declare; anything else is not this schema.
 const CIVIL_OFFSET_HOURS: RangeInclusive<i32> = -14..=14;
@@ -74,7 +74,7 @@ pub enum RunFreshness {
 /// couple of minutes early on purpose, and only lateness is evidence of an
 /// archived answer.
 #[must_use]
-pub fn run_freshness(
+pub(crate) fn run_freshness(
     run_timestamp: &str,
     vendor_offset_hours: Option<i32>,
     now: Timestamp,
@@ -119,19 +119,8 @@ struct RunHeader {
 
 #[cfg(test)]
 mod tests {
-    use jiff::Timestamp;
-
     use super::{RunFreshness, metadata_freshness, run_freshness};
-
-    /// 2 September 2026, 15:50 Amsterdam — the instant the live sample was taken.
-    ///
-    /// Written as an offset-qualified instant rather than a zone name so the
-    /// assertions below mean the same thing in every zone the matrix runs.
-    fn sample_instant() -> Timestamp {
-        "2026-09-02T15:50:00+02:00"
-            .parse()
-            .expect("a literal instant should parse")
-    }
+    use crate::test_support::sample_instant;
 
     #[test]
     fn a_run_five_minutes_behind_the_present_keeps_its_history() {

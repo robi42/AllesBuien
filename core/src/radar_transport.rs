@@ -154,19 +154,15 @@ impl RadarApi for ReqwestRadarApi {
 mod tests {
     use std::sync::Mutex;
 
-    use jiff::Timestamp;
-
     use super::{BytesSource, MetadataUrls, ReqwestRadarApi, metadata_of_a_current_run};
-    use crate::{config::DEFAULT_RADAR_URL, radar::RadarFuture, test_support::block_on};
+    use crate::{
+        config::DEFAULT_RADAR_URL,
+        radar::RadarFuture,
+        test_support::{block_on, sample_instant},
+    };
 
     const STALE_RUN: &[u8] = br#"{"timestamp":"2026-09-02T12:18:00","timeOffset":2,"times":[]}"#;
     const CURRENT_RUN: &[u8] = br#"{"timestamp":"2026-09-02T13:45:00","timeOffset":2,"times":[]}"#;
-
-    fn sample_instant() -> Timestamp {
-        "2026-09-02T15:50:00+02:00"
-            .parse()
-            .expect("a literal instant should parse")
-    }
 
     /// Answers each window with a canned body and records what was asked for.
     struct StubSource {

@@ -1,5 +1,4 @@
 use std::{
-    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -7,28 +6,20 @@ use std::{
     time::Duration,
 };
 
-use allesbuien::{
-    AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals,
-    weather_controller::ffi::ForecastRole,
-};
-use allesbuien_core::{
-    datetime::{LocalTimestamp, SOURCE_TIMEZONE},
-    rain::parse_series,
-    weather::{CurrentConditions, FeedApi, FeedFuture, ForecastDay, RainSoon, WeatherData},
-};
-use allesbuien_testkit::{SETTLE_BUDGET, StubNotifier, StubRadarApi, amsterdam_west, pump_until};
+use allesbuien::{TimerIntervals, weather_controller::ffi::ForecastRole};
+use allesbuien_core::weather::{FeedApi, FeedFuture, WeatherData};
+use allesbuien_harness::HarnessBuilder;
+use allesbuien_testkit::{SETTLE_BUDGET, fixtures::five_day_weather, pump_until};
 use cxx_qt_lib::{QByteArray, QModelIndex, QString};
 
-struct FakeFeedApi {
+/// A feed that answers with the shared five-day fixture, or with nothing at all
+/// once switched empty, and counts how often it was asked.
+struct FiveDayOrEmptyFeedApi {
     calls: AtomicUsize,
     empty: AtomicBool,
 }
 
-impl FeedApi for FakeFeedApi {
-    #[expect(
-        clippy::too_many_lines,
-        reason = "this test-only feed keeps its complete deterministic weather response beside the single GUI scenario that consumes it"
-    )]
+impl FeedApi for FiveDayOrEmptyFeedApi {
     fn fetch(&self, _latitude: f64, _longitude: f64) -> FeedFuture<'_> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let empty = self.empty.load(Ordering::SeqCst);
@@ -42,49 +33,7 @@ impl FeedApi for FakeFeedApi {
                     rain_series: Vec::new(),
                 });
             }
-            Ok(WeatherData {
-                current: Some(CurrentConditions {
-                    // Deliberately unequal to the configured location label, so
-                    // the header assertions below fail if the two are swapped.
-                    station_name: String::from("Schiphol"),
-                    temperature: Some(19.5),
-                    feel_temperature: Some(18.8),
-                    wind_speed: Some(3.2),
-                    wind_bft: Some(2),
-                    humidity: Some(71.0),
-                    condition: Some(String::from("Half bewolkt")),
-                    condition_code: String::from("qq"),
-                    observed_at: LocalTimestamp::from_feed_in(
-                        "2026-08-31T17:50:00",
-                        SOURCE_TIMEZONE,
-                    ),
-                    ..CurrentConditions::default()
-                }),
-                forecast: (1..=5)
-                    .map(|day| ForecastDay {
-                        day: format!("2026-09-0{day}T00:00:00"),
-                        min_temperature_min: 10 + day,
-                        min_temperature_max: 11 + day,
-                        max_temperature_min: 18 + day,
-                        max_temperature_max: 19 + day,
-                        rain_chance: 20,
-                        condition: String::from("Bewolkt"),
-                        condition_code: String::from("f"),
-                        day_at: LocalTimestamp::from_feed_in(
-                            &format!("2026-09-0{day}T12:00:00"),
-                            SOURCE_TIMEZONE,
-                        ),
-                        ..ForecastDay::default()
-                    })
-                    .collect(),
-                rain_line: String::from("starts around 14:10"),
-                rain_soon: Some(RainSoon {
-                    minutes_until: 10,
-                    time_label: String::from("14:10"),
-                    max_mmh: 1.5,
-                }),
-                rain_series: parse_series("000|14:00\n000|14:05\n077|14:10\n090|14:15\n", 0).points,
-            })
+            Ok(five_day_weather())
         })
     }
 }
@@ -100,16 +49,9 @@ impl FeedApi for FakeFeedApi {
 )]
 fn populates_weather_properties_when_boot_triggers_initial_refresh() {
     // Given: one GUI application builder with a fake feed and a long recurring interval.
-    let feed = Arc::new(FakeFeedApi {
+    let feed = Arc::new(FiveDayOrEmptyFeedApi {
         calls: AtomicUsize::new(0),
         empty: AtomicBool::new(false),
-    });
-    let services = CoreServices::new(CoreServiceConfig {
-        feed: feed.clone(),
-        radar: Arc::new(StubRadarApi),
-        notifier: Arc::new(StubNotifier),
-        location: amsterdam_west(),
-        radar_state_dir: PathBuf::from("/nonexistent/test-radar"),
     });
     let intervals = TimerIntervals {
         weather_refresh: Duration::from_secs(60),
@@ -117,13 +59,9 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
     };
 
     // When: boot constructs the controller and its initial async refresh completes.
-    let mut booted = AppBuilder::new(
-        services,
-        PathBuf::from("/nonexistent/test-theme"),
-        intervals,
-    )
-    .boot()
-    .expect("fake-wired GUI should boot");
+    let mut booted = HarnessBuilder::with_feed(feed.clone())
+        .intervals(intervals)
+        .boot();
     pump_until("the boot refresh fills five rows", SETTLE_BUDGET, || {
         booted.process_events();
         booted

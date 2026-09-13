@@ -58,10 +58,12 @@ AllesBuien/
 | Application construction and dependency injection | `app/src/bootstrap.rs`, `app/src/services.rs` | Qt ownership, Tokio runtime, controller seams |
 | Weather bridge | `app/src/weather_controller.rs` | Async feed refresh and QML list model |
 | Radar bridge and image delivery | `app/src/radar_controller.rs`, `app/src/image_provider.rs` | Generation-safe playback and `image://radar` provider |
+| What both bridges share | `app/src/refresh_job.rs`, `app/src/location_follow.rs`, `app/src/qt_values.rs` | The retry ladder and background refresh work, the location-moved check, and Duration/Option-to-Qt conversions |
 | Theme bridge | `app/src/theme_controller.rs` | Replacement-aware 2-second polling |
 | Desktop UI | `app/qml/Main.qml` | Radar, current conditions, forecast, inline statuses, attribution |
 | GUI integration tests | `app/tests/` | Exactly one GUI test and one `QGuiApplication` per file/executable |
 | Shared GUI test doubles | `app/testkit/` | Qt-free crate: the inert stubs several harnesses need, plus `pump_until` |
+| Shared GUI boot and object-tree probes | `app/harness/` | Qt-linked dev crate: `HarnessBuilder` and the `unsafe` rendered-tree probes |
 | Basemap provenance | `assets/BASEMAP-LICENSE` | Pinned Natural Earth source and shipped-image SHA-256 |
 | Packaging | `pkgbuild/PKGBUILD`, `pkgbuild/allesbuien.desktop` | Static package metadata and four installed payloads |
 | Quality gates | `bin/test`, `bin/check-fast`, `bin/check-qml-contract` | `bin/test` is the whole list and CI runs it; the other two are its cheap and post-build halves |

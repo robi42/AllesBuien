@@ -1,9 +1,10 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
+use allesbuien::TimerIntervals;
 use allesbuien_core::datetime::LocalTimestamp;
-use allesbuien_testkit::{SETTLE_BUDGET, StubFeedApi, StubNotifier, amsterdam_west, pump_until};
-use radar_generations::FakeRadarApi;
+use allesbuien_harness::HarnessBuilder;
+use allesbuien_testkit::{SETTLE_BUDGET, StubFeedApi, pump_until};
+use radar_generations::SupersededRunRadarApi;
 
 mod radar_generations;
 
@@ -31,16 +32,7 @@ fn assert_local_clock_label(label: &str) {
 )]
 fn cancels_and_awaits_superseded_refresh_before_starting_its_replacement() {
     // Given: one GUI application, deterministic radar generations, and injected timer intervals.
-    let radar = Arc::new(FakeRadarApi::new());
-    let cache = std::env::temp_dir().join(format!("allesbuien-radar-test-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&cache);
-    let services = CoreServices::new(CoreServiceConfig {
-        feed: Arc::new(StubFeedApi),
-        radar: radar.clone(),
-        notifier: Arc::new(StubNotifier),
-        location: amsterdam_west(),
-        radar_state_dir: cache.clone(),
-    });
+    let radar = Arc::new(SupersededRunRadarApi::new());
     let intervals = TimerIntervals {
         radar_refresh: Duration::from_secs(300),
         radar_playback: Duration::from_millis(400),
@@ -48,13 +40,10 @@ fn cancels_and_awaits_superseded_refresh_before_starting_its_replacement() {
     };
 
     // When: construction loads generation one, playback advances, and generation two is superseded.
-    let mut booted = AppBuilder::new(
-        services,
-        PathBuf::from("/nonexistent/test-theme"),
-        intervals,
-    )
-    .boot()
-    .expect("fake-wired GUI should boot");
+    let mut booted = HarnessBuilder::with_feed(Arc::new(StubFeedApi))
+        .radar(radar.clone())
+        .intervals(intervals)
+        .boot();
     pump_until("generation one exposes two frames", SETTLE_BUDGET, || {
         booted.process_events();
         booted
@@ -171,5 +160,4 @@ fn cancels_and_awaits_superseded_refresh_before_starting_its_replacement() {
             .iter()
             .any(|event| event.starts_with("frame-fake://stale/"))
     );
-    std::fs::remove_dir_all(cache).expect("radar test cache should be removable");
 }

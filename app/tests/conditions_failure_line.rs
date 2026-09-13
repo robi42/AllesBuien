@@ -9,89 +9,14 @@
 //! the forecast list must contain no second copy of the sentence, and the hero
 //! must ask for no more width than it was given.
 
-use std::{
-    ffi::{CString, c_char},
-    path::PathBuf,
-    ptr::NonNull,
-    sync::Arc,
-};
+use std::sync::Arc;
 
-use allesbuien::{AppBuilder, BootedApp, CoreServiceConfig, CoreServices, TimerIntervals};
 use allesbuien_core::weather::{FeedApi, FeedFuture, WeatherError};
-use allesbuien_testkit::{SETTLE_BUDGET, StubNotifier, StubRadarApi, amsterdam_west, pump_until};
-use cxx_qt_lib::{QString, QVariant};
-
-#[repr(C)]
-struct QObject {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct QMetaObject {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct QQuickWindow {
-    _private: [u8; 0],
-}
-
-unsafe extern "C" {
-    #[link_name = "_ZN15QGuiApplication11focusWindowEv"]
-    fn focus_window() -> *mut QQuickWindow;
-    #[link_name = "_Z20qt_qFindChild_helperPK7QObjectRK7QStringRK11QMetaObject6QFlagsIN2Qt15FindChildOptionEE"]
-    fn find_child(
-        parent: *const QObject,
-        name: &QString,
-        meta_object: &QMetaObject,
-        options: i32,
-    ) -> *mut QObject;
-    #[link_name = "_ZNK7QObject8propertyEPKc"]
-    fn object_property(object: *const QObject, name: *const c_char) -> QVariant;
-
-    #[link_name = "_ZN7QObject16staticMetaObjectE"]
-    static QOBJECT_STATIC_META_OBJECT: QMetaObject;
-}
-
-unsafe fn find(window: NonNull<QQuickWindow>, name: &str) -> *mut QObject {
-    // SAFETY: Category 8 - Qt owns the focused window's QObject tree for the
-    // booted app's lifetime, and this call stays on the GUI thread.
-    unsafe {
-        find_child(
-            window.as_ptr().cast::<QObject>(),
-            &QString::from(name),
-            &QOBJECT_STATIC_META_OBJECT,
-            1,
-        )
-    }
-}
-
-unsafe fn child(window: NonNull<QQuickWindow>, name: &str) -> NonNull<QObject> {
-    // SAFETY: Category 8 - as `find`, whose result is checked before use.
-    NonNull::new(unsafe { find(window, name) }).unwrap_or_else(|| panic!("{name} should exist"))
-}
-
-unsafe fn property(object: NonNull<QObject>, name: &str) -> QVariant {
-    let name = CString::new(name).expect("static property name is valid");
-    // SAFETY: Category 8 - `object` came from the tree Qt owns, and the name is
-    // a NUL-terminated static.
-    unsafe { object_property(object.as_ptr(), name.as_ptr()) }
-}
-
-unsafe fn text_of(object: NonNull<QObject>) -> String {
-    // SAFETY: Category 8 - as `property`.
-    unsafe { property(object, "text") }
-        .value::<QString>()
-        .expect("a Label should carry text")
-        .to_string()
-}
-
-unsafe fn number_of(object: NonNull<QObject>, name: &str) -> f64 {
-    // SAFETY: Category 8 - as `property`.
-    unsafe { property(object, name) }
-        .value::<f64>()
-        .unwrap_or_else(|| panic!("{name} should be readable"))
-}
+use allesbuien_harness::{
+    HarnessBuilder,
+    probe::{child, focused_window, number_of, property, text_of},
+};
+use allesbuien_testkit::{SETTLE_BUDGET, pump_until};
 
 /// A feed that never answers, which is the state the window opens in offline.
 struct UnreachableFeedApi;
@@ -109,28 +34,10 @@ impl FeedApi for UnreachableFeedApi {
     }
 }
 
-fn boot_over_the_unreachable_feed() -> BootedApp {
-    let services = CoreServices::new(CoreServiceConfig {
-        feed: Arc::new(UnreachableFeedApi),
-        radar: Arc::new(StubRadarApi),
-        notifier: Arc::new(StubNotifier),
-        location: amsterdam_west(),
-        radar_state_dir: std::env::temp_dir()
-            .join(format!("allesbuien-failure-line-{}", std::process::id())),
-    });
-    AppBuilder::new(
-        services,
-        PathBuf::from("/nonexistent/test-theme"),
-        TimerIntervals::default(),
-    )
-    .boot()
-    .expect("fake-wired GUI should boot")
-}
-
 #[test]
 fn a_failed_fetch_states_itself_once_and_leaves_the_reading_whole() {
     // Given: a booted window whose only feed request fails.
-    let booted = boot_over_the_unreachable_feed();
+    let booted = HarnessBuilder::with_feed(Arc::new(UnreachableFeedApi)).boot();
 
     // When: that failure has reached the controller and the layout has settled.
     pump_until(
@@ -141,9 +48,8 @@ fn a_failed_fetch_states_itself_once_and_leaves_the_reading_whole() {
             let failure_is_ready = booted
                 .weather_controller()
                 .is_some_and(|controller| controller.status().to_string().contains(" — "));
-            // SAFETY: Category 8 - Qt owns the focus-window pointer and this call
-            // only tests it for null on the Qt GUI thread.
-            failure_is_ready && unsafe { !focus_window().is_null() }
+            // SAFETY: on the GUI thread of the live booted app.
+            failure_is_ready && unsafe { focused_window() }.is_some()
         },
     );
     let status = booted
@@ -151,31 +57,31 @@ fn a_failed_fetch_states_itself_once_and_leaves_the_reading_whole() {
         .expect("controller should exist")
         .status()
         .to_string();
-    // SAFETY: Category 8 - Qt owns the focused QQuickWindow and the QObject
-    // tree under it for `booted`'s lifetime, and every call stays on the GUI
-    // thread.
+    // SAFETY: the window and every item come from the probes on `booted`, which
+    // outlives this block, and every call stays on the GUI thread.
     unsafe {
-        let window = NonNull::new(focus_window()).expect("root QQuickWindow should be focused");
+        let window = focused_window().expect("root QQuickWindow should be focused");
 
         // Then: the conditions panel states the failure, and it is the only
         // thing on screen that does. The forecast list is itself reachable from
         // this same search, which is what makes the missing second label an
         // absence rather than a search that never got there.
-        let conditions_error = child(window, "conditionsError");
+        let conditions_error =
+            child(window, "conditionsError").expect("conditionsError should exist");
         assert_eq!(
             property(conditions_error, "visible").value::<bool>(),
             Some(true)
         );
         assert_eq!(text_of(conditions_error), status);
-        child(window, "forecastView");
+        child(window, "forecastView").expect("forecastView should exist");
         assert!(
-            find(window, "forecastError").is_null(),
+            child(window, "forecastError").is_none(),
             "the forecast list printed a second copy of the same sentence"
         );
 
         // Then: the hero carries the mark rather than a word it has to cut, and
         // asks for no more width than the column gave it, so nothing elides.
-        let hero = child(window, "heroReading");
+        let hero = child(window, "heroReading").expect("heroReading should exist");
         assert_eq!(text_of(hero), "—");
         let width = number_of(hero, "width");
         let implicit = number_of(hero, "implicitWidth");

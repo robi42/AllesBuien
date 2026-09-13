@@ -1,0 +1,19 @@
+[package]
+name = "allesbuien-harness"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lints]
+workspace = true
+
+# The Qt-bound half of the GUI harnesses' shared scaffolding. It links the app
+# library and Qt, so unlike allesbuien-testkit it cannot build without a Qt
+# toolchain; only the harnesses under app/tests/ depend on it.
+[dependencies]
+allesbuien = { path = ".." }
+allesbuien-core = { path = "../../core" }
+allesbuien-testkit = { path = "../testkit" }
+cxx-qt-lib = { workspace = true, features = ["qt_gui", "qt_qml"] }
+tempfile = "3"

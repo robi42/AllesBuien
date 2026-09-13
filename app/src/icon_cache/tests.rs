@@ -1,15 +1,15 @@
 //! Regression coverage for persistent, fail-soft, bounded icon warming.
 
 use std::{
-    future::Future,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    task::{Context, Poll, Waker},
+    task::Poll,
 };
 
 use allesbuien_core::weather::{CurrentConditions, ForecastDay, WeatherData};
+use allesbuien_testkit::block_on;
 use tempfile::{TempDir, tempdir};
 
 use super::{IconCache, IconFuture, IconSource, condition_codes};
@@ -64,27 +64,16 @@ fn cache(directory: &TempDir, source: Arc<CountingSource>) -> IconCache {
     IconCache::new(directory.path().to_path_buf(), source)
 }
 
-fn block_on<F: Future>(future: F) -> F::Output {
-    let mut context = Context::from_waker(Waker::noop());
-    let mut future = Box::pin(future);
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(output) => return output,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}
-
 #[test]
 fn a_second_launch_reads_the_icon_off_disk_instead_of_the_network() {
     // Given: one warmed directory and a brand-new cache handle over it.
     let directory = tempdir().expect("temp cache");
     let first_source = CountingSource::serving(PNG);
-    let first = block_on(cache(&directory, Arc::clone(&first_source)).entry("QQ"));
+    let first = block_on(cache(&directory, Arc::clone(&first_source)).read_or_download("QQ"));
     let second_source = CountingSource::serving(PNG);
 
     // When
-    let second = block_on(cache(&directory, Arc::clone(&second_source)).entry("QQ"));
+    let second = block_on(cache(&directory, Arc::clone(&second_source)).read_or_download("QQ"));
 
     // Then
     assert_eq!(first_source.calls(), 1);
@@ -102,7 +91,7 @@ fn a_damaged_cache_entry_is_refetched_rather_than_served() {
     let source = CountingSource::serving(PNG);
 
     // When
-    let entry = block_on(cache(&directory, Arc::clone(&source)).entry("Q"));
+    let entry = block_on(cache(&directory, Arc::clone(&source)).read_or_download("Q"));
 
     // Then
     assert_eq!(source.calls(), 1);
@@ -134,7 +123,7 @@ fn an_undecodable_download_does_not_stop_another_icon_from_warming() {
 #[test]
 fn a_disabled_cache_never_reaches_for_the_network() {
     // Given / When
-    let entry = block_on(IconCache::disabled().entry("QQ"));
+    let entry = block_on(IconCache::disabled().read_or_download("QQ"));
 
     // Then
     assert!(entry.is_none());

@@ -27,7 +27,9 @@ use cxx_qt_lib::{
 use crate::{
     CoreServices, TimerIntervals, app_style,
     icon_cache::IconCache,
-    image_provider, radar_controller,
+    image_provider,
+    qt_values::interval_ms,
+    radar_controller,
     radar_state::{RadarControllerConfig, RadarIntervals},
     services::{AppRuntime, NotificationService},
     theme_controller::{self, ThemeControllerConfig},
@@ -126,18 +128,15 @@ impl AppBuilder {
             intervals: RadarIntervals {
                 refresh: self.intervals.radar_refresh,
                 playback: self.intervals.radar_playback,
-                location_poll: self.intervals.location_poll,
             },
         });
         let Some(radar_controller_pin) = radar_controller.as_mut() else {
             return Err(BootstrapError::ControllerCreation);
         };
         radar_controller::ffi::set_radar_controller(engine_pin.as_mut(), radar_controller_pin);
-        let poll_interval_ms =
-            i32::try_from(self.intervals.theme_poll.as_millis()).unwrap_or(i32::MAX);
         let mut theme_controller = theme_controller::create(ThemeControllerConfig {
             theme_base_path: self.theme_base_path,
-            poll_interval_ms,
+            poll_interval_ms: interval_ms(self.intervals.theme_poll),
         });
         let Some(theme_controller_pin) = theme_controller.as_mut() else {
             return Err(BootstrapError::ControllerCreation);

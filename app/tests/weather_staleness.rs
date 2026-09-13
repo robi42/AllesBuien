@@ -6,7 +6,6 @@
 //! terminal failures through one real Qt object.
 
 use std::{
-    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -14,9 +13,10 @@ use std::{
     time::Duration,
 };
 
-use allesbuien::{AppBuilder, CoreServiceConfig, CoreServices, TimerIntervals};
+use allesbuien::TimerIntervals;
 use allesbuien_core::weather::{FeedApi, FeedFuture, ForecastDay, WeatherData, WeatherError};
-use allesbuien_testkit::{SETTLE_BUDGET, StubNotifier, StubRadarApi, amsterdam_west, pump_until};
+use allesbuien_harness::HarnessBuilder;
+use allesbuien_testkit::{SETTLE_BUDGET, pump_until};
 use cxx_qt_lib::QModelIndex;
 
 struct SwitchableFeedApi {
@@ -69,26 +69,12 @@ fn weather_failure_wording_tracks_whether_a_forecast_is_visible() {
         failing: AtomicBool::new(true),
         client_build_failure: AtomicBool::new(false),
     });
-    let services = CoreServices::new(CoreServiceConfig {
-        feed: feed.clone(),
-        radar: Arc::new(StubRadarApi),
-        notifier: Arc::new(StubNotifier),
-        location: amsterdam_west(),
-        radar_state_dir: std::env::temp_dir().join(format!(
-            "allesbuien-weather-staleness-{}",
-            std::process::id()
-        )),
-    });
-    let mut booted = AppBuilder::new(
-        services,
-        PathBuf::from("/nonexistent/test-theme"),
-        TimerIntervals {
+    let mut booted = HarnessBuilder::with_feed(feed.clone())
+        .intervals(TimerIntervals {
             weather_refresh: Duration::from_secs(60),
             ..TimerIntervals::default()
-        },
-    )
-    .boot()
-    .expect("fake-wired GUI should boot");
+        })
+        .boot();
 
     // When: the cold failure reaches the controller.
     pump_until("the cold failure reports its cause", SETTLE_BUDGET, || {

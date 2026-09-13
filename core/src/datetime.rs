@@ -106,18 +106,25 @@ pub fn clock_shift_minutes_in(target_timezone: &str, at: &str) -> i32 {
 /// untouched, so malformed feed rows never surface as blanks.
 #[must_use]
 pub fn shift_clock_label(label: &str, shift_minutes: i32) -> String {
-    let trimmed = label.trim();
-    let Some((hours, minutes)) = trimmed.split_once(':') else {
-        return trimmed.to_owned();
+    let Some(minutes) = minutes_of_day(label) else {
+        return label.trim().to_owned();
     };
-    let (Ok(hours), Ok(minutes)) = (hours.parse::<i32>(), minutes.parse::<i32>()) else {
-        return trimmed.to_owned();
-    };
-    if !(0..24).contains(&hours) || !(0..60).contains(&minutes) {
-        return trimmed.to_owned();
-    }
-    let total = (hours * 60 + minutes + shift_minutes).rem_euclid(24 * 60);
+    let total = (minutes + shift_minutes).rem_euclid(24 * 60);
     format!("{:02}:{:02}", total / 60, total % 60)
+}
+
+/// Reads a bare `HH:MM` clock label as minutes past midnight.
+///
+/// Surrounding whitespace is tolerated; anything that is not an hour in `0..24`
+/// and a minute in `0..60` yields `None`.
+pub(crate) fn minutes_of_day(label: &str) -> Option<i32> {
+    let (hours, minutes) = label.trim().split_once(':')?;
+    let hours = hours.parse::<i32>().ok().filter(|h| (0..24).contains(h))?;
+    let minutes = minutes
+        .parse::<i32>()
+        .ok()
+        .filter(|m| (0..60).contains(m))?;
+    Some(hours * 60 + minutes)
 }
 
 fn source_timezone() -> TimeZone {
@@ -150,8 +157,19 @@ fn label(zoned: &Zoned, format: &str) -> String {
 mod tests {
     use super::{
         LocalTimestamp, SOURCE_TIMEZONE, clock_shift_minutes, clock_shift_minutes_in,
-        shift_clock_label,
+        minutes_of_day, shift_clock_label,
     };
+
+    #[test]
+    fn clock_labels_read_as_minutes_past_midnight_only_when_well_formed() {
+        // Given / When / Then
+        assert_eq!(minutes_of_day("00:00"), Some(0));
+        assert_eq!(minutes_of_day(" 23:59 "), Some(23 * 60 + 59));
+        assert_eq!(minutes_of_day("24:00"), None);
+        assert_eq!(minutes_of_day("12:60"), None);
+        assert_eq!(minutes_of_day("12"), None);
+        assert_eq!(minutes_of_day("ab:cd"), None);
+    }
 
     #[test]
     fn summer_stamp_converts_from_cest_to_utc() {

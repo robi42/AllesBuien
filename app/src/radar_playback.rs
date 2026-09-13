@@ -58,7 +58,7 @@ impl ffi::RadarController {
         );
         let observed = usize::try_from(index)
             .ok()
-            .and_then(|index| self.observed.get(index).copied())
+            .and_then(|index| self.observed_by_frame.get(index).copied())
             .unwrap_or(true);
         self.as_mut().set_current_frame_observed(observed);
         self.as_mut().set_current_frame_label(label);

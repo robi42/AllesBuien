@@ -6,7 +6,7 @@
 //! crisply on a scaled display and is published under UPPERCASE stems; the
 //! lowercase stem answers 404 there, while the 30x30 set is lowercase only.
 //!
-//! QML never reads the CDN URL: [`icon_url`] is what [`crate::icon_cache`]
+//! QML never reads the CDN URL: [`cdn_url`] is what [`crate::icon_cache`]
 //! downloads, and [`display_url`] is the `image://condition/<CODE>` address the
 //! provider answers from disk, so a second launch paints without the network.
 
@@ -14,26 +14,21 @@
 const ICON_BASE: &str = "https://cdn.buienradar.nl/resources/images/icons/weather";
 
 /// QML image-provider scheme the condition icons are served under.
-pub const PROVIDER_SCHEME: &str = "image://condition";
+const PROVIDER_SCHEME: &str = "image://condition";
 
-/// Builds the 96x96 CDN icon URL for a Buienradar condition code.
+/// Builds the 96x96 CDN icon URL for a [`cache_key`].
 ///
-/// `published` is the URL the feed itself carried and is used whenever the code
-/// is missing or not a plain ASCII letter stem. When neither is usable the
-/// result is empty, which QML treats as "no icon" rather than a broken image.
+/// The key is already the uppercase stem the 96x96 set is published under, so
+/// this only places it; a code the cache cannot key on never reaches here.
 #[must_use]
-pub fn icon_url(code: &str, published: &str) -> String {
-    let code = code.trim();
-    if code.is_empty() || !code.chars().all(|letter| letter.is_ascii_alphabetic()) {
-        return published.trim().to_owned();
-    }
-    format!("{ICON_BASE}/96x96/{}.png", code.to_ascii_uppercase())
+pub(crate) fn cdn_url(key: &str) -> String {
+    format!("{ICON_BASE}/96x96/{key}.png")
 }
 
 /// Builds the cached-provider URL QML binds to for a Buienradar condition code.
 ///
-/// Falls back to `published` on the same terms as [`icon_url`], so a code the
-/// cache cannot key on still renders the URL the feed itself carried.
+/// Falls back to `published` whenever [`cache_key`] refuses the code, so a code
+/// the cache cannot key on still renders the URL the feed itself carried.
 #[must_use]
 pub fn display_url(code: &str, published: &str) -> String {
     cache_key(code).map_or_else(
@@ -55,12 +50,15 @@ pub fn cache_key(code: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{cache_key, display_url, icon_url};
+    use super::{cache_key, cdn_url, display_url};
 
     #[test]
     fn day_code_becomes_an_uppercase_96_pixel_url() {
-        // Given / When
-        let url = icon_url("q", "https://cdn.buienradar.nl/x/30x30/q.png");
+        // Given
+        let key = cache_key("q").expect("a single letter is a usable code");
+
+        // When
+        let url = cdn_url(&key);
 
         // Then
         assert_eq!(
@@ -71,29 +69,14 @@ mod tests {
 
     #[test]
     fn night_variant_keeps_its_doubled_letter() {
-        // Given / When
-        let url = icon_url("qq", "");
+        // Given
+        let key = cache_key("qq").expect("a doubled letter is a usable code");
+
+        // When
+        let url = cdn_url(&key);
 
         // Then
         assert!(url.ends_with("/96x96/QQ.png"), "unexpected url {url}");
-    }
-
-    #[test]
-    fn missing_or_malformed_code_falls_back_to_the_published_url() {
-        // Given
-        let published = "https://cdn.buienradar.nl/resources/images/icons/weather/30x30/f.png";
-
-        // When / Then
-        assert_eq!(icon_url("", published), published);
-        assert_eq!(icon_url("  ", published), published);
-        assert_eq!(icon_url("4", published), published);
-        assert_eq!(icon_url("a.png", published), published);
-    }
-
-    #[test]
-    fn absent_code_and_absent_published_url_yield_an_empty_string() {
-        // Given / When / Then
-        assert!(icon_url("", "  ").is_empty());
     }
 
     #[test]

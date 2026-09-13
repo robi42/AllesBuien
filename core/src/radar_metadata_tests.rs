@@ -3,54 +3,32 @@
 //! The fixture is a verbatim capture of the live `history=0&forecast=24` sprite
 //! metadata response, so a vendor schema change surfaces here rather than as a
 //! two-hour caption drift on someone's desktop.
+//!
+//! It exercises only the public [`RadarClient`] surface, as the app does. It sits
+//! inside the crate rather than under `tests/` so it shares [`crate::test_support`]'s
+//! executor and radar fake instead of carrying private copies of both.
 
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll, Waker},
-};
+use std::sync::Arc;
 
-use allesbuien_core::{
-    radar::{GenerationId, RadarApi, RadarClient, RadarFuture},
-    radar_timeline::RadarTimeline,
-};
 use tempfile::tempdir;
 
-const LIVE_METADATA: &[u8] = include_bytes!("fixtures/radar-metadata.json");
+use crate::{
+    radar::{GenerationId, RadarClient, RadarRefresh},
+    radar_timeline::RadarTimeline,
+    test_support::{StaticRadarApi, block_on},
+};
+
+const LIVE_METADATA: &[u8] = include_bytes!("../tests/fixtures/radar-metadata.json");
 
 const METADATA_WITHOUT_OFFSET: &[u8] = br#"{
     "timestamp":"2026-08-31T18:55:00",
     "times":[{"timestamp":"2026-08-31T18:30:00","url":"fake://frame-0"}]
 }"#;
 
-struct FixtureRadarApi(&'static [u8]);
-
-impl RadarApi for FixtureRadarApi {
-    fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
-        Box::pin(async { Ok(self.0.to_vec()) })
-    }
-
-    fn frame<'a>(&'a self, _url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-        Box::pin(async { Ok(b"png".to_vec()) })
-    }
-}
-
-fn block_on<F: Future>(future: F) -> F::Output {
-    let mut context = Context::from_waker(Waker::noop());
-    let mut future = Box::pin(future);
-    loop {
-        match Pin::new(&mut future).poll(&mut context) {
-            Poll::Ready(output) => return output,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}
-
-fn refresh(metadata: &'static [u8]) -> allesbuien_core::radar::RadarRefresh {
+fn refresh(metadata: &'static [u8]) -> RadarRefresh {
     let state = tempdir().expect("temp state");
     let client = RadarClient::new(
-        Arc::new(FixtureRadarApi(metadata)),
+        Arc::new(StaticRadarApi::serving(metadata)),
         state.path().to_path_buf(),
     );
     block_on(client.refresh(GenerationId(1))).expect("fixture refresh should succeed")

@@ -33,9 +33,9 @@ use crate::{
 /// no source to name and no `via` to write; saying `No setting` names the
 /// absence, which is both the true state and the one that hints there is
 /// something to set. `Default` named the value instead and read like a choice.
-pub const ENVIRONMENT_PROVENANCE: &str = "Via env override";
-pub const DESKTOP_PROVENANCE: &str = "Via Omarchy";
-pub const DEFAULT_PROVENANCE: &str = "No setting";
+pub(crate) const ENVIRONMENT_PROVENANCE: &str = "Via env override";
+pub(crate) const DESKTOP_PROVENANCE: &str = "Via Omarchy";
+pub(crate) const DEFAULT_PROVENANCE: &str = "No setting";
 
 /// The caption for where this location came from.
 #[must_use]

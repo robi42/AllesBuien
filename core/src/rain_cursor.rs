@@ -10,7 +10,7 @@
 //! twelve hours is therefore read as the series having wrapped past midnight
 //! rather than as a frame half a day away.
 
-use crate::rain::RainPoint;
+use crate::{datetime::minutes_of_day, rain::RainPoint};
 
 const MINUTES_PER_DAY: i32 = 24 * 60;
 
@@ -48,16 +48,6 @@ fn wrapped_difference(from: i32, to: i32) -> i32 {
     } else {
         forward
     }
-}
-
-fn minutes_of_day(label: &str) -> Option<i32> {
-    let (hours, minutes) = label.trim().split_once(':')?;
-    let hours = hours.parse::<i32>().ok().filter(|h| (0..24).contains(h))?;
-    let minutes = minutes
-        .parse::<i32>()
-        .ok()
-        .filter(|m| (0..60).contains(m))?;
-    Some(hours * 60 + minutes)
 }
 
 #[cfg(test)]

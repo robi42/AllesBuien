@@ -1,4 +1,4 @@
-//! The trait fakes and fixture location more than one GUI harness needs.
+//! The inert stubs and fixture location more than one GUI harness needs.
 //!
 //! Each of these is inert on purpose. A harness reaches for one when the port
 //! is a dependency of the thing under test rather than the subject of it: the
@@ -15,7 +15,7 @@ use allesbuien_core::{
     weather::{FeedApi, FeedFuture, WeatherData},
 };
 
-/// The configured location all seven harnesses boot with.
+/// The configured location the harnesses boot with.
 ///
 /// The coordinates are load-bearing twice over: the label reaches the window
 /// header and the notification title, and `radar_controller` projects this
