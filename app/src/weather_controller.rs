@@ -14,14 +14,16 @@ use std::{pin::Pin, sync::Arc};
 use allesbuien_core::{
     error_chain,
     location::LocationConfig,
-    location_notice, retry, status,
+    location_notice, status,
     weather::{WeatherData, WeatherError},
 };
 use cxx_qt::{CxxQtType, Threading};
 
 use crate::{
     conditions_view::ConditionsView,
-    icon_cache,
+    location_follow,
+    qt_values::interval_ms,
+    refresh_job,
     weather_state::{WeatherControllerConfig, WeatherControllerRust},
 };
 
@@ -139,8 +141,8 @@ pub mod ffi {
 pub(crate) fn create(config: WeatherControllerConfig) -> cxx::UniquePtr<ffi::WeatherController> {
     let mut controller = ffi::new_weather_controller();
     if let Some(mut pinned) = controller.as_mut() {
-        let refresh_ms = i32::try_from(config.intervals.refresh.as_millis()).unwrap_or(i32::MAX);
-        let poll_ms = i32::try_from(config.intervals.location_poll.as_millis()).unwrap_or(i32::MAX);
+        let refresh_ms = interval_ms(config.intervals.refresh);
+        let poll_ms = interval_ms(config.intervals.location_poll);
         let location = config.location.resolve();
         let mut rust = pinned.as_mut().rust_mut();
         rust.feed = Some(config.feed);
@@ -159,18 +161,14 @@ pub(crate) fn create(config: WeatherControllerConfig) -> cxx::UniquePtr<ffi::Wea
 impl ffi::WeatherController {
     /// Re-asks the desktop where the viewer is, and re-fetches when it moved.
     ///
-    /// Polled rather than watched for the same reason the theme is: the file is
-    /// removed and rewritten rather than edited in place, so an inode-bound
-    /// watcher stops hearing about it after the first `--clear`.
+    /// [`location_follow`] says why this is a poll and why each bridge polls alone.
     pub fn poll_location(mut self: Pin<&mut Self>) {
-        let Some(settings) = self.location_settings.as_ref() else {
+        let Some(moved) =
+            location_follow::moved_to(self.location_settings.as_deref(), self.location.as_ref())
+        else {
             return;
         };
-        let resolved = settings.resolve();
-        if self.location.as_ref() == Some(&resolved) {
-            return;
-        }
-        self.as_mut().adopt_location(&resolved);
+        self.as_mut().adopt_location(&moved);
         self.refresh();
     }
 
@@ -200,26 +198,7 @@ impl ffi::WeatherController {
         );
         let qt_thread = self.qt_thread();
         drop(runtime.spawn(async move {
-            let mut result = feed.fetch(location.latitude, location.longitude).await;
-            for attempt in 2..=retry::MAX_ATTEMPTS {
-                match &result {
-                    Err(error) if retry::is_weather_retryable(error) => {}
-                    _ => break,
-                }
-                tokio::time::sleep(retry::backoff(attempt)).await;
-                result = feed.fetch(location.latitude, location.longitude).await;
-            }
-            if let Ok(data) = &result {
-                // Warms the provider before the URLs reach QML, so the icons are
-                // already decodable when the bindings below fire.
-                icons.warm(&icon_cache::condition_codes(data)).await;
-                let notified = notifications
-                    .notify_rain(data.rain_soon.as_ref(), location.display_label())
-                    .await;
-                if let Err(error) = notified {
-                    eprintln!("allesbuien: notification failed: {error}");
-                }
-            }
+            let result = refresh_job::fetch_weather(feed, icons, notifications, location).await;
             if let Err(error) = qt_thread.queue(move |controller| controller.apply_result(result)) {
                 eprintln!("allesbuien: weather update never reached the window: {error}");
             }

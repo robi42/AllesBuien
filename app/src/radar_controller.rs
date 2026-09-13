@@ -14,7 +14,7 @@ use allesbuien_core::{
     error_chain,
     location::LocationConfig,
     location_notice,
-    radar::{GenerationId, RadarClient, RadarError},
+    radar::{GenerationId, RadarError},
     radar_projection::marker_position,
     radar_timeline::{boundary_visible, observed_fraction},
     retry, status,
@@ -23,9 +23,11 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 
 use crate::{
-    image_provider::{self, FrameBytes},
+    image_provider, location_follow,
+    qt_values::{interval_ms, or_empty},
     radar_frames::{FrameSet, LoadedRefresh},
     radar_state::{RadarControllerConfig, RadarControllerRust},
+    refresh_job,
 };
 
 #[cxx_qt::bridge]
@@ -65,7 +67,6 @@ pub mod ffi {
         #[qproperty(QString, status)]
         #[qproperty(i32, refresh_interval_ms)]
         #[qproperty(i32, playback_interval_ms)]
-        #[qproperty(i32, location_poll_interval_ms)]
         type RadarController = super::RadarControllerRust;
 
         #[qinvokable]
@@ -106,9 +107,8 @@ pub mod ffi {
 pub(crate) fn create(config: RadarControllerConfig) -> cxx::UniquePtr<ffi::RadarController> {
     let mut controller = ffi::new_radar_controller();
     if let Some(mut pinned) = controller.as_mut() {
-        let refresh_ms = i32::try_from(config.intervals.refresh.as_millis()).unwrap_or(i32::MAX);
-        let playback_ms = i32::try_from(config.intervals.playback.as_millis()).unwrap_or(i32::MAX);
-        let poll_ms = i32::try_from(config.intervals.location_poll.as_millis()).unwrap_or(i32::MAX);
+        let refresh_ms = interval_ms(config.intervals.refresh);
+        let playback_ms = interval_ms(config.intervals.playback);
         let location = config.location.resolve();
         let mut rust = pinned.as_mut().rust_mut();
         rust.api = Some(config.api);
@@ -118,7 +118,6 @@ pub(crate) fn create(config: RadarControllerConfig) -> cxx::UniquePtr<ffi::Radar
         rust.configured_refresh_ms = refresh_ms;
         pinned.as_mut().set_refresh_interval_ms(refresh_ms);
         pinned.as_mut().set_playback_interval_ms(playback_ms);
-        pinned.as_mut().set_location_poll_interval_ms(poll_ms);
         pinned.as_mut().adopt_location(&location);
         pinned.refresh();
     }
@@ -128,19 +127,14 @@ pub(crate) fn create(config: RadarControllerConfig) -> cxx::UniquePtr<ffi::Radar
 impl ffi::RadarController {
     /// Re-asks the desktop where the viewer is, and re-runs the radar when it moved.
     ///
-    /// Both bridges poll the same settings independently rather than one telling
-    /// the other. Each compares against the location it last adopted, so neither
-    /// can miss a change the other consumed first, and there is no shared cell
-    /// for them to race over.
+    /// [`location_follow`] says why this is a poll and why each bridge polls alone.
     pub fn poll_location(mut self: Pin<&mut Self>) {
-        let Some(settings) = self.location_settings.as_ref() else {
+        let Some(moved) =
+            location_follow::moved_to(self.location_settings.as_deref(), self.location.as_ref())
+        else {
             return;
         };
-        let resolved = settings.resolve();
-        if self.location.as_ref() == Some(&resolved) {
-            return;
-        }
-        self.as_mut().adopt_location(&resolved);
+        self.as_mut().adopt_location(&moved);
         self.refresh();
     }
 
@@ -153,8 +147,7 @@ impl ffi::RadarController {
             self.as_mut().set_marker_y_fraction(marker.y);
         }
         let notice = location_notice::coverage_notice(location);
-        self.as_mut()
-            .set_coverage_notice(notice.map_or_else(QString::default, QString::from));
+        self.as_mut().set_coverage_notice(or_empty(notice));
         self.as_mut().rust_mut().location = Some(location.clone());
     }
 
@@ -189,26 +182,8 @@ impl ffi::RadarController {
             if let Some(previous) = previous {
                 drop(previous.await);
             }
-            let client = RadarClient::new(api, state_dir);
-            let mut result = client.refresh(GenerationId(generation)).await;
-            for attempt in 2..=retry::MAX_ATTEMPTS {
-                match &result {
-                    Err(error) if retry::is_retryable(error) => {}
-                    _ => break,
-                }
-                tokio::time::sleep(retry::backoff(attempt)).await;
-                result = client.refresh(GenerationId(generation)).await;
-            }
-            let loaded = match result {
-                Ok(refresh) => refresh
-                    .frames
-                    .iter()
-                    .map(|frame| std::fs::read(&frame.path).map(FrameBytes::from))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map(|frames| LoadedRefresh { refresh, frames })
-                    .map_err(RadarError::Cache),
-                Err(error) => Err(error),
-            };
+            let loaded =
+                refresh_job::load_radar_run(api, state_dir, GenerationId(generation)).await;
             if let Err(error) = qt_thread.queue(move |controller| {
                 controller.apply_result(GenerationId(generation), loaded);
             }) {
@@ -236,22 +211,23 @@ impl ffi::RadarController {
                 self.as_mut().set_status(QString::default());
                 self.set_refresh_interval_ms(configured);
             }
-            Err(error) => {
-                let stale = self.last_good.is_some();
-                if let Some(set) = self.last_good.clone() {
-                    self.as_mut().apply_frame_set(generation.0, &set);
-                }
-                eprintln!(
-                    "allesbuien: radar refresh failed: {}",
-                    error_chain::describe(&error)
-                );
-                let retry_ms = i32::try_from(retry::RETRY_AFTER_FAILURE.as_millis())
-                    .unwrap_or(self.configured_refresh_ms);
-                self.as_mut()
-                    .set_status(status::radar_message(&error, stale).into());
-                self.set_refresh_interval_ms(retry_ms);
-            }
+            Err(error) => self.apply_failure(generation.0, &error),
         }
+    }
+
+    /// Keeps the last good run on screen, states the failure, and retries sooner.
+    fn apply_failure(mut self: Pin<&mut Self>, generation: u64, error: &RadarError) {
+        let stale = self.last_good.is_some();
+        if let Some(set) = self.last_good.clone() {
+            self.as_mut().apply_frame_set(generation, &set);
+        }
+        eprintln!(
+            "allesbuien: radar refresh failed: {}",
+            error_chain::describe(error)
+        );
+        self.as_mut()
+            .set_status(status::radar_message(error, stale).into());
+        self.set_refresh_interval_ms(interval_ms(retry::RETRY_AFTER_FAILURE));
     }
 
     fn apply_frame_set(mut self: Pin<&mut Self>, generation: u64, set: &FrameSet) {

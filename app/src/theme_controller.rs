@@ -9,6 +9,11 @@ use allesbuien_core::theme::{Theme, colors_mtime, read_theme};
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 
+use crate::{
+    qt_values::{interval_ms, or_empty},
+    services::TimerIntervals,
+};
+
 #[cxx_qt::bridge]
 pub mod ffi {
     unsafe extern "C++" {
@@ -86,7 +91,7 @@ impl Default for ThemeControllerRust {
             theme_lighter_background: QString::default(),
             theme_muted: QString::default(),
             theme_available: false,
-            poll_interval_ms: 2_000,
+            poll_interval_ms: interval_ms(TimerIntervals::default().theme_poll),
             theme_base_path: PathBuf::new(),
             last_mtime: None,
             initialized: false,
@@ -108,6 +113,7 @@ pub(crate) fn create(config: ThemeControllerConfig) -> cxx::UniquePtr<ffi::Theme
 }
 
 impl ffi::ThemeController {
+    /// Re-reads the theme when its colours changed on disk since the last read.
     pub fn poll(mut self: Pin<&mut Self>) {
         let mtime = colors_mtime(&self.theme_base_path);
         if self.initialized && self.last_mtime == mtime {
@@ -117,6 +123,11 @@ impl ffi::ThemeController {
         let mut rust = self.as_mut().rust_mut();
         rust.last_mtime = mtime;
         rust.initialized = true;
+        self.apply_theme(theme);
+    }
+
+    /// Publishes a freshly read theme, or flips QML onto its `SystemPalette` fallback.
+    fn apply_theme(mut self: Pin<&mut Self>, theme: Theme) {
         match theme {
             Theme::Available {
                 mode,
@@ -127,21 +138,17 @@ impl ffi::ThemeController {
                 lighter_background,
                 muted,
             } => {
-                self.as_mut().set_theme_mode(to_qstring(mode));
-                self.as_mut().set_theme_background(to_qstring(background));
-                self.as_mut().set_theme_foreground(to_qstring(foreground));
-                self.as_mut().set_theme_accent(to_qstring(accent));
-                self.as_mut().set_theme_selection(to_qstring(selection));
+                self.as_mut().set_theme_mode(or_empty(mode));
+                self.as_mut().set_theme_background(or_empty(background));
+                self.as_mut().set_theme_foreground(or_empty(foreground));
+                self.as_mut().set_theme_accent(or_empty(accent));
+                self.as_mut().set_theme_selection(or_empty(selection));
                 self.as_mut()
-                    .set_theme_lighter_background(to_qstring(lighter_background));
-                self.as_mut().set_theme_muted(to_qstring(muted));
+                    .set_theme_lighter_background(or_empty(lighter_background));
+                self.as_mut().set_theme_muted(or_empty(muted));
                 self.set_theme_available(true);
             }
             Theme::Unavailable => self.set_theme_available(false),
         }
     }
-}
-
-fn to_qstring(value: Option<String>) -> QString {
-    value.map_or_else(QString::default, QString::from)
 }

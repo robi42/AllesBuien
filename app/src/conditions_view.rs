@@ -53,7 +53,7 @@ impl ConditionsView {
         Self {
             station_name: current.station_name.clone(),
             temperature: measurement(current.temperature, "°C", NO_READING),
-            feels_like: optional_measurement(current.feel_temperature, "°C"),
+            feels_like: measurement(current.feel_temperature, "°C", ""),
             wind: measurement(current.wind_speed, "m/s", UNAVAILABLE),
             humidity: optional_percentage(current.humidity),
             condition: describe(
@@ -70,17 +70,13 @@ impl ConditionsView {
 /// Formats a station measurement, or the placeholder its rank can carry.
 ///
 /// `absent` is a parameter rather than one constant inside the body because the
-/// two callers render at ranks three scale steps apart, and the word that fits
-/// the chips overruns the hero. Deciding it here for everyone is what shipped
+/// callers render at ranks three scale steps apart, and the word that fits the
+/// chips overruns the hero; the apparent temperature passes an empty one and is
+/// simply omitted. Deciding it here for everyone is what shipped
 /// `Unavaila…` as the largest thing in the window; deciding it at the call site
 /// puts the choice beside the field it is chosen for.
 fn measurement(value: Option<f64>, unit: &str, absent: &str) -> String {
     value.map_or_else(|| absent.to_owned(), |value| format!("{value:.1} {unit}"))
-}
-
-/// Formats a secondary reading the panel simply omits when the station skips it.
-fn optional_measurement(value: Option<f64>, unit: &str) -> String {
-    value.map_or_else(String::new, |value| format!("{value:.1} {unit}"))
 }
 
 fn optional_percentage(value: Option<f64>) -> String {

@@ -36,6 +36,8 @@ pub mod icon_store;
     reason = "the image-provider module contains CXX-Qt constructor plumbing whose generated signatures and boxed QObject allocation are fixed by its C++ ABI"
 )]
 pub mod image_provider;
+mod location_follow;
+mod qt_values;
 pub mod radar_clock;
 #[expect(
     clippy::float_cmp,
@@ -46,6 +48,7 @@ mod radar_frames;
 mod radar_playback;
 mod radar_state;
 pub mod rain_graph;
+mod refresh_job;
 mod services;
 pub mod theme_controller;
 #[expect(

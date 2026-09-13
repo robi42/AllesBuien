@@ -76,7 +76,7 @@ impl IconCache {
         if let Some(cached) = icon_store::read(&path) {
             return Some(cached);
         }
-        let downloaded = source.get(&condition_icon::icon_url(key, "")).await?;
+        let downloaded = source.get(&condition_icon::cdn_url(key)).await?;
         if !icon_store::is_complete_png(&downloaded) {
             return None;
         }

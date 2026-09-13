@@ -48,16 +48,19 @@ fn source_offset_minutes(utc_stamp: &str, vendor_offset_hours: Option<i32>) -> i
         )
 }
 
+/// Minutes past midnight of a `HH:MM` caption, for tests that pin a shift
+/// rather than digits so they hold in every host timezone.
+#[cfg(test)]
+pub(crate) fn minutes_of(label: &str) -> i32 {
+    let (hours, minutes) = label.split_once(':').expect("expected a HH:MM label");
+    hours.parse::<i32>().expect("hours") * 60 + minutes.parse::<i32>().expect("minutes")
+}
+
 #[cfg(test)]
 mod tests {
     use allesbuien_core::datetime::LocalTimestamp;
 
-    use super::frame_label;
-
-    fn minutes_of(label: &str) -> i32 {
-        let (hours, minutes) = label.split_once(':').expect("expected a HH:MM label");
-        hours.parse::<i32>().expect("hours") * 60 + minutes.parse::<i32>().expect("minutes")
-    }
+    use super::{frame_label, minutes_of};
 
     /// Minutes the label was shifted past the same stamp read as Dutch wall time.
     ///

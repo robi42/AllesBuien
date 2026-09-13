@@ -14,7 +14,7 @@ use allesbuien_core::{
 use cxx_qt_lib::{QString, QStringList};
 use tokio::{runtime::Handle, task::JoinHandle};
 
-use crate::radar_frames::FrameSet;
+use crate::{qt_values::interval_ms, radar_frames::FrameSet, services::TimerIntervals};
 
 pub(crate) struct RadarControllerConfig {
     pub(crate) api: Arc<dyn RadarApi>,
@@ -24,12 +24,12 @@ pub(crate) struct RadarControllerConfig {
     pub(crate) intervals: RadarIntervals,
 }
 
-/// The three cadences QML drives this controller with.
+/// The two cadences QML drives this controller with. Its location poll rides the
+/// weather bridge's timer, which calls both `pollLocation()`s.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct RadarIntervals {
     pub(crate) refresh: Duration,
     pub(crate) playback: Duration,
-    pub(crate) location_poll: Duration,
 }
 
 #[expect(
@@ -60,7 +60,6 @@ pub struct RadarControllerRust {
     /// Non-empty exactly when the last refresh failed; never a wait.
     pub(crate) status: QString,
     pub(crate) refresh_interval_ms: i32,
-    pub(crate) location_poll_interval_ms: i32,
     /// The cadence from config, restored after a failure shortens it.
     pub(crate) configured_refresh_ms: i32,
     pub(crate) playback_interval_ms: i32,
@@ -77,6 +76,7 @@ pub struct RadarControllerRust {
 
 impl Default for RadarControllerRust {
     fn default() -> Self {
+        let defaults = TimerIntervals::default();
         Self {
             frame_count: 0,
             current_frame_index: 0,
@@ -104,10 +104,9 @@ impl Default for RadarControllerRust {
             coverage_notice: QString::default(),
             loading_notice: QString::default(),
             status: QString::default(),
-            refresh_interval_ms: 300_000,
-            location_poll_interval_ms: 2_000,
-            configured_refresh_ms: 300_000,
-            playback_interval_ms: 400,
+            refresh_interval_ms: interval_ms(defaults.radar_refresh),
+            configured_refresh_ms: interval_ms(defaults.radar_refresh),
+            playback_interval_ms: interval_ms(defaults.radar_playback),
             api: None,
             state_dir: PathBuf::new(),
             location: None,
