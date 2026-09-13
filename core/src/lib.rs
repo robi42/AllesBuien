@@ -10,6 +10,8 @@ pub mod radar;
 mod radar_cache;
 pub mod radar_freshness;
 pub mod radar_legend;
+#[cfg(test)]
+mod radar_metadata_tests;
 pub mod radar_projection;
 pub mod radar_timeline;
 pub mod radar_transport;

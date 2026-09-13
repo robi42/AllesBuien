@@ -18,7 +18,7 @@
 //! never to an empty string.
 
 /// Neutral label used when neither an English mapping nor Dutch text exists.
-pub const UNKNOWN_CONDITION: &str = "Unknown";
+pub(crate) const UNKNOWN_CONDITION: &str = "Unknown";
 
 /// Every condition code Buienradar is documented to emit, with English wording.
 const ENGLISH_BY_CODE: &[(char, &str)] = &[
@@ -52,51 +52,39 @@ const ENGLISH_BY_CODE: &[(char, &str)] = &[
 /// returns [`None`] for anything that is not a one or two letter ASCII stem.
 #[must_use]
 pub fn code_from_icon_url(url: &str) -> Option<String> {
-    let path = url
-        .split(['?', '#'])
-        .next()
-        .unwrap_or_default()
-        .trim_end_matches('/');
-    let stem = path
-        .rsplit('/')
-        .next()?
-        .rsplit_once('.')
-        .map_or(path.rsplit('/').next()?, |(stem, _)| stem);
-    let code = stem.to_ascii_lowercase();
+    let code = icon_stem(url)?.to_ascii_lowercase();
     let mut letters = code.chars();
     let first = letters.next()?;
-    if !first.is_ascii_lowercase() {
-        return None;
-    }
-    match letters.next() {
-        None => Some(code),
-        Some(second) if second == first && letters.next().is_none() => Some(code),
-        Some(_) => None,
-    }
+    let single = letters.as_str().is_empty();
+    (first.is_ascii_lowercase() && (single || is_doubled(&code))).then_some(code)
+}
+
+/// The icon file's stem: the last path segment without query, fragment, or extension.
+fn icon_stem(url: &str) -> Option<&str> {
+    let path = url.split(['?', '#']).next()?.trim_end_matches('/');
+    let segment = path.rsplit('/').next()?;
+    Some(segment.rsplit_once('.').map_or(segment, |(stem, _)| stem))
+}
+
+/// Whether `code` is exactly two copies of one character, the night-variant shape.
+fn is_doubled(code: &str) -> bool {
+    let mut letters = code.chars();
+    matches!(
+        (letters.next(), letters.next(), letters.next()),
+        (Some(first), Some(second), None) if first == second
+    )
 }
 
 /// Returns the base condition letter for a code, discarding the night doubling.
 #[must_use]
-pub fn base_letter(code: &str) -> Option<char> {
+pub(crate) fn base_letter(code: &str) -> Option<char> {
     let first = code.chars().next()?.to_ascii_lowercase();
     first.is_ascii_lowercase().then_some(first)
 }
 
-/// Reports whether a code is the doubled night variant, e.g. `qq`.
-#[must_use]
-pub fn is_night(code: &str) -> bool {
-    let mut letters = code.chars();
-    match (letters.next(), letters.next(), letters.next()) {
-        (Some(first), Some(second), None) => {
-            first.eq_ignore_ascii_case(&second) && first.is_ascii_alphabetic()
-        }
-        _ => false,
-    }
-}
-
 /// Looks up the documented English description for a condition code.
 #[must_use]
-pub fn english_text(code: &str) -> Option<&'static str> {
+pub(crate) fn english_text(code: &str) -> Option<&'static str> {
     let letter = base_letter(code)?;
     ENGLISH_BY_CODE
         .iter()
@@ -125,7 +113,7 @@ pub fn describe(code: &str, dutch: &str) -> String {
 mod tests {
     use super::{
         ENGLISH_BY_CODE, UNKNOWN_CONDITION, base_letter, code_from_icon_url, describe,
-        english_text, is_night,
+        english_text, is_doubled,
     };
 
     #[test]
@@ -161,15 +149,19 @@ mod tests {
         );
         assert_eq!(code_from_icon_url("https://cdn.example/icons/ab.png"), None);
         assert_eq!(code_from_icon_url("https://cdn.example/icons/12.png"), None);
+        assert_eq!(
+            code_from_icon_url("https://cdn.example/icons/qqq.png"),
+            None
+        );
     }
 
     #[test]
     fn night_variants_are_detected_and_share_the_day_letter() {
         // Given / When / Then
-        assert!(is_night("qq"));
-        assert!(!is_night("q"));
-        assert!(!is_night("qr"));
-        assert!(!is_night("qqq"));
+        assert!(is_doubled("qq"));
+        assert!(!is_doubled("q"));
+        assert!(!is_doubled("qr"));
+        assert!(!is_doubled("qqq"));
         assert_eq!(base_letter("QQ"), Some('q'));
         assert_eq!(base_letter("q"), Some('q'));
         assert_eq!(base_letter(""), None);

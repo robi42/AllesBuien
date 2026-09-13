@@ -81,17 +81,7 @@ impl RadarClient {
     /// Returns a typed transport, metadata, or cache error.
     pub async fn refresh(&self, generation: GenerationId) -> Result<RadarRefresh, RadarError> {
         let metadata: Metadata = serde_json::from_slice(&self.api.metadata().await?)?;
-        let run_id: String = metadata
-            .timestamp
-            .chars()
-            .filter(char::is_ascii_digit)
-            .take(12)
-            .collect();
-        if run_id.len() != 12 {
-            return Err(RadarError::InvalidRunTimestamp {
-                timestamp: metadata.timestamp,
-            });
-        }
+        let run_id = run_directory_id(&metadata.timestamp)?;
 
         let time_offset_hours = metadata.time_offset;
         let frames = RadarCache::new(&self.state_dir)
@@ -101,6 +91,25 @@ impl RadarClient {
             generation,
             frames,
             time_offset_hours,
+        })
+    }
+}
+
+/// Names a run's cache directory after the first twelve digits of its timestamp.
+///
+/// `2026-08-29T21:15:00` becomes `202608292115`, which sorts the way the runs
+/// were published; a timestamp without twelve digits cannot name a directory.
+fn run_directory_id(timestamp: &str) -> Result<String, RadarError> {
+    let run_id: String = timestamp
+        .chars()
+        .filter(char::is_ascii_digit)
+        .take(12)
+        .collect();
+    if run_id.len() == 12 {
+        Ok(run_id)
+    } else {
+        Err(RadarError::InvalidRunTimestamp {
+            timestamp: timestamp.to_owned(),
         })
     }
 }
@@ -121,15 +130,12 @@ pub(crate) struct MetadataTime {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
+    use std::sync::Arc;
 
     use tempfile::tempdir;
 
     use super::*;
-    use crate::{radar_cache::prune_runs, test_support::block_on};
+    use crate::test_support::{StaticRadarApi, block_on};
 
     const METADATA: &[u8] = br#"{
         "timestamp":"2026-08-29T21:15:00",
@@ -140,46 +146,24 @@ mod tests {
         ]
     }"#;
 
-    struct FakeRadarApi {
-        metadata_status: u16,
-        downloads: AtomicUsize,
-    }
-
-    impl FakeRadarApi {
-        const fn successful() -> Self {
-            Self {
-                metadata_status: 200,
-                downloads: AtomicUsize::new(0),
-            }
-        }
-    }
-
-    impl RadarApi for FakeRadarApi {
-        fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
-            Box::pin(async move {
-                if self.metadata_status == 200 {
-                    Ok(METADATA.to_vec())
-                } else {
-                    Err(RadarError::HttpStatus {
-                        status: self.metadata_status,
-                    })
-                }
-            })
-        }
-
-        fn frame<'a>(&'a self, _url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-            Box::pin(async move {
-                self.downloads.fetch_add(1, Ordering::Relaxed);
-                Ok(b"png".to_vec())
-            })
-        }
+    #[test]
+    fn run_directories_are_named_by_the_first_twelve_timestamp_digits() {
+        // Given / When / Then
+        assert_eq!(
+            run_directory_id("2026-08-29T21:15:00").expect("a full timestamp"),
+            "202608292115"
+        );
+        assert!(matches!(
+            run_directory_id("2026-08-29"),
+            Err(RadarError::InvalidRunTimestamp { timestamp }) if timestamp == "2026-08-29"
+        ));
     }
 
     #[test]
     fn refresh_returns_ordered_metadata_frames_when_metadata_succeeds() {
         // Given
         let state = tempdir().expect("temp state");
-        let api = Arc::new(FakeRadarApi::successful());
+        let api = Arc::new(StaticRadarApi::serving(METADATA));
         let client = RadarClient::new(api, state.path().to_path_buf());
 
         // When
@@ -201,7 +185,7 @@ mod tests {
     fn refresh_skips_downloads_when_frames_are_cached() {
         // Given
         let state = tempdir().expect("temp state");
-        let api = Arc::new(FakeRadarApi::successful());
+        let api = Arc::new(StaticRadarApi::serving(METADATA));
         let client = RadarClient::new(api.clone(), state.path().to_path_buf());
         block_on(client.refresh(GenerationId(1))).expect("first refresh succeeds");
 
@@ -209,37 +193,14 @@ mod tests {
         block_on(client.refresh(GenerationId(2))).expect("second refresh succeeds");
 
         // Then
-        assert_eq!(api.downloads.load(Ordering::Relaxed), 3);
-    }
-
-    #[test]
-    fn prune_removes_oldest_runs_when_eight_exist() {
-        // Given
-        let state = tempdir().expect("temp state");
-        let runs = state.path().join("runs");
-        std::fs::create_dir(&runs).expect("runs directory");
-        for index in 0..8 {
-            std::fs::create_dir(runs.join(format!("run-{index:02}"))).expect("run directory");
-        }
-
-        // When
-        prune_runs(state.path(), &runs.join("run-07")).expect("prune succeeds");
-
-        // Then
-        let remaining = std::fs::read_dir(runs).expect("read runs").count();
-        assert_eq!(remaining, MAX_CACHED_RUNS);
-        assert!(!state.path().join("runs/run-00").exists());
-        assert!(!state.path().join("runs/run-01").exists());
+        assert_eq!(api.downloads(), 3);
     }
 
     #[test]
     fn refresh_surfaces_typed_error_and_leaves_cache_untouched_when_metadata_is_500() {
         // Given
         let state = tempdir().expect("temp state");
-        let api = Arc::new(FakeRadarApi {
-            metadata_status: 500,
-            downloads: AtomicUsize::new(0),
-        });
+        let api = Arc::new(StaticRadarApi::failing_metadata(500));
         let client = RadarClient::new(api, state.path().to_path_buf());
 
         // When

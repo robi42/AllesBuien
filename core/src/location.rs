@@ -23,7 +23,10 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use crate::config::EnvSource;
+use crate::config::{EnvSource, non_blank};
+
+/// Omarchy's desktop-wide weather location setting, relative to `$HOME`.
+pub const OMARCHY_WEATHER_SETTING: &str = ".local/state/omarchy/settings/weather.json";
 
 const DEFAULT_LABEL: &str = "Amsterdam-West";
 /// Shown instead of an empty header when a caller supplies a nameless location.
@@ -84,7 +87,7 @@ pub(crate) fn from_env(env: &impl EnvSource) -> Option<LocationConfig> {
     let longitude = parse_coordinate(&env.var("ALLESBUIEN_LON")?, -180.0, 180.0)?;
     let label = env
         .var("ALLESBUIEN_LOCATION_LABEL")
-        .filter(|value| !value.trim().is_empty())
+        .and_then(non_blank)
         .unwrap_or_else(|| String::from("Custom"));
     Some(LocationConfig {
         latitude,
@@ -95,15 +98,14 @@ pub(crate) fn from_env(env: &impl EnvSource) -> Option<LocationConfig> {
 }
 
 pub(crate) fn from_file(home: &Path) -> Option<LocationConfig> {
-    let contents =
-        std::fs::read_to_string(home.join(".local/state/omarchy/settings/weather.json")).ok()?;
+    let contents = std::fs::read_to_string(home.join(OMARCHY_WEATHER_SETTING)).ok()?;
     let weather: WeatherLocation = serde_json::from_str(&contents).ok()?;
     let latitude = parse_json_coordinate(weather.latitude?, -90.0, 90.0)?;
     let longitude = parse_json_coordinate(weather.longitude?, -180.0, 180.0)?;
     Some(LocationConfig {
         latitude,
         longitude,
-        label: weather.name.filter(|value| !value.trim().is_empty())?,
+        label: weather.name.and_then(non_blank)?,
         source: LocationSource::DesktopSetting,
     })
 }
@@ -112,7 +114,7 @@ fn parse_json_coordinate(value: serde_json::Value, minimum: f64, maximum: f64) -
     match value {
         serde_json::Value::Number(number) => number
             .as_f64()
-            .filter(|v| (*v >= minimum) && (*v <= maximum)),
+            .filter(|degrees| in_range(*degrees, minimum, maximum)),
         serde_json::Value::String(text) => parse_coordinate(&text, minimum, maximum),
         _ => None,
     }
@@ -123,7 +125,12 @@ fn parse_coordinate(value: &str, minimum: f64, maximum: f64) -> Option<f64> {
         .trim()
         .parse::<f64>()
         .ok()
-        .filter(|parsed| parsed.is_finite() && (*parsed >= minimum) && (*parsed <= maximum))
+        .filter(|degrees| in_range(*degrees, minimum, maximum))
+}
+
+/// Whether a coordinate lies within its axis's bounds; NaN and infinities never do.
+fn in_range(degrees: f64, minimum: f64, maximum: f64) -> bool {
+    (minimum..=maximum).contains(&degrees)
 }
 
 pub(crate) fn default_location() -> LocationConfig {

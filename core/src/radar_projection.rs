@@ -22,13 +22,13 @@ use std::f64::consts::PI;
 /// Semi-major axis of the sphere EPSG:3857 projects onto, in metres.
 const EARTH_RADIUS_METERS: f64 = 6_378_137.0;
 /// Southern edge of the radar raster, in degrees.
-pub const SOUTH_LATITUDE: f64 = 49.5;
+pub(crate) const SOUTH_LATITUDE: f64 = 49.5;
 /// Northern edge of the radar raster, in degrees.
-pub const NORTH_LATITUDE: f64 = 54.8;
+pub(crate) const NORTH_LATITUDE: f64 = 54.8;
 /// Western edge of the radar raster, in degrees.
-pub const WEST_LONGITUDE: f64 = 0.0;
+pub(crate) const WEST_LONGITUDE: f64 = 0.0;
 /// Eastern edge of the radar raster, in degrees.
-pub const EAST_LONGITUDE: f64 = 10.0;
+pub(crate) const EAST_LONGITUDE: f64 = 10.0;
 
 /// A point inside the radar raster, as a fraction of its width and height.
 ///

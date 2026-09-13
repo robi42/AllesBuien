@@ -64,7 +64,7 @@ impl<'a> RadarCache<'a> {
     }
 }
 
-pub(crate) fn prune_runs(state_dir: &Path, current_run: &Path) -> Result<(), RadarError> {
+fn prune_runs(state_dir: &Path, current_run: &Path) -> Result<(), RadarError> {
     let runs = state_dir.join("runs");
     let mut run_dirs = Vec::new();
     for entry in std::fs::read_dir(runs)? {

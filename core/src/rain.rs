@@ -11,7 +11,7 @@
 use crate::datetime::shift_clock_label;
 
 /// Cadence between consecutive raintext rows.
-pub const RAIN_STEP_MINUTES: u32 = 5;
+pub(crate) const RAIN_STEP_MINUTES: u32 = 5;
 
 /// Summary of the next rain event within the raintext window.
 #[derive(Debug, Clone, PartialEq)]

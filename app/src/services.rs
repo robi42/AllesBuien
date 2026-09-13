@@ -13,7 +13,7 @@ use allesbuien_core::{
     location_settings::LocationSettings,
     notify::{
         NotificationInput, Notifier, NotifyConfig, NotifyError, NotifyState,
-        RainSoon as NotifyRainSoon, maybe_send_rain_notification,
+        maybe_send_rain_notification,
     },
     radar::RadarApi,
     weather::{FeedApi, RainSoon},
@@ -121,28 +121,15 @@ impl NotificationService {
         rain: Option<&RainSoon>,
         location_label: &str,
     ) -> Result<(), NotifyError> {
-        let rain = rain.map(|rain| NotifyRainSoon {
-            minutes_until: rain.minutes_until,
-            time_label: &rain.time_label,
-            max_mmh: rain.max_mmh,
-        });
         let mut state = self.state.lock().await;
         maybe_send_rain_notification(
-            &NotifierAdapter(self.notifier.as_ref()),
+            self.notifier.as_ref(),
             NotificationInput {
-                rain: rain.as_ref(),
+                rain,
                 location_label,
             },
             &mut state,
         )
-    }
-}
-
-struct NotifierAdapter<'a>(&'a NotifierService);
-
-impl Notifier for NotifierAdapter<'_> {
-    fn send(&self, title: &str, body: &str) -> Result<(), NotifyError> {
-        self.0.send(title, body)
     }
 }
 

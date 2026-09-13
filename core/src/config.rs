@@ -92,7 +92,7 @@ impl Config {
             notify: resolve_notify(env),
             state_dir: env
                 .var("XDG_STATE_HOME")
-                .filter(|value| !value.trim().is_empty())
+                .and_then(non_blank)
                 .map_or_else(|| home.join(".local/state"), PathBuf::from)
                 .join("allesbuien"),
         }
@@ -123,8 +123,13 @@ fn resolve_notify(env: &impl EnvSource) -> NotifyConfig {
 
 fn value_or_default(env: &impl EnvSource, key: &str, default: &str) -> String {
     env.var(key)
-        .filter(|value| !value.trim().is_empty())
+        .and_then(non_blank)
         .unwrap_or_else(|| default.to_owned())
+}
+
+/// Treats a blank or whitespace-only setting as unset, the rule every override here follows.
+pub(crate) fn non_blank(value: String) -> Option<String> {
+    (!value.trim().is_empty()).then_some(value)
 }
 
 #[cfg(test)]
