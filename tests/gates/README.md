@@ -77,7 +77,7 @@ commands would keep passing long after the real gate changed underneath it.
 
 ## Coverage
 
-Eighteen of the twenty-two gates are covered. The four that are not all need a
+Nineteen of the twenty-three gates are covered. The four that are not all need a
 compiled workspace, and a cold CXX-Qt build on this host is over twenty minutes:
 
 | gate | why it is out of scope |
@@ -102,6 +102,15 @@ module, so a broken row cannot hide behind a working one. Nesting depth is bound
 and Liskov principles have no fixture and no gate: nothing in the text of a
 Rust file says whether an extension needed an edit or a subtype broke a
 contract, and a gate that guessed would be a decoration.
+
+`cxx family lockstep` reads `Cargo.lock` and refuses a `cxx` and a `cxx-gen`
+whose patch numbers differ, or either crate missing or locked twice. cxx names
+every bridge symbol after its patch and cxx-gen writes their C++ half, so the
+mismatch a grouped Dependabot bump leaves behind compiles and then fails to link
+eighteen minutes into `bin/test`. Its fixture reads the current versions out of
+the lock rather than pinning them. The rest of the cxx family is not compared:
+cxx's own manifest pins `cxx-build` and the `cxxbridge-*` crates exactly, so
+cargo already holds them in step.
 
 The trade is deliberate. All four are stock invocations of tools whose failure
 behaviour is not in question, whereas every gate covered here is either
@@ -130,8 +139,8 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-thirty-seven it runs, each of which fails loudly if its gate stops biting. One
-of those thirty-seven aims at the runner rather than at a gate: the slicer
+thirty-eight it runs, each of which fails loudly if its gate stops biting. One
+of those thirty-eight aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That

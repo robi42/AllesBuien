@@ -140,6 +140,45 @@ echo "==> gate: pinned action SHAs"
 unpinned=$(grep -rnE '^\s*-?\s*uses:' .github/workflows/*.yml | grep -vE '@[0-9a-f]{40} #' | sed 's/^/  /' || true)
 [[ -z "$unpinned" ]] || report 'workflow steps not pinned to a 40-character SHA with a tag comment:' "$unpinned"
 
+# cxx family lockstep. cxx embeds its patch number in every bridge symbol
+# (cxxbridge1$199$...), and cxx-gen writes the C++ half of those symbols, so
+# cxx 1.0.N only links against code from cxx-gen 0.7.N. cxx-gen arrives
+# transitively through cxx-qt-gen, and a Dependabot bump of cxx leaves it
+# behind: nothing complains until the linker reports undefined symbols eighteen
+# minutes into bin/test. The fix is `cargo update -p cxx-gen --precise 0.7.N`.
+#
+# Only cxx and cxx-gen are compared. cxx-build, cxxbridge-cmd, cxxbridge-flags,
+# and cxxbridge-macro are =-pinned by cxx's own manifest, so cargo already holds
+# them in step, and widening this gate would restate cargo's job. A crate
+# missing from the lock, or locked at two versions, has no single patch number
+# to compare, so that is refused as well.
+echo "==> gate: cxx family lockstep"
+lockstep=$(awk '
+  /^name = "(cxx|cxx-gen)"$/ { crate = $3; gsub(/"/, "", crate); next }
+  /^name = / { crate = ""; next }
+  crate != "" && /^version = / {
+    ver = $3
+    gsub(/"/, "", ver)
+    versions[crate] = versions[crate] (versions[crate] == "" ? "" : " and ") ver
+    seen[crate]++
+    crate = ""
+  }
+  END {
+    cxx = versions["cxx"]
+    gen = versions["cxx-gen"]
+    if (seen["cxx"] != 1 || seen["cxx-gen"] != 1) {
+      printf "  Cargo.lock: expected exactly one version of each, found cxx %s, cxx-gen %s\n", (cxx == "" ? "none" : cxx), (gen == "" ? "none" : gen)
+      exit
+    }
+    split(cxx, cxx_parts, ".")
+    split(gen, gen_parts, ".")
+    if (cxx_parts[3] != gen_parts[3]) {
+      printf "  Cargo.lock: cxx %s, cxx-gen %s\n", cxx, gen
+    }
+  }
+' Cargo.lock)
+[[ -z "$lockstep" ]] || report 'cxx and cxx-gen must share a patch number (cxx embeds it in every bridge symbol):' "$lockstep"
+
 # Side-effect seams. Dependency inversion in this tree has a concrete shape:
 # processes, environment reads, HTTP clients, and the Tokio runtime are each
 # built in one named home behind FeedApi, RadarApi, Notifier, or a construction
