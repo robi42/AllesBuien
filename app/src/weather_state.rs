@@ -50,6 +50,7 @@ pub struct WeatherControllerRust {
     pub(crate) condition_icon_url: QString,
     /// The addressable hero icon URL, re-published once the provider can serve it.
     pub(crate) hero_icon_url: String,
+    /// Whether an empty icon slot is still coming, rather than never coming.
     pub(crate) icons_loading: bool,
     pub(crate) observed_label: QString,
     pub(crate) rain_summary: QString,
@@ -92,7 +93,9 @@ impl Default for WeatherControllerRust {
             condition: (&conditions.condition).into(),
             condition_icon_url: (&conditions.icon_url).into(),
             hero_icon_url: String::new(),
-            icons_loading: false,
+            // Nothing has answered at construction, so the hero slot is pending
+            // until the first refresh says otherwise, success or failure.
+            icons_loading: true,
             observed_label: (&conditions.observed_label).into(),
             rain_summary: RAIN_UNAVAILABLE.into(),
             rain_wet: false,

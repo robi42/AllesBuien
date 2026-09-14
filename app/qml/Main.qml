@@ -79,6 +79,8 @@ ApplicationWindow {
             // a hole, and the 40 px goes to the radar, which is the one thing
             // here that gets better the larger it is.
             Rectangle {
+                // Named so a harness can hold the icon skeletons against it.
+                objectName: "sideCard"
                 Layout.preferredWidth: 380
                 Layout.fillHeight: true
                 color: appTheme.surface

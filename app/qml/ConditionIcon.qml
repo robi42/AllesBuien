@@ -23,14 +23,16 @@ Item {
     implicitWidth: conditionIcon.slotSize
     implicitHeight: conditionIcon.slotSize
 
-    // The pending icon's placeholder, drawn from the theme's own surface tone
-    // and emphasis floor rather than an invented colour.
+    // The pending icon's placeholder, in the inset tone the metrics panel
+    // already uses, not an invented colour. It used to be `surface`, which is
+    // the colour of the card both call sites sit on, so the skeleton was drawn
+    // on every cold load and seen on none of them.
     Rectangle {
         id: skeleton
         objectName: "skeleton"
         anchors.fill: parent
         radius: conditionIcon.theme.radiusMd
-        color: conditionIcon.theme.surface
+        color: conditionIcon.theme.panel
         opacity: conditionIcon.theme.emphasisLow
         visible: conditionIcon.loading && iconImage.status !== Image.Ready
 
