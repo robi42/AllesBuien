@@ -86,9 +86,14 @@ fn sample() -> Option<(Rgb, Rgb)> {
         let centre = map_to_scene(hero, number_of(hero, "width") / 2.0, middle);
         let card = map_to_scene(hero, -CARD_OFFSET, middle);
         let image = grab_window(window);
+        // The scene is in logical units and the grab in physical pixels, so a
+        // scaled desktop (`QT_SCALE_FACTOR=2`, a HiDPI shell) needs the ratio
+        // between them. The window's own width measures it without trusting the
+        // grab to carry its device pixel ratio.
+        let ratio = f64::from(image.width()) / number_of(window.cast(), "width");
         let pixel = |point: QPointF| {
             // `toPoint` rounds to the nearest pixel, which is the pixel meant.
-            let point = point.to_point();
+            let point = (point * ratio).to_point();
             let color = image.pixel_color(point.x(), point.y());
             [color.red(), color.green(), color.blue()]
         };
