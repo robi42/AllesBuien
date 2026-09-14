@@ -7,6 +7,14 @@
 //! toward the free public CDN. Thereafter the `image://condition/<CODE>` provider
 //! serves them locally — the second launch never touches the network.
 //!
+//! That fix first warmed every icon before the feed data was published, which
+//! turned the defect inside out: the text waited behind the slowest download.
+//! A refresh therefore runs in three steps. [`IconCache::restore`] publishes
+//! what is already on disk, so a cached launch paints text and icons together;
+//! the text is published next, whatever is still missing; then
+//! [`IconCache::warm`] downloads the misses and reports each icon the moment it
+//! is published, so no icon waits for another one.
+//!
 //! Every failure degrades to "no icon" rather than to an error: a miss, an
 //! unreachable CDN, an oversized body, or a damaged file all leave the code
 //! unwarmed, and the reserved QML slot stays empty instead of moving the text.
@@ -50,18 +58,27 @@ impl IconCache {
         }
     }
 
-    /// Publishes every requested code to the provider, downloading the misses.
-    pub async fn warm(&self, codes: &[String]) {
-        let keys: Vec<String> = codes
-            .iter()
-            .filter_map(|code| condition_icon::cache_key(code))
-            .collect();
-        stream::iter(keys)
+    /// Publishes every requested code already stored on disk, without ever
+    /// reaching for the network.
+    pub fn restore(&self, codes: &[String]) {
+        let Some(directory) = self.directory.as_ref() else {
+            return;
+        };
+        for key in unpublished_keys(codes) {
+            if let Some(bytes) = icon_store::read(&icon_store::entry_path(directory, &key)) {
+                image_provider::store_icon(&key, bytes.into());
+            }
+        }
+    }
+
+    /// Publishes every requested code to the provider, downloading the misses,
+    /// and calls `on_ready` after each icon it publishes.
+    pub async fn warm(&self, codes: &[String], on_ready: &(dyn Fn() + Sync)) {
+        stream::iter(unpublished_keys(codes))
             .map(|key| async move {
-                if !image_provider::has_icon(&key)
-                    && let Some(bytes) = self.read_or_download(&key).await
-                {
+                if let Some(bytes) = self.read_or_download(&key).await {
                     image_provider::store_icon(&key, bytes.into());
+                    on_ready();
                 }
             })
             .buffer_unordered(MAX_CONCURRENT_ICONS)
@@ -83,6 +100,15 @@ impl IconCache {
         icon_store::write(directory, &path, &downloaded);
         Some(downloaded)
     }
+}
+
+/// The cache keys of `codes` the provider cannot serve yet.
+fn unpublished_keys(codes: &[String]) -> Vec<String> {
+    codes
+        .iter()
+        .filter_map(|code| condition_icon::cache_key(code))
+        .filter(|key| !image_provider::has_icon(key))
+        .collect()
 }
 
 /// Downloads icons over HTTP, treating any non-success response as a miss.

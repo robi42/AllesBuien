@@ -111,13 +111,58 @@ fn an_undecodable_download_does_not_stop_another_icon_from_warming() {
 
     // When
     block_on(
-        cache(&directory, Arc::clone(&source)).warm(&[String::from("BAD"), String::from("GOOD")]),
+        cache(&directory, Arc::clone(&source))
+            .warm(&[String::from("BAD"), String::from("GOOD")], &|| {}),
     );
 
     // Then
     assert_eq!(source.calls(), 1);
     assert!(!directory.path().join("BAD.png").exists());
     assert!(crate::image_provider::has_icon("GOOD"));
+}
+
+#[test]
+fn restoring_publishes_disk_entries_without_asking_the_source() {
+    // Given: one stored icon, one stored damaged file, and one code never stored.
+    let directory = tempdir().expect("temp cache");
+    std::fs::write(directory.path().join("RA.png"), PNG).expect("cached icon");
+    std::fs::write(directory.path().join("RB.png"), b"\x89PN").expect("partial entry");
+    let source = CountingSource::serving(PNG);
+
+    // When
+    cache(&directory, Arc::clone(&source)).restore(&[
+        String::from("ra"),
+        String::from("RB"),
+        String::from("RE"),
+    ]);
+
+    // Then
+    assert_eq!(source.calls(), 0);
+    assert!(crate::image_provider::has_icon("RA"));
+    assert!(!crate::image_provider::has_icon("RB"));
+    assert!(!crate::image_provider::has_icon("RE"));
+}
+
+#[test]
+fn warming_reports_each_published_icon_and_nothing_it_refused() {
+    // Given: one valid download, and one response that is no PNG at all.
+    let directory = tempdir().expect("temp cache");
+    let valid = CountingSource::serving(PNG);
+    let damaged = CountingSource::serving(b"<html>404 not found</html>");
+    let reported = AtomicUsize::new(0);
+    let on_ready = || {
+        reported.fetch_add(1, Ordering::SeqCst);
+    };
+
+    // When
+    block_on(cache(&directory, Arc::clone(&valid)).warm(&[String::from("RC")], &on_ready));
+    block_on(cache(&directory, Arc::clone(&damaged)).warm(&[String::from("RD")], &on_ready));
+
+    // Then
+    assert_eq!((valid.calls(), damaged.calls()), (1, 1));
+    assert_eq!(reported.load(Ordering::SeqCst), 1);
+    assert!(crate::image_provider::has_icon("RC"));
+    assert!(!crate::image_provider::has_icon("RD"));
 }
 
 #[test]
@@ -138,7 +183,7 @@ fn warming_an_unusable_code_publishes_nothing() {
     // When
     block_on(
         cache(&directory, Arc::clone(&source))
-            .warm(&[String::new(), String::from("../etc/passwd")]),
+            .warm(&[String::new(), String::from("../etc/passwd")], &|| {}),
     );
 
     // Then
@@ -174,7 +219,7 @@ fn warming_fetches_every_payload_code_with_bounded_concurrency() {
     let source = CountingSource::serving(PNG);
 
     // When
-    block_on(cache(&directory, Arc::clone(&source)).warm(&codes));
+    block_on(cache(&directory, Arc::clone(&source)).warm(&codes, &|| {}));
 
     // Then
     assert_eq!(source.calls(), expected_fetches);

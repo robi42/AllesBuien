@@ -15,10 +15,7 @@ use allesbuien_core::{
 };
 
 use crate::{
-    icon_cache::{self, IconCache},
-    image_provider::FrameBytes,
-    radar_frames::LoadedRefresh,
-    services::NotificationService,
+    image_provider::FrameBytes, radar_frames::LoadedRefresh, services::NotificationService,
 };
 
 /// Runs `attempt` until it succeeds, fails for good, or uses up its attempts.
@@ -67,7 +64,7 @@ pub(crate) async fn load_radar_run(
     Ok(LoadedRefresh { refresh, frames })
 }
 
-/// Fetches the feed for `location`, warms its icons, and announces coming rain.
+/// Fetches the feed for `location` and announces coming rain.
 ///
 /// A failed notification is logged and does not fail the refresh: the forecast
 /// is still worth showing when `notify-send` is missing.
@@ -77,7 +74,6 @@ pub(crate) async fn load_radar_run(
 /// Returns the feed's error once retries are exhausted.
 pub(crate) async fn fetch_weather(
     feed: Arc<dyn FeedApi>,
-    icons: IconCache,
     notifications: NotificationService,
     location: LocationConfig,
 ) -> Result<WeatherData, WeatherError> {
@@ -85,9 +81,6 @@ pub(crate) async fn fetch_weather(
         feed.fetch(location.latitude, location.longitude)
     })
     .await?;
-    // Warms the provider before the URLs reach QML, so the icons are already
-    // decodable when the bindings fire.
-    icons.warm(&icon_cache::condition_codes(&data)).await;
     let notified = notifications
         .notify_rain(data.rain_soon.as_ref(), location.display_label())
         .await;

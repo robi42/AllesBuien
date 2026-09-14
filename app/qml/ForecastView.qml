@@ -88,8 +88,11 @@ ListView {
 
                 ConditionIcon {
                     id: rowIcon
+                    objectName: "forecastIcon"
                     source: forecastRow.iconUrl
                     slotSize: forecastView.theme.iconRow
+                    theme: forecastView.theme
+                    loading: forecastView.weatherController.iconsLoading
                     Layout.preferredWidth: rowIcon.implicitWidth
                     Layout.preferredHeight: rowIcon.implicitHeight
                 }

@@ -37,6 +37,13 @@ pub fn display_url(code: &str, published: &str) -> String {
     )
 }
 
+/// The cache key an `image://condition/<KEY>` URL addresses, or [`None`] for
+/// any other URL, so the readiness rule never restates the provider scheme.
+#[must_use]
+pub(crate) fn provider_key(url: &str) -> Option<&str> {
+    url.strip_prefix(PROVIDER_SCHEME)?.strip_prefix('/')
+}
+
 /// Normalises a condition code into the single filesystem-safe name the cache,
 /// the provider URL, and the CDN URL all agree on.
 #[must_use]
@@ -50,7 +57,7 @@ pub fn cache_key(code: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{cache_key, cdn_url, display_url};
+    use super::{cache_key, cdn_url, display_url, provider_key};
 
     #[test]
     fn day_code_becomes_an_uppercase_96_pixel_url() {
@@ -105,5 +112,16 @@ mod tests {
         assert_eq!(cache_key("Q").as_deref(), Some("Q"));
         assert_eq!(cache_key("../etc/passwd"), None);
         assert_eq!(cache_key(""), None);
+    }
+
+    #[test]
+    fn only_a_provider_url_names_a_cache_key() {
+        // Given / When / Then
+        assert_eq!(provider_key(&display_url("qq", "")), Some("QQ"));
+        assert_eq!(
+            provider_key("https://cdn.buienradar.nl/x/30x30/f.png"),
+            None
+        );
+        assert_eq!(provider_key(""), None);
     }
 }

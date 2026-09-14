@@ -48,6 +48,9 @@ pub struct WeatherControllerRust {
     pub(crate) humidity: QString,
     pub(crate) condition: QString,
     pub(crate) condition_icon_url: QString,
+    /// The addressable hero icon URL, re-published once the provider can serve it.
+    pub(crate) hero_icon_url: String,
+    pub(crate) icons_loading: bool,
     pub(crate) observed_label: QString,
     pub(crate) rain_summary: QString,
     pub(crate) rain_wet: bool,
@@ -88,6 +91,8 @@ impl Default for WeatherControllerRust {
             humidity: (&conditions.humidity).into(),
             condition: (&conditions.condition).into(),
             condition_icon_url: (&conditions.icon_url).into(),
+            hero_icon_url: String::new(),
+            icons_loading: false,
             observed_label: (&conditions.observed_label).into(),
             rain_summary: RAIN_UNAVAILABLE.into(),
             rain_wet: false,

@@ -13,6 +13,7 @@ use std::{
 
 use allesbuien::{
     AppBuilder, BootedApp, CoreServiceConfig, CoreServices, NotifierService, TimerIntervals,
+    icon_cache::IconCache,
 };
 use allesbuien_core::{
     location_settings::LocationSettings, notify::NotifyConfig, radar::RadarApi, weather::FeedApi,
@@ -55,12 +56,13 @@ pub struct HarnessBuilder {
     location: LocationSettings,
     theme_path: PathBuf,
     intervals: TimerIntervals,
+    icons: IconCache,
 }
 
 impl HarnessBuilder {
     /// Starts from `feed`, a failing stub radar, a silent notifier with
     /// notifications off, the pinned Amsterdam-West location, an absent theme,
-    /// and the production timer intervals.
+    /// the production timer intervals, and an icon cache that serves nothing.
     #[must_use]
     pub fn with_feed(feed: Arc<dyn FeedApi>) -> Self {
         Self {
@@ -71,6 +73,7 @@ impl HarnessBuilder {
             location: amsterdam_west(),
             theme_path: PathBuf::from(ABSENT_THEME),
             intervals: TimerIntervals::default(),
+            icons: IconCache::disabled(),
         }
     }
 
@@ -110,6 +113,13 @@ impl HarnessBuilder {
         self
     }
 
+    /// Warms condition icons through `icons` instead of a disabled cache.
+    #[must_use]
+    pub fn icons(mut self, icons: IconCache) -> Self {
+        self.icons = icons;
+        self
+    }
+
     /// Creates this process's one `QGuiApplication` and loads the root window.
     ///
     /// # Panics
@@ -131,6 +141,7 @@ impl HarnessBuilder {
             None => CoreServices::new(config),
         };
         let app = AppBuilder::new(services, self.theme_path, self.intervals)
+            .with_icons(self.icons)
             .boot()
             .expect("the fake-wired GUI should boot");
         Harness {

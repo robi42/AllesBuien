@@ -21,7 +21,7 @@ use cxx_qt::{CxxQtType, Threading};
 
 use crate::{
     conditions_view::ConditionsView,
-    location_follow,
+    icon_delivery, image_provider, location_follow,
     qt_values::interval_ms,
     refresh_job,
     weather_state::{WeatherControllerConfig, WeatherControllerRust},
@@ -40,6 +40,8 @@ pub mod ffi {
         type QHash_i32_QByteArray = cxx_qt_lib::QHash<cxx_qt_lib::QHashPair_i32_QByteArray>;
         include!("cxx-qt-lib/qmodelindex.h");
         type QModelIndex = cxx_qt_lib::QModelIndex;
+        include!("cxx-qt-lib/qvector.h");
+        type QVector_i32 = cxx_qt_lib::QVector<i32>;
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qstringlist.h");
@@ -77,6 +79,7 @@ pub mod ffi {
         #[qproperty(QString, humidity)]
         #[qproperty(QString, condition)]
         #[qproperty(QString, condition_icon_url)]
+        #[qproperty(bool, icons_loading)]
         #[qproperty(QString, observed_label)]
         #[qproperty(QString, rain_summary)]
         #[qproperty(bool, rain_wet)]
@@ -110,6 +113,16 @@ pub mod ffi {
             column: i32,
             parent: &QModelIndex,
         ) -> QModelIndex;
+        // Bound as an inherited member rather than a `#[qsignal]`: the signal
+        // form also generates `connect`/`on_` helpers nothing here calls.
+        #[inherit]
+        #[cxx_name = "dataChanged"]
+        fn data_changed(
+            self: Pin<&mut WeatherController>,
+            top_left: &QModelIndex,
+            bottom_right: &QModelIndex,
+            roles: &QVector_i32,
+        );
         #[inherit]
         #[cxx_name = "beginResetModel"]
         unsafe fn begin_reset_model(self: Pin<&mut WeatherController>);
@@ -198,14 +211,15 @@ impl ffi::WeatherController {
         );
         let qt_thread = self.qt_thread();
         drop(runtime.spawn(async move {
-            let result = refresh_job::fetch_weather(feed, icons, notifications, location).await;
-            if let Err(error) = qt_thread.queue(move |controller| controller.apply_result(result)) {
-                eprintln!("allesbuien: weather update never reached the window: {error}");
-            }
+            let result = refresh_job::fetch_weather(feed, notifications, location).await;
+            icon_delivery::publish(result, &icons, &qt_thread).await;
         }));
     }
 
-    fn apply_result(mut self: Pin<&mut Self>, result: Result<WeatherData, WeatherError>) {
+    pub(crate) fn apply_result(
+        mut self: Pin<&mut Self>,
+        result: Result<WeatherData, WeatherError>,
+    ) {
         let data = match result {
             Ok(data) => data,
             Err(error) => {
@@ -231,7 +245,11 @@ impl ffi::WeatherController {
         self.as_mut().set_humidity((&view.humidity).into());
         self.as_mut().set_condition((&view.condition).into());
         self.as_mut()
-            .set_condition_icon_url((&view.icon_url).into());
+            .rust_mut()
+            .hero_icon_url
+            .clone_from(&view.icon_url);
+        self.as_mut()
+            .set_condition_icon_url(image_provider::published_url(&view.icon_url).into());
         self.as_mut()
             .set_observed_label((&view.observed_label).into());
         self.set_status((&view.status).into());

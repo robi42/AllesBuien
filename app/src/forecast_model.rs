@@ -11,9 +11,11 @@ use std::pin::Pin;
 
 use allesbuien_core::{condition::describe, weather::ForecastDay};
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
+use cxx_qt_lib::{
+    QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant, QVector,
+};
 
-use crate::{condition_icon, weather_controller::ffi};
+use crate::{condition_icon, image_provider, weather_controller::ffi};
 use ffi::ForecastRole;
 
 impl ffi::WeatherController {
@@ -36,6 +38,19 @@ impl ffi::WeatherController {
         self.as_mut().rust_mut().forecast = forecast;
         // SAFETY: Category 13 — this closes the immediately preceding model reset.
         unsafe { self.end_reset_model() };
+    }
+
+    /// Tells every row's delegate to re-read its icon, now that the provider may
+    /// serve a URL [`role_value`] withheld when the rows were last read.
+    pub(crate) fn forecast_icons_changed(self: Pin<&mut Self>) {
+        let Some(last) = self.forecast.len().checked_sub(1) else {
+            return;
+        };
+        let root = QModelIndex::default();
+        let first_row = self.index(0, 0, &root);
+        let last_row = self.index(i32::try_from(last).unwrap_or(i32::MAX), 0, &root);
+        let roles = QVector::from([ForecastRole::IconUrl.repr]);
+        self.data_changed(&first_row, &last_row, &roles);
     }
 }
 
@@ -82,7 +97,9 @@ fn role_value(forecast: &[ForecastDay], row: i32, role: i32) -> QVariant {
         ForecastRole::MaxTemperature => QVariant::from(&row.max_temperature),
         ForecastRole::RainChance => QVariant::from(&row.rain_chance),
         ForecastRole::Condition => QVariant::from(&QString::from(&row.condition)),
-        ForecastRole::IconUrl => QVariant::from(&QString::from(&row.icon_url)),
+        ForecastRole::IconUrl => QVariant::from(&QString::from(&image_provider::published_url(
+            &row.icon_url,
+        ))),
         _ => QVariant::default(),
     }
 }

@@ -28,6 +28,7 @@ pub mod condition_icon;
 pub mod conditions_view;
 pub mod forecast_model;
 pub mod icon_cache;
+mod icon_delivery;
 pub mod icon_store;
 #[expect(
     clippy::must_use_candidate,

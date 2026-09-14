@@ -297,8 +297,12 @@ ColumnLayout {
 
         ConditionIcon {
             id: heroIcon
+            objectName: "heroIcon"
             source: conditionsView.weatherController.conditionIconUrl
             slotSize: conditionsView.theme.iconHero
+            theme: conditionsView.theme
+            loading: conditionsView.weatherController.iconsLoading
+            pulse: true
             Layout.preferredWidth: heroIcon.implicitWidth
             Layout.preferredHeight: heroIcon.implicitHeight
         }
