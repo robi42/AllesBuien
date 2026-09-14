@@ -23,38 +23,46 @@ Item {
     implicitWidth: conditionIcon.slotSize
     implicitHeight: conditionIcon.slotSize
 
-    // The pending icon's placeholder, in the inset tone the metrics panel
-    // already uses, not an invented colour. It used to be `surface`, which is
-    // the colour of the card both call sites sit on, so the skeleton was drawn
-    // on every cold load and seen on none of them.
+    // How strongly the skeleton tints its card with the theme's text colour.
+    // Named here because nothing else draws with them. A tint of `text` is what
+    // keeps the placeholder visible on every theme: `text` contrasts with the
+    // card by construction, light or dark, while any second surface tone may
+    // sit a handful of levels from it. The first skeleton used `surface`, the
+    // card's own colour, and then `panel`, whose full pulse on Nord moved four
+    // levels per channel; both rendered and neither could be seen. At these
+    // strengths Nord's card moves 16 and 41 levels in red, Flexoki Light's 21
+    // and 56, above the 12-per-channel threshold `ForecastView` measured.
+    readonly property real skeletonFaint: 0.1
+    readonly property real skeletonStrong: 0.26
+
     Rectangle {
         id: skeleton
         objectName: "skeleton"
         anchors.fill: parent
         radius: conditionIcon.theme.radiusMd
-        color: conditionIcon.theme.panel
-        opacity: conditionIcon.theme.emphasisLow
+        color: conditionIcon.theme.text
+        opacity: conditionIcon.skeletonStrong
         visible: conditionIcon.loading && iconImage.status !== Image.Ready
 
-        // Shaped like the radar loading notice's pulse, for the reasons given
-        // there: a 2 s breath between two emphasis steps the theme already
-        // carries. `running` binds the skeleton's own visibility, because an
-        // animation left running behind an invisible item is a battery cost
-        // that nothing on screen can account for.
+        // Timed like the radar loading notice's pulse, for the reasons given
+        // there: a 2 s breath with sine easing reads as waiting, not alarm.
+        // `running` binds the skeleton's own visibility, because an animation
+        // left running behind an invisible item is a battery cost that nothing
+        // on screen can account for.
         SequentialAnimation on opacity {
             running: skeleton.visible && conditionIcon.pulse
             loops: Animation.Infinite
 
             NumberAnimation {
-                from: conditionIcon.theme.emphasisFull
-                to: conditionIcon.theme.emphasisLow
+                from: conditionIcon.skeletonStrong
+                to: conditionIcon.skeletonFaint
                 duration: 1000
                 easing.type: Easing.InOutSine
             }
 
             NumberAnimation {
-                from: conditionIcon.theme.emphasisLow
-                to: conditionIcon.theme.emphasisFull
+                from: conditionIcon.skeletonFaint
+                to: conditionIcon.skeletonStrong
                 duration: 1000
                 easing.type: Easing.InOutSine
             }

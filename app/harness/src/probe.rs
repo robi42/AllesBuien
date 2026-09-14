@@ -29,7 +29,7 @@ use std::{
     ptr::NonNull,
 };
 
-use cxx_qt_lib::{QImage, QString, QVariant};
+use cxx_qt_lib::{QImage, QPointF, QString, QVariant};
 
 /// An opaque `QObject`, only ever handled through a pointer Qt returned.
 #[repr(C)]
@@ -66,6 +66,10 @@ unsafe extern "C" {
     // same address is the `QObject *` every other probe takes.
     #[link_name = "_ZNK14QQuickItemView11itemAtIndexEi"]
     fn item_view_item_at_index(view: *const QObject, index: i32) -> *mut QObject;
+    // `QPointF` is two `qreal`s with trivial copy and destruction, so the
+    // Itanium ABI returns it in registers exactly as a `repr(C)` pair of `f64`.
+    #[link_name = "_ZNK10QQuickItem10mapToSceneERK7QPointF"]
+    fn item_map_to_scene(item: *const QObject, point: &QPointF) -> QPointF;
     #[link_name = "_ZNK7QObject8propertyEPKc"]
     fn object_property(object: *const QObject, name: *const c_char) -> QVariant;
     #[link_name = "_ZN12QQuickWindow10grabWindowEv"]
@@ -131,6 +135,19 @@ pub unsafe fn delegate(view: NonNull<QObject>, row: i32) -> Option<NonNull<QObje
     // SAFETY: the caller upholds the module contract and guarantees `view` is a
     // `QQuickItemView`; the result is checked for null before it is returned.
     NonNull::new(unsafe { item_view_item_at_index(view.as_ptr(), row) })
+}
+
+/// Where the point (`x`, `y`) of `item`'s own coordinates lands in its window,
+/// which is where [`grab_window`]'s image has that point's pixel.
+///
+/// # Safety
+///
+/// As [`property`], and `item` must be a `QQuickItem`.
+#[must_use]
+pub unsafe fn map_to_scene(item: NonNull<QObject>, x: f64, y: f64) -> QPointF {
+    // SAFETY: the caller upholds the module contract and guarantees `item` is a
+    // `QQuickItem`, whose first base is `QObject`, so the addresses agree.
+    unsafe { item_map_to_scene(item.as_ptr(), &QPointF::new(x, y)) }
 }
 
 /// The value of `object`'s QML property `name`; invalid when it has none.

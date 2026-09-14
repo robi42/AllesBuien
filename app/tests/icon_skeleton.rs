@@ -1,77 +1,146 @@
-//! A pending condition icon shows a skeleton that can actually be seen.
+//! A pending condition icon shows a skeleton that can be seen, on dark and light.
 //!
-//! The skeleton was once drawn in the colour of the card it sits on, so every
-//! binding test passed while nothing appeared on screen. This harness holds the
-//! first refresh open forever and reads what the window shows meanwhile: the
-//! hero's skeleton is visible, differs in colour from its card, and breathes.
+//! Twice the skeleton passed its binding checks and still could not be seen:
+//! first it was filled with its card's own colour, then with a tone whose whole
+//! pulse moved four levels per channel. So this harness reads rendered pixels.
+//! It holds the first refresh open forever, samples the hero skeleton's centre
+//! and the card beside it frame after frame, and requires both a visible
+//! contrast in every frame and a visible pulse across frames.
 
-use std::{future::pending, ptr::NonNull, sync::Arc};
+use std::{
+    fs::{self, FileTimes},
+    path::Path,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use allesbuien_core::weather::{FeedApi, FeedFuture};
 use allesbuien_harness::{
-    HarnessBuilder,
-    probe::{QObject, child, descendant, focused_window, number_of, property},
+    Harness, HarnessBuilder,
+    probe::{child, focused_window, grab_window, map_to_scene, number_of, property},
 };
 use allesbuien_testkit::{SETTLE_BUDGET, pump_until};
-use cxx_qt_lib::QColor;
+use cxx_qt_lib::QPointF;
+
+/// The per-channel difference a reader can actually see, as `ForecastView`
+/// measured for its row rules.
+const VISIBLE_LEVELS: i32 = 12;
+
+/// How far left of the hero icon the card is sampled: inside the card's padding.
+const CARD_OFFSET: f64 = 8.0;
+
+/// Omarchy's Nord, the dark theme this app is developed on.
+const NORD: &str = "mode = \"dark\"\nbackground = \"#2e3440\"\nforeground = \"#d8dee9\"\n\
+    accent = \"#81a1c1\"\nselection = \"#434c5e\"\nlighter_background = \"#3b4252\"\n\
+    muted = \"#4c566a\"\n";
+
+/// Omarchy's Flexoki Light, so the tint is proven against a light card too.
+const FLEXOKI_LIGHT: &str = "mode = \"light\"\nbackground = \"#FFFCF0\"\n\
+    foreground = \"#100F0F\"\naccent = \"#205EA6\"\nselection = \"#CECDC3\"\n\
+    lighter_background = \"#E6E4D9\"\nmuted = \"#B7B5AC\"\n";
 
 /// A feed whose answer never arrives, so the window stays in its loading state.
 struct SilentFeedApi;
 
 impl FeedApi for SilentFeedApi {
     fn fetch(&self, _latitude: f64, _longitude: f64) -> FeedFuture<'_> {
-        Box::pin(pending())
+        Box::pin(std::future::pending())
     }
 }
 
-/// The hero icon's skeleton and the card beneath it, once both are rendered.
-fn skeleton_and_card() -> Option<(NonNull<QObject>, NonNull<QObject>)> {
-    // SAFETY: called only on the GUI thread while the booted app is alive.
+/// Writes `colors` as the theme, stamped `modified` seconds after the epoch so
+/// the controller's modification-time poll sees each write as a change.
+fn write_theme(theme: &Path, colors: &str, modified: u64) {
+    let path = theme.join("colors.toml");
+    fs::write(&path, colors).expect("the theme should be written");
+    fs::File::options()
+        .write(true)
+        .open(path)
+        .expect("the theme should reopen")
+        .set_times(
+            FileTimes::new().set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(modified)),
+        )
+        .expect("the theme's modification time should be set");
+}
+
+type Rgb = [i32; 3];
+
+/// The largest per-channel difference between two colours.
+fn spread(first: Rgb, second: Rgb) -> i32 {
+    (0..3)
+        .map(|channel| (first[channel] - second[channel]).abs())
+        .max()
+        .unwrap_or(0)
+}
+
+/// The rendered pixels at the hero skeleton's centre and at the card beside it,
+/// once the skeleton is on screen.
+fn sample() -> Option<(Rgb, Rgb)> {
+    // SAFETY: called only on the GUI thread while the booted app is alive; the
+    // hero icon and its skeleton are `QQuickItem`s.
     unsafe {
         let window = focused_window()?;
-        let skeleton = descendant(child(window, "heroIcon")?, "skeleton")?;
-        Some((skeleton, child(window, "sideCard")?))
+        let hero = child(window, "heroIcon")?;
+        let shown = property(hero, "loading").value::<bool>() == Some(true);
+        let middle = number_of(hero, "height") / 2.0;
+        let centre = map_to_scene(hero, number_of(hero, "width") / 2.0, middle);
+        let card = map_to_scene(hero, -CARD_OFFSET, middle);
+        let image = grab_window(window);
+        let pixel = |point: QPointF| {
+            // `toPoint` rounds to the nearest pixel, which is the pixel meant.
+            let point = point.to_point();
+            let color = image.pixel_color(point.x(), point.y());
+            [color.red(), color.green(), color.blue()]
+        };
+        shown.then(|| (pixel(centre), pixel(card)))
     }
 }
 
-fn color_of(object: NonNull<QObject>) -> QColor {
-    // SAFETY: `object` was just returned by the probes on the GUI thread.
-    unsafe { property(object, "color") }
-        .value::<QColor>()
-        .expect("a rectangle's color should be a QColor")
+/// Pumps frames until the skeleton's pulse has spanned a visible range, and
+/// requires it to stand out from its card in every frame on the way.
+fn watch_pulse(booted: &Harness, theme: &str) {
+    let (mut faintest, mut strongest) = ([i32::MAX; 3], [i32::MIN; 3]);
+    pump_until(
+        &format!("the skeleton visibly pulses on {theme}"),
+        SETTLE_BUDGET,
+        || {
+            booted.process_events();
+            let Some((skeleton, card)) = sample() else {
+                return false;
+            };
+            assert!(
+                spread(skeleton, card) >= VISIBLE_LEVELS,
+                "on {theme} the skeleton {skeleton:?} is not visible on its card {card:?}"
+            );
+            for channel in 0..3 {
+                faintest[channel] = faintest[channel].min(skeleton[channel]);
+                strongest[channel] = strongest[channel].max(skeleton[channel]);
+            }
+            spread(faintest, strongest) >= VISIBLE_LEVELS
+        },
+    );
 }
 
 #[test]
-fn a_pending_hero_icon_shows_a_visible_pulsing_skeleton() {
-    // Given: a window whose first weather refresh never answers.
-    let booted = HarnessBuilder::with_feed(Arc::new(SilentFeedApi)).boot();
+fn a_pending_hero_icon_shows_a_visibly_pulsing_skeleton_on_dark_and_light() {
+    // Given: a window on Nord whose first weather refresh never answers.
+    let root = tempfile::tempdir().expect("a temporary theme root");
+    write_theme(root.path(), NORD, 1);
+    let mut booted = HarnessBuilder::with_feed(Arc::new(SilentFeedApi))
+        .theme_path(root.path().to_owned())
+        .boot();
 
-    // When: the window is up.
-    pump_until("the hero skeleton is rendered", SETTLE_BUDGET, || {
+    // When / Then: the hero skeleton stands out from its card and breathes.
+    watch_pulse(&booted, "Nord");
+
+    // When: the desktop switches to a light theme.
+    write_theme(root.path(), FLEXOKI_LIGHT, 2);
+    booted.poll_theme();
+    pump_until("the card turns light", SETTLE_BUDGET, || {
         booted.process_events();
-        skeleton_and_card().is_some()
+        sample().is_some_and(|(_, card)| card.iter().all(|level| *level > 200))
     });
-    let (skeleton, card) = skeleton_and_card().expect("the wait returned with both items");
 
-    // Then: the slot is marked as loading and its skeleton is shown in a colour
-    // its card does not already have.
-    assert!(
-        *booted
-            .weather_controller()
-            .expect("controller should exist")
-            .icons_loading()
-    );
-    // SAFETY: `skeleton` comes from the probes on the live app's GUI thread.
-    let visible = unsafe { property(skeleton, "visible") }.value::<bool>();
-    assert_eq!(visible, Some(true));
-    assert_ne!(color_of(skeleton), color_of(card));
-
-    // Then: the skeleton breathes rather than standing still.
-    // SAFETY: as above.
-    let first_opacity = unsafe { number_of(skeleton, "opacity") };
-    pump_until("the skeleton's opacity moves", SETTLE_BUDGET, || {
-        booted.process_events();
-        // SAFETY: as above; the hero icon outlives every refresh.
-        (unsafe { number_of(skeleton, "opacity") } - first_opacity).abs() > 0.01
-    });
+    // Then: the same holds on the light card.
+    watch_pulse(&booted, "Flexoki Light");
 }
