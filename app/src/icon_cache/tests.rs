@@ -12,7 +12,7 @@ use allesbuien_core::weather::{CurrentConditions, ForecastDay, WeatherData};
 use allesbuien_testkit::block_on;
 use tempfile::{TempDir, tempdir};
 
-use super::{IconCache, IconFuture, IconSource, condition_codes};
+use super::{IconCache, IconFuture, IconSource, condition_codes, missing_keys};
 
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\nbody";
 
@@ -112,7 +112,7 @@ fn an_undecodable_download_does_not_stop_another_icon_from_warming() {
     // When
     block_on(
         cache(&directory, Arc::clone(&source))
-            .warm(&[String::from("BAD"), String::from("GOOD")], &|| {}),
+            .warm(&[String::from("BAD"), String::from("GOOD")], &|_| {}),
     );
 
     // Then
@@ -144,25 +144,44 @@ fn restoring_publishes_disk_entries_without_asking_the_source() {
 }
 
 #[test]
-fn warming_reports_each_published_icon_and_nothing_it_refused() {
+fn warming_settles_every_key_once_whether_or_not_it_was_published() {
     // Given: one valid download, and one response that is no PNG at all.
     let directory = tempdir().expect("temp cache");
     let valid = CountingSource::serving(PNG);
     let damaged = CountingSource::serving(b"<html>404 not found</html>");
-    let reported = AtomicUsize::new(0);
-    let on_ready = || {
-        reported.fetch_add(1, Ordering::SeqCst);
+    let settled = std::sync::Mutex::new(Vec::new());
+    let on_settled = |key: &str| {
+        settled.lock().expect("settled keys").push(key.to_owned());
     };
 
     // When
-    block_on(cache(&directory, Arc::clone(&valid)).warm(&[String::from("RC")], &on_ready));
-    block_on(cache(&directory, Arc::clone(&damaged)).warm(&[String::from("RD")], &on_ready));
+    block_on(cache(&directory, Arc::clone(&valid)).warm(&[String::from("rc")], &on_settled));
+    block_on(cache(&directory, Arc::clone(&damaged)).warm(&[String::from("RD")], &on_settled));
 
     // Then
     assert_eq!((valid.calls(), damaged.calls()), (1, 1));
-    assert_eq!(reported.load(Ordering::SeqCst), 1);
+    assert_eq!(*settled.lock().expect("settled keys"), ["RC", "RD"]);
     assert!(crate::image_provider::has_icon("RC"));
     assert!(!crate::image_provider::has_icon("RD"));
+}
+
+#[test]
+fn only_distinct_usable_codes_the_provider_lacks_are_missing() {
+    // Given: a key no other test in this process stores.
+    let codes = [
+        String::from("rg"),
+        String::from("RG"),
+        String::from("../etc/passwd"),
+        String::new(),
+    ];
+    let before = missing_keys(&codes);
+
+    // When
+    crate::image_provider::store_icon("RG", b"icon".to_vec().into());
+
+    // Then
+    assert_eq!(before, ["RG"]);
+    assert!(missing_keys(&codes).is_empty());
 }
 
 #[test]
@@ -183,7 +202,7 @@ fn warming_an_unusable_code_publishes_nothing() {
     // When
     block_on(
         cache(&directory, Arc::clone(&source))
-            .warm(&[String::new(), String::from("../etc/passwd")], &|| {}),
+            .warm(&[String::new(), String::from("../etc/passwd")], &|_| {}),
     );
 
     // Then
@@ -219,7 +238,7 @@ fn warming_fetches_every_payload_code_with_bounded_concurrency() {
     let source = CountingSource::serving(PNG);
 
     // When
-    block_on(cache(&directory, Arc::clone(&source)).warm(&codes, &|| {}));
+    block_on(cache(&directory, Arc::clone(&source)).warm(&codes, &|_| {}));
 
     // Then
     assert_eq!(source.calls(), expected_fetches);

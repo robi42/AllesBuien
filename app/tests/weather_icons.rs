@@ -110,10 +110,13 @@ fn icons_follow_the_text_one_by_one_and_recover_on_a_later_refresh() {
             && source.calls("QQ") == 1
     });
 
-    // Then: the text is on screen while no icon is, and the pending slots say so.
+    // Then: the text is on screen while no icon is, and each slot answers for
+    // its own download: the refused hero goes empty while row 0 still loads.
+    settle(&booted, "the refused hero drops its skeleton", || {
+        !skeleton_visible(Icon::Hero)
+    });
     assert_eq!(bound_source(Icon::Hero), "");
     assert_eq!(bound_source(Icon::Row(0)), "");
-    assert!(skeleton_visible(Icon::Hero));
     assert!(skeleton_visible(Icon::Row(0)));
 
     // Then: the served icon shows while another is still downloading.
@@ -137,10 +140,12 @@ fn icons_follow_the_text_one_by_one_and_recover_on_a_later_refresh() {
     // When: the held-back download completes.
     release.send(()).expect("the gate should still be awaited");
 
-    // Then: its rows show it, loading ends, and no skeleton is left behind.
-    settle(&booted, "row 0 shows its icon and loading ends", || {
-        bound_source(Icon::Row(0)) == "image://condition/F" && !*controller(&booted).icons_loading()
-    });
+    // Then: its rows show it, and no skeleton is left behind.
+    settle(
+        &booted,
+        "row 0 shows its icon and drops its skeleton",
+        || bound_source(Icon::Row(0)) == "image://condition/F" && !skeleton_visible(Icon::Row(0)),
+    );
     assert!(!skeleton_visible(Icon::Hero));
     assert!(!skeleton_visible(Icon::Row(0)));
 }

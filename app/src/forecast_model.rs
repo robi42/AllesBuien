@@ -15,7 +15,7 @@ use cxx_qt_lib::{
     QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant, QVector,
 };
 
-use crate::{condition_icon, image_provider, weather_controller::ffi};
+use crate::{condition_icon, icon_delivery::PendingIcons, image_provider, weather_controller::ffi};
 use ffi::ForecastRole;
 
 impl ffi::WeatherController {
@@ -24,7 +24,7 @@ impl ffi::WeatherController {
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        role_value(&self.forecast, index.row(), role)
+        role_value(&self.forecast, &self.pending_icons, index.row(), role)
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
@@ -40,8 +40,8 @@ impl ffi::WeatherController {
         unsafe { self.end_reset_model() };
     }
 
-    /// Tells every row's delegate to re-read its icon, now that the provider may
-    /// serve a URL [`role_value`] withheld when the rows were last read.
+    /// Tells every row's delegate to re-read its icon and whether it is still
+    /// loading, now that a download may have settled since the rows were read.
     pub(crate) fn forecast_icons_changed(self: Pin<&mut Self>) {
         let Some(last) = self.forecast.len().checked_sub(1) else {
             return;
@@ -49,7 +49,7 @@ impl ffi::WeatherController {
         let root = QModelIndex::default();
         let first_row = self.index(0, 0, &root);
         let last_row = self.index(i32::try_from(last).unwrap_or(i32::MAX), 0, &root);
-        let roles = QVector::from([ForecastRole::IconUrl.repr]);
+        let roles = QVector::from([ForecastRole::IconUrl.repr, ForecastRole::IconLoading.repr]);
         self.data_changed(&first_row, &last_row, &roles);
     }
 }
@@ -82,7 +82,7 @@ impl ForecastRow {
 }
 
 /// Reads one role of one row, or an invalid variant for anything out of range.
-fn role_value(forecast: &[ForecastDay], row: i32, role: i32) -> QVariant {
+fn role_value(forecast: &[ForecastDay], pending: &PendingIcons, row: i32, role: i32) -> QVariant {
     let Some(row) = usize::try_from(row)
         .ok()
         .and_then(|row| forecast.get(row))
@@ -97,6 +97,7 @@ fn role_value(forecast: &[ForecastDay], row: i32, role: i32) -> QVariant {
         ForecastRole::MaxTemperature => QVariant::from(&row.max_temperature),
         ForecastRole::RainChance => QVariant::from(&row.rain_chance),
         ForecastRole::Condition => QVariant::from(&QString::from(&row.condition)),
+        ForecastRole::IconLoading => QVariant::from(&pending.awaits(&row.icon_url)),
         ForecastRole::IconUrl => QVariant::from(&QString::from(&image_provider::published_url(
             &row.icon_url,
         ))),
@@ -115,6 +116,7 @@ fn forecast_role_names() -> QHash<QHashPair_i32_QByteArray> {
         (ForecastRole::RainChance.repr, "rainChance"),
         (ForecastRole::Condition.repr, "condition"),
         (ForecastRole::IconUrl.repr, "iconUrl"),
+        (ForecastRole::IconLoading.repr, "iconLoading"),
     ] {
         roles.insert(role, QByteArray::from(name));
     }

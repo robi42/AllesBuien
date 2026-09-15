@@ -18,6 +18,7 @@ use tokio::runtime::Handle;
 use crate::{
     conditions_view::ConditionsView,
     icon_cache::IconCache,
+    icon_delivery::PendingIcons,
     qt_values::interval_ms,
     services::{NotificationService, TimerIntervals},
 };
@@ -50,8 +51,8 @@ pub struct WeatherControllerRust {
     pub(crate) condition_icon_url: QString,
     /// The addressable hero icon URL, re-published once the provider can serve it.
     pub(crate) hero_icon_url: String,
-    /// Whether an empty icon slot is still coming, rather than never coming.
-    pub(crate) icons_loading: bool,
+    /// Whether the hero's empty slot is still coming, rather than never coming.
+    pub(crate) hero_icon_loading: bool,
     pub(crate) observed_label: QString,
     pub(crate) rain_summary: QString,
     pub(crate) rain_wet: bool,
@@ -65,6 +66,8 @@ pub struct WeatherControllerRust {
     pub(crate) forecast: Vec<ForecastDay>,
     /// Retained so the radar cursor can be replaced without refetching raintext.
     pub(crate) rain_points: Vec<RainPoint>,
+    /// Icon keys still downloading, which decide each slot's loading state.
+    pub(crate) pending_icons: PendingIcons,
     pub(crate) radar_frame_label: String,
     pub(crate) feed: Option<Arc<dyn FeedApi>>,
     pub(crate) icons: IconCache,
@@ -95,7 +98,7 @@ impl Default for WeatherControllerRust {
             hero_icon_url: String::new(),
             // Nothing has answered at construction, so the hero slot is pending
             // until the first refresh says otherwise, success or failure.
-            icons_loading: true,
+            hero_icon_loading: true,
             observed_label: (&conditions.observed_label).into(),
             rain_summary: RAIN_UNAVAILABLE.into(),
             rain_wet: false,
@@ -108,6 +111,7 @@ impl Default for WeatherControllerRust {
             location_poll_interval_ms: interval_ms(defaults.location_poll),
             forecast: Vec::new(),
             rain_points: Vec::new(),
+            pending_icons: PendingIcons::default(),
             radar_frame_label: String::new(),
             feed: None,
             icons: IconCache::disabled(),

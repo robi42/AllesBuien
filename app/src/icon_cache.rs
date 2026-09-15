@@ -12,8 +12,9 @@
 //! A refresh therefore runs in three steps. [`IconCache::restore`] publishes
 //! what is already on disk, so a cached launch paints text and icons together;
 //! the text is published next, whatever is still missing; then
-//! [`IconCache::warm`] downloads the misses and reports each icon the moment it
-//! is published, so no icon waits for another one.
+//! [`IconCache::warm`] downloads the misses and reports each key the moment it
+//! settles, published or not, so no icon waits for another one and no slot is
+//! left marked as loading once its own download is over.
 //!
 //! Every failure degrades to "no icon" rather than to an error: a miss, an
 //! unreachable CDN, an oversized body, or a damaged file all leave the code
@@ -64,7 +65,7 @@ impl IconCache {
         let Some(directory) = self.directory.as_ref() else {
             return;
         };
-        for key in unpublished_keys(codes) {
+        for key in missing_keys(codes) {
             if let Some(bytes) = icon_store::read(&icon_store::entry_path(directory, &key)) {
                 image_provider::store_icon(&key, bytes.into());
             }
@@ -72,14 +73,17 @@ impl IconCache {
     }
 
     /// Publishes every requested code to the provider, downloading the misses,
-    /// and calls `on_ready` after each icon it publishes.
-    pub async fn warm(&self, codes: &[String], on_ready: &(dyn Fn() + Sync)) {
-        stream::iter(unpublished_keys(codes))
+    /// and calls `on_settled` exactly once per usable key when its attempt is
+    /// over, whether the icon was published, refused, or already there.
+    pub async fn warm(&self, codes: &[String], on_settled: &(dyn Fn(&str) + Sync)) {
+        stream::iter(usable_keys(codes))
             .map(|key| async move {
-                if let Some(bytes) = self.read_or_download(&key).await {
+                if !image_provider::has_icon(&key)
+                    && let Some(bytes) = self.read_or_download(&key).await
+                {
                     image_provider::store_icon(&key, bytes.into());
-                    on_ready();
                 }
+                on_settled(&key);
             })
             .buffer_unordered(MAX_CONCURRENT_ICONS)
             .collect::<()>()
@@ -102,11 +106,22 @@ impl IconCache {
     }
 }
 
-/// The cache keys of `codes` the provider cannot serve yet.
-fn unpublished_keys(codes: &[String]) -> Vec<String> {
+/// The distinct cache keys of `codes`, leaving out any code the cache refuses.
+fn usable_keys(codes: &[String]) -> BTreeSet<String> {
     codes
         .iter()
         .filter_map(|code| condition_icon::cache_key(code))
+        .collect()
+}
+
+/// The distinct cache keys of `codes` the provider cannot serve yet.
+///
+/// Handing exactly these to [`IconCache::warm`] is what lets a caller count a
+/// key as pending once and trust that it settles once.
+#[must_use]
+pub fn missing_keys(codes: &[String]) -> Vec<String> {
+    usable_keys(codes)
+        .into_iter()
         .filter(|key| !image_provider::has_icon(key))
         .collect()
 }

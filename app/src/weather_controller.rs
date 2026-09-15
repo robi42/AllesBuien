@@ -63,6 +63,7 @@ pub mod ffi {
         RainChance,
         Condition,
         IconUrl,
+        IconLoading,
     }
 
     #[auto_cxx_name]
@@ -79,7 +80,7 @@ pub mod ffi {
         #[qproperty(QString, humidity)]
         #[qproperty(QString, condition)]
         #[qproperty(QString, condition_icon_url)]
-        #[qproperty(bool, icons_loading)]
+        #[qproperty(bool, hero_icon_loading)]
         #[qproperty(QString, observed_label)]
         #[qproperty(QString, rain_summary)]
         #[qproperty(bool, rain_wet)]

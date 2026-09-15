@@ -55,6 +55,7 @@ ListView {
 
         required property var weekday
         required property var iconUrl
+        required property bool iconLoading
         required property var rainChance
         required property var minTemperature
         required property var maxTemperature
@@ -92,7 +93,7 @@ ListView {
                     source: forecastRow.iconUrl
                     slotSize: forecastView.theme.iconRow
                     theme: forecastView.theme
-                    loading: forecastView.weatherController.iconsLoading
+                    loading: forecastRow.iconLoading
                     Layout.preferredWidth: rowIcon.implicitWidth
                     Layout.preferredHeight: rowIcon.implicitHeight
                 }

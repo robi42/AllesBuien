@@ -140,8 +140,9 @@ pub unsafe fn delegate(view: NonNull<QObject>, row: i32) -> Option<NonNull<QObje
 /// Where the point (`x`, `y`) of `item`'s own coordinates lands in its window.
 ///
 /// The result is in logical units. [`grab_window`]'s image is in physical
-/// pixels, so a caller reading that point's pixel scales it by the ratio of the
-/// image's width to the window's first; only an unscaled desktop has them agree.
+/// pixels, so a caller reading that point's pixel first scales it by the image's
+/// width divided by the window's logical `width`; only on an unscaled desktop
+/// are the two the same.
 ///
 /// # Safety
 ///
