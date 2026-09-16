@@ -68,6 +68,9 @@ pub struct WeatherControllerRust {
     pub(crate) rain_points: Vec<RainPoint>,
     /// Icon keys still downloading, which decide each slot's loading state.
     pub(crate) pending_icons: PendingIcons,
+    /// Which refresh the window is showing, so a slower earlier fetch whose
+    /// answer arrives after a later one's cannot put its older payload back.
+    pub(crate) refresh_generation: u64,
     pub(crate) radar_frame_label: String,
     pub(crate) feed: Option<Arc<dyn FeedApi>>,
     pub(crate) icons: IconCache,
@@ -112,6 +115,7 @@ impl Default for WeatherControllerRust {
             forecast: Vec::new(),
             rain_points: Vec::new(),
             pending_icons: PendingIcons::default(),
+            refresh_generation: 0,
             radar_frame_label: String::new(),
             feed: None,
             icons: IconCache::disabled(),

@@ -200,7 +200,7 @@ impl ffi::WeatherController {
         self.as_mut().rust_mut().location = Some(location.clone());
     }
 
-    pub fn refresh(self: Pin<&mut Self>) {
+    pub fn refresh(mut self: Pin<&mut Self>) {
         let (Some(feed), Some(location), Some(runtime), Some(notifications)) = (
             &self.feed,
             &self.location,
@@ -216,10 +216,12 @@ impl ffi::WeatherController {
             runtime.clone(),
             notifications.clone(),
         );
+        let generation = self.refresh_generation.saturating_add(1);
+        self.as_mut().rust_mut().refresh_generation = generation;
         let qt_thread = self.qt_thread();
         drop(runtime.spawn(async move {
             let result = refresh_job::fetch_weather(feed, notifications, location).await;
-            icon_delivery::publish(result, &icons, &qt_thread).await;
+            icon_delivery::publish(result, &icons, &qt_thread, generation).await;
         }));
     }
 

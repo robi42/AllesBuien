@@ -8,6 +8,13 @@
 //! re-publish a change QML reacts to: a URL republished as the same string
 //! emits nothing, and a hero icon that failed once would stay blank.
 //!
+//! Refreshes overlap — a poll that finds a new location refreshes while the
+//! recurring one is still in flight — so every update this module queues is
+//! tagged with the refresh it belongs to and dropped unless the window is still
+//! showing that refresh. Without the tag, a slow fetch whose answer arrives
+//! after a later one's would put its own older payload back on screen, and its
+//! icon updates would then count against it.
+//!
 //! Whether a slot is still loading is answered per icon key, not per refresh.
 //! A skeleton belongs to the one download it stands for: a slot whose own
 //! download has failed goes empty even while another icon is still on its way,
@@ -58,10 +65,15 @@ impl PendingIcons {
 }
 
 /// Publishes one refresh's `result` onto the window, then its missing icons.
+///
+/// Every update is dropped unless `generation` is still the refresh the window
+/// is showing, so an overtaken fetch neither restores its payload nor marks any
+/// slot as loading for icons nobody is waiting for.
 pub(crate) async fn publish(
     result: Result<WeatherData, WeatherError>,
     icons: &IconCache,
     qt_thread: &CxxQtThread<ffi::WeatherController>,
+    generation: u64,
 ) {
     let codes = result
         .as_ref()
@@ -71,6 +83,9 @@ pub(crate) async fn publish(
     let keys = icon_cache::missing_keys(&codes);
     let awaited = keys.clone();
     queue_update(qt_thread, move |mut controller| {
+        if controller.refresh_generation != generation {
+            return;
+        }
         // Counted before the rows are replaced, so they are first read loading.
         controller.as_mut().rust_mut().pending_icons.add(&awaited);
         controller.as_mut().apply_result(result);
@@ -83,6 +98,9 @@ pub(crate) async fn publish(
         .warm(&keys, &|key| {
             let key = key.to_owned();
             queue_update(qt_thread, move |mut controller| {
+                if controller.refresh_generation != generation {
+                    return;
+                }
                 controller.as_mut().rust_mut().pending_icons.settle(&key);
                 controller.apply_icons();
             });
