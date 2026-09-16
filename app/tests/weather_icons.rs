@@ -9,14 +9,17 @@ mod icon_sources;
 
 use std::{ptr::NonNull, sync::Arc};
 
-use allesbuien::{icon_cache::IconCache, weather_controller::ffi::WeatherController};
+use allesbuien::{
+    icon_cache::IconCache,
+    weather_controller::ffi::{ForecastRole, WeatherController},
+};
 use allesbuien_core::weather::{FeedApi, FeedFuture};
 use allesbuien_harness::{
     Harness, HarnessBuilder,
     probe::{QObject, child, delegate, descendant, focused_window, property},
 };
 use allesbuien_testkit::{SETTLE_BUDGET, fixtures::five_day_weather, pump_until};
-use cxx_qt_lib::QUrl;
+use cxx_qt_lib::{QModelIndex, QUrl};
 use icon_sources::ScriptedIconSource;
 
 /// The shared five-day fixture with its last day's code changed to `a`, so the
@@ -148,4 +151,17 @@ fn icons_follow_the_text_one_by_one_and_recover_on_a_later_refresh() {
     );
     assert!(!skeleton_visible(Icon::Hero));
     assert!(!skeleton_visible(Icon::Row(0)));
+
+    // Then: nothing is left counted as downloading. Both refreshes asked for
+    // `F`, and a count that outlived its download would keep the row's slot
+    // loading for good — invisible here only because the icon did arrive, and a
+    // skeleton forever the next time one does not.
+    let controller = controller(&booted);
+    let row = controller.index(0, 0, &QModelIndex::default());
+    assert_eq!(
+        controller
+            .data(&row, ForecastRole::IconLoading.repr)
+            .value::<bool>(),
+        Some(false)
+    );
 }

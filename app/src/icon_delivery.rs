@@ -9,11 +9,16 @@
 //! emits nothing, and a hero icon that failed once would stay blank.
 //!
 //! Refreshes overlap — a poll that finds a new location refreshes while the
-//! recurring one is still in flight — so every update this module queues is
-//! tagged with the refresh it belongs to and dropped unless the window is still
-//! showing that refresh. Without the tag, a slow fetch whose answer arrives
-//! after a later one's would put its own older payload back on screen, and its
-//! icon updates would then count against it.
+//! recurring one is still in flight — so the payload a refresh queues carries
+//! the refresh it belongs to and is dropped unless the window is still showing
+//! that refresh. Without the tag, a slow fetch whose answer arrives after a
+//! later one's would put its own older payload back on screen.
+//!
+//! The pending counts below are deliberately not tagged that way. They record
+//! downloads, not payloads, and a download that has started has to be counted
+//! out again whichever refresh started it. Counting only what the current
+//! refresh began would leave an overtaken refresh's key pending for good, and a
+//! slot bound to that key loading for good with it.
 //!
 //! Whether a slot is still loading is answered per icon key, not per refresh.
 //! A skeleton belongs to the one download it stands for: a slot whose own
@@ -66,9 +71,10 @@ impl PendingIcons {
 
 /// Publishes one refresh's `result` onto the window, then its missing icons.
 ///
-/// Every update is dropped unless `generation` is still the refresh the window
-/// is showing, so an overtaken fetch neither restores its payload nor marks any
-/// slot as loading for icons nobody is waiting for.
+/// The payload is applied only while `generation` is still the refresh the
+/// window is showing, so an overtaken fetch cannot restore its own older
+/// answer. Its downloads are still counted in and out, because they are really
+/// in flight and every one of them reports back.
 pub(crate) async fn publish(
     result: Result<WeatherData, WeatherError>,
     icons: &IconCache,
@@ -83,12 +89,13 @@ pub(crate) async fn publish(
     let keys = icon_cache::missing_keys(&codes);
     let awaited = keys.clone();
     queue_update(qt_thread, move |mut controller| {
-        if controller.refresh_generation != generation {
-            return;
-        }
-        // Counted before the rows are replaced, so they are first read loading.
+        // Counted before the rows are replaced, so they are first read loading,
+        // and counted whether or not this refresh still owns the window: warm
+        // settles every one of these keys exactly once, below.
         controller.as_mut().rust_mut().pending_icons.add(&awaited);
-        controller.as_mut().apply_result(result);
+        if controller.refresh_generation == generation {
+            controller.as_mut().apply_result(result);
+        }
         controller.apply_icons();
     });
     if keys.is_empty() {
@@ -98,9 +105,6 @@ pub(crate) async fn publish(
         .warm(&keys, &|key| {
             let key = key.to_owned();
             queue_update(qt_thread, move |mut controller| {
-                if controller.refresh_generation != generation {
-                    return;
-                }
                 controller.as_mut().rust_mut().pending_icons.settle(&key);
                 controller.apply_icons();
             });
