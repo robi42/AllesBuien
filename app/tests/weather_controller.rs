@@ -87,10 +87,9 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
             controller.condition().to_string(),
             "Heavily clouded with rain"
         );
-        assert_eq!(
-            controller.condition_icon_url().to_string(),
-            "image://condition/QQ"
-        );
+        // The harness's default icon cache is disabled, so a provider URL it can
+        // never serve is withheld; `weather_icons.rs` proves icon delivery.
+        assert!(controller.condition_icon_url().is_empty());
         assert_eq!(controller.observed_label().to_string(), "17:50");
         assert_eq!(controller.rain_summary().to_string(), "starts around 14:10");
         assert_eq!(controller.row_count(&QModelIndex::default()), 5);
@@ -134,7 +133,7 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
             .data(&first_row, ForecastRole::IconUrl.repr)
             .value::<QString>()
             .expect("icon role should carry a string");
-        assert_eq!(icon.to_string(), "image://condition/F");
+        assert!(icon.is_empty());
     }
 
     // The rain cursor tracks the radar frame QML is showing, and reports itself

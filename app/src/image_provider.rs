@@ -78,6 +78,19 @@ pub(crate) fn has_icon(key: &str) -> bool {
         .is_ok_and(|store| store.icons.contains_key(key))
 }
 
+/// What QML may bind now for an icon URL.
+///
+/// A provider URL is withheld as `""` until the store can answer it, so the
+/// later re-publish is a change QML reacts to instead of a same-string setter
+/// that emits nothing. Any other URL, a CDN fallback or empty, passes through.
+#[must_use]
+pub(crate) fn published_url(url: &str) -> String {
+    match crate::condition_icon::provider_key(url) {
+        Some(key) if !has_icon(key) => String::new(),
+        _ => url.to_owned(),
+    }
+}
+
 #[cxx_qt::bridge]
 pub mod ffi {
     unsafe extern "C++" {
@@ -192,7 +205,9 @@ fn published_bytes(id: ImageId) -> Option<FrameBytes> {
 
 #[cfg(test)]
 mod tests {
-    use super::{FrameBytes, ImageId, begin_generation, has_icon, published_bytes, store_icon};
+    use super::{
+        FrameBytes, ImageId, begin_generation, has_icon, published_bytes, published_url, store_icon,
+    };
 
     #[test]
     fn a_two_part_numeric_id_addresses_a_radar_frame() {
@@ -240,6 +255,25 @@ mod tests {
             Some(b"icon".as_slice())
         );
         assert!(published_bytes(ImageId::ConditionIcon(String::from("ZY"))).is_none());
+    }
+
+    #[test]
+    fn a_provider_url_is_withheld_until_its_icon_is_published() {
+        // Given: a key no other test in this process stores.
+        let url = "image://condition/RU";
+        let withheld = published_url(url);
+
+        // When
+        store_icon("RU", FrameBytes::from(b"icon".to_vec()));
+
+        // Then
+        assert!(withheld.is_empty());
+        assert_eq!(published_url(url), url);
+        assert_eq!(
+            published_url("https://cdn.buienradar.nl/x/30x30/f.png"),
+            "https://cdn.buienradar.nl/x/30x30/f.png"
+        );
+        assert!(published_url("").is_empty());
     }
 
     #[test]

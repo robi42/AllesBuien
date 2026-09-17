@@ -13,8 +13,14 @@
 //! is proven instead by the harnesses that call it, and a missing or renamed
 //! symbol fails their link rather than passing silently.
 //!
+//! A list view's delegates are the one part of the tree `findChild` cannot see:
+//! Qt 6 parents them to the view's content item as items, never as objects. So
+//! [`delegate`] asks the view for one by row, through `QQuickItemView`'s own
+//! `itemAtIndex`, and [`descendant`] searches below whatever item it returns.
+//!
 //! Every function is `unsafe` with one shared contract, stated once here: the
-//! pointers passed in came from [`focused_window`] or [`child`] on the harness's
+//! pointers passed in came from [`focused_window`], [`child`], [`delegate`], or
+//! [`descendant`] on the harness's
 //! booted application, that application is still alive, and the call is made
 //! on the thread that booted it. A non-null pointer proves none of that.
 
@@ -23,7 +29,7 @@ use std::{
     ptr::NonNull,
 };
 
-use cxx_qt_lib::{QImage, QString, QVariant};
+use cxx_qt_lib::{QImage, QPointF, QString, QVariant};
 
 /// An opaque `QObject`, only ever handled through a pointer Qt returned.
 #[repr(C)]
@@ -56,6 +62,14 @@ unsafe extern "C" {
         meta_object: &QMetaObject,
         options: i32,
     ) -> *mut QObject;
+    // Returns a `QQuickItem *`. `QObject` is `QQuickItem`'s first base, so the
+    // same address is the `QObject *` every other probe takes.
+    #[link_name = "_ZNK14QQuickItemView11itemAtIndexEi"]
+    fn item_view_item_at_index(view: *const QObject, index: i32) -> *mut QObject;
+    // `QPointF` is two `qreal`s with trivial copy and destruction, so the
+    // Itanium ABI returns it in registers exactly as a `repr(C)` pair of `f64`.
+    #[link_name = "_ZNK10QQuickItem10mapToSceneERK7QPointF"]
+    fn item_map_to_scene(item: *const QObject, point: &QPointF) -> QPointF;
     #[link_name = "_ZNK7QObject8propertyEPKc"]
     fn object_property(object: *const QObject, name: *const c_char) -> QVariant;
     #[link_name = "_ZN12QQuickWindow10grabWindowEv"]
@@ -86,16 +100,58 @@ pub unsafe fn focused_window() -> Option<NonNull<QQuickWindow>> {
 /// application, and the call must be on its GUI thread.
 #[must_use]
 pub unsafe fn child(window: NonNull<QQuickWindow>, name: &str) -> Option<NonNull<QObject>> {
-    // SAFETY: the caller upholds the module contract; a `QQuickWindow` is a
-    // `QObject`, and the result is checked for null before it is returned.
+    // SAFETY: the caller upholds the module contract, and a `QQuickWindow` is a
+    // `QObject`.
+    unsafe { descendant(window.cast::<QObject>(), name) }
+}
+
+/// The item named `name` anywhere under `object`, if its subtree holds one.
+///
+/// # Safety
+///
+/// As [`property`].
+#[must_use]
+pub unsafe fn descendant(object: NonNull<QObject>, name: &str) -> Option<NonNull<QObject>> {
+    // SAFETY: the caller upholds the module contract, and the result is checked
+    // for null before it is returned.
     NonNull::new(unsafe {
         find_child_helper(
-            window.as_ptr().cast::<QObject>(),
+            object.as_ptr(),
             &QString::from(name),
             &QOBJECT_STATIC_META_OBJECT,
             FIND_RECURSIVELY,
         )
     })
+}
+
+/// The delegate `view` currently shows for `row`, if it has created one.
+///
+/// # Safety
+///
+/// As [`property`], and `view` must be a `ListView`, `GridView`, or another
+/// `QQuickItemView`: the call is dispatched on that class, not looked up.
+#[must_use]
+pub unsafe fn delegate(view: NonNull<QObject>, row: i32) -> Option<NonNull<QObject>> {
+    // SAFETY: the caller upholds the module contract and guarantees `view` is a
+    // `QQuickItemView`; the result is checked for null before it is returned.
+    NonNull::new(unsafe { item_view_item_at_index(view.as_ptr(), row) })
+}
+
+/// Where the point (`x`, `y`) of `item`'s own coordinates lands in its window.
+///
+/// The result is in logical units. [`grab_window`]'s image is in physical
+/// pixels, so a caller reading that point's pixel first scales it by the image's
+/// width divided by the window's logical `width`; only on an unscaled desktop
+/// are the two the same.
+///
+/// # Safety
+///
+/// As [`property`], and `item` must be a `QQuickItem`.
+#[must_use]
+pub unsafe fn map_to_scene(item: NonNull<QObject>, x: f64, y: f64) -> QPointF {
+    // SAFETY: the caller upholds the module contract and guarantees `item` is a
+    // `QQuickItem`, whose first base is `QObject`, so the addresses agree.
+    unsafe { item_map_to_scene(item.as_ptr(), &QPointF::new(x, y)) }
 }
 
 /// The value of `object`'s QML property `name`; invalid when it has none.
