@@ -155,13 +155,14 @@ fn icons_follow_the_text_one_by_one_and_recover_on_a_later_refresh() {
     // Then: nothing is left counted as downloading. Both refreshes asked for
     // `F`, and a count that outlived its download would keep the row's slot
     // loading for good — invisible here only because the icon did arrive, and a
-    // skeleton forever the next time one does not.
-    let controller = controller(&booted);
-    let row = controller.index(0, 0, &QModelIndex::default());
-    assert_eq!(
+    // skeleton forever the next time one does not. The second refresh's settle
+    // is a separate queued update, so it is waited for rather than read at once.
+    settle(&booted, "row 0 is no longer counted as downloading", || {
+        let controller = controller(&booted);
+        let row = controller.index(0, 0, &QModelIndex::default());
         controller
             .data(&row, ForecastRole::IconLoading.repr)
-            .value::<bool>(),
-        Some(false)
-    );
+            .value::<bool>()
+            == Some(false)
+    });
 }
