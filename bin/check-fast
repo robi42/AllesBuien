@@ -107,15 +107,54 @@ missing_attribution=$(
 # refused everywhere, Theme.qml included: a fabricated palette value is the
 # same defect wearing the right file name, and Qt.rgba produces a colour the
 # theme never sees.
+#
+# The bar widget under plugin/ is read too. It is drawn inside omarchy-shell,
+# whose theme it has to follow just as the window follows Omarchy's, and a
+# literal there is the same defect in a file the old app/qml/*.qml glob never
+# opened. Files come from the index rather than a shell glob, so a directory
+# with no QML in it contributes nothing instead of a literal pattern grep
+# cannot open.
+#
+# A file this gate cannot read is an offender, not a pass. The index can name a
+# file the working tree no longer has - a deletion or a rename not yet staged -
+# and a scan that skipped it would report a clean tree it never looked at, so
+# each one is named up front and left out of the scans. grep's own exit status
+# 1 is "no match", the answer a clean tree gives; anything above it is a read
+# that failed some other way, and that is reported too rather than mistaken for
+# a clean result. The scan's output runs through awk, which exits 0 on no match,
+# so the pipeline's status stays grep's.
 echo "==> gate: theme-owned colours"
+colour_files=()
+bound_files=()
+unreadable_colour_files=()
+while IFS= read -r qml_file; do
+  if [[ ! -f $qml_file || ! -r $qml_file ]]; then
+    unreadable_colour_files+=("$qml_file")
+    continue
+  fi
+  colour_files+=("$qml_file")
+  if [[ $qml_file != app/qml/Theme.qml ]]; then
+    bound_files+=("$qml_file")
+  fi
+done < <(git ls-files 'app/qml/*.qml' 'plugin/*.qml')
+colour_scan() {
+  local pattern=$1 quoted_only=$2 scan_status=0
+  shift 2
+  [[ $# -gt 0 ]] || return 0
+  grep -nHE "$pattern" "$@" | awk -v quoted_only="$quoted_only" '!quoted_only || /"/' || scan_status=$?
+  if [[ $scan_status -gt 1 ]]; then
+    printf '  grep exited %d scanning for %s, so this gate did not read every file\n' "$scan_status" "$pattern"
+  fi
+}
 hardcoded=$(
-  grep -nE '"#[0-9A-Fa-f]{3,8}"' app/qml/*.qml || true
-  grep -nE '(Qt\.(rgba|hsla|hsva|tint|colorEqual)|\.(lighter|darker))\(' app/qml/*.qml || true
-  git ls-files 'app/qml/*.qml' | grep -v '^app/qml/Theme\.qml$' | xargs -r \
-    grep -nE '(^|[^[:alnum:]_])color:|property[[:space:]]+color[[:space:]]' |
-    grep '"' || true
+  for qml_file in "${unreadable_colour_files[@]}"; do
+    printf '  %s: tracked, but not readable in the working tree, so it went unscanned\n' "$qml_file"
+  done
+  colour_scan '"#[0-9A-Fa-f]{3,8}"' 0 "${colour_files[@]}"
+  colour_scan '(Qt\.(rgba|hsla|hsva|tint|colorEqual)|\.(lighter|darker))\(' 0 "${colour_files[@]}"
+  colour_scan '(^|[^[:alnum:]_])color:|property[[:space:]]+color[[:space:]]' 1 "${bound_files[@]}"
 )
-[[ -z "$hardcoded" ]] || report 'colours written outside Theme.qml:' "$hardcoded"
+[[ -z "$hardcoded" ]] || report 'colours written outside Theme.qml, or QML this gate could not read:' "$hardcoded"
 
 # Image allowlist. A blanket ban would be wrong - the basemap, the README
 # screenshot, and the desktop icon are all ours to ship - but Buienradar's map
@@ -178,6 +217,210 @@ lockstep=$(awk '
   }
 ' Cargo.lock)
 [[ -z "$lockstep" ]] || report 'cxx and cxx-gen must share a patch number (cxx embeds it in every bridge symbol):' "$lockstep"
+
+# Release version. Nine files carry the version - five Cargo.toml manifests,
+# the five workspace entries in Cargo.lock, pkgver= in the PKGBUILD, the Omarchy
+# manifest, and the package filename the README tells people to download - and
+# release.yml compares three of them against the tag. It does so at tag time,
+# after the README has already shipped a filename that does not exist and the
+# marketplace has already read a manifest that names the previous release. This
+# gate holds all nine to app/Cargo.toml on every commit instead.
+#
+# A surface that yields no version at all is an offender reported as none, as in
+# the lockstep gate above: a comparison that skips what it cannot read would
+# pass the tree whose pkgver= line was deleted. A file that is missing is read
+# as one that says nothing, so it lands in the same report rather than stopping
+# awk. CHANGELOG.md is not a surface, because it keeps every old version on
+# purpose. The input contract is the one each file already has: the package
+# version is the first column-one version = in a Cargo.toml, and the manifest is
+# pretty-printed with its top-level keys indented two spaces.
+echo "==> gate: release version"
+release_surfaces=(
+  app/Cargo.toml
+  core/Cargo.toml
+  app/harness/Cargo.toml
+  app/testkit/Cargo.toml
+  assets/gen-basemap/Cargo.toml
+  Cargo.lock
+  pkgbuild/PKGBUILD
+  manifest.json
+  README.md
+)
+readable_surfaces=()
+for surface in "${release_surfaces[@]}"; do
+  if [[ -f $surface ]]; then
+    readable_surfaces+=("$surface")
+  fi
+done
+release_scan=$(
+  cat <<'AWK'
+FILENAME ~ /Cargo\.toml$/ && /^version = "/ && !(FILENAME in found) {
+  ver = $3
+  gsub(/"/, "", ver)
+  found[FILENAME] = ver
+}
+FILENAME == "Cargo.lock" && /^name = / {
+  crate = $3
+  gsub(/"/, "", crate)
+  next
+}
+FILENAME == "Cargo.lock" && crate != "" && /^version = / {
+  ver = $3
+  gsub(/"/, "", ver)
+  found["Cargo.lock (" crate ")"] = ver
+  crate = ""
+}
+FILENAME == "pkgbuild/PKGBUILD" && /^pkgver=/ && !(FILENAME in found) {
+  ver = $0
+  sub(/^pkgver=/, "", ver)
+  found[FILENAME] = ver
+}
+FILENAME == "manifest.json" && /^  "version":/ {
+  ver = $0
+  sub(/^  "version":[[:space:]]*"/, "", ver)
+  sub(/".*$/, "", ver)
+  found[FILENAME] = ver
+}
+FILENAME == "README.md" {
+  rest = $0
+  while (match(rest, /allesbuien-[^-[:space:]]+-[0-9]+-x86_64\.pkg\.tar\.zst/)) {
+    ver = substr(rest, RSTART, RLENGTH)
+    sub(/^allesbuien-/, "", ver)
+    sub(/-[0-9]+-x86_64\.pkg\.tar\.zst$/, "", ver)
+    readme_hits++
+    readme_line[readme_hits] = FNR
+    readme_ver[readme_hits] = ver
+    rest = substr(rest, RSTART + RLENGTH)
+  }
+}
+END {
+  reference = found["app/Cargo.toml"]
+  if (reference == "") {
+    print "  app/Cargo.toml: none, so there is no version to hold the others to"
+    exit
+  }
+  surface_count = split(surfaces, order, ",")
+  for (i = 1; i <= surface_count; i++) {
+    ver = found[order[i]]
+    if (ver != reference) printf "  %s: %s\n", order[i], (ver == "" ? "none" : ver)
+  }
+  if (readme_hits == 0) print "  README.md: none"
+  for (i = 1; i <= readme_hits; i++) {
+    if (readme_ver[i] != reference) printf "  README.md:%d: %s\n", readme_line[i], readme_ver[i]
+  }
+}
+AWK
+)
+release_labels=core/Cargo.toml,app/harness/Cargo.toml,app/testkit/Cargo.toml,assets/gen-basemap/Cargo.toml
+release_labels+=",Cargo.lock (allesbuien),Cargo.lock (allesbuien-core),Cargo.lock (allesbuien-harness)"
+release_labels+=",Cargo.lock (allesbuien-testkit),Cargo.lock (gen-basemap),pkgbuild/PKGBUILD,manifest.json"
+version_drift=$(awk -v surfaces="$release_labels" "$release_scan" "${readable_surfaces[@]}" /dev/null)
+[[ -z "$version_drift" ]] || report 'version surfaces that disagree with app/Cargo.toml (README.md Releasing lists all nine):' "$version_drift"
+
+# Omarchy plugin. omarchy-plugin-validate is what `omarchy plugin add` and the
+# marketplace run, and it needs jq and an Omarchy desktop, neither of which CI's
+# bare Arch container has - so until now nothing in bin/test looked at the
+# plugin at all, and a symlink or a renamed entry point would have been found by
+# whoever tried to install the release. This is the part of the validator that
+# tracked text can answer: no symlink anywhere in the tree, a tracked
+# manifest.json at schemaVersion 1 with the five required top-level keys, an id
+# in the validator's character set, outside the reserved omarchy.* namespace
+# and free of "..", every entry point relative, ".."-free and tracked, an entry
+# point for each kind in the validator's table, a non-empty kinds list, and a
+# barWidget.defaultSection of left, center, or right when one is given.
+#
+# It is a belt, not the validator. The input contract is a pretty-printed
+# manifest - one key per line, top-level keys indented two spaces and their
+# members four, as manifest.json is written - and JSON validity and value types
+# are not checked here at all. README.md's Plugin checks section runs the real
+# validator by hand, on a clean clone, before every tag.
+echo "==> gate: omarchy plugin"
+plugin_scan=$(
+  cat <<'AWK'
+BEGIN {
+  tracked_count = split(tracked_list, paths, "\n")
+  for (i = 1; i <= tracked_count; i++) tracked[paths[i]] = 1
+  entry_key["bar"] = "bar"
+  entry_key["bar-widget"] = "barWidget"
+  entry_key["menu"] = "menu"
+  entry_key["overlay"] = "overlay"
+  entry_key["panel"] = "panel"
+  entry_key["service"] = "service"
+}
+/^  "[^"]+":/ {
+  key = $0
+  sub(/^  "/, "", key)
+  sub(/".*$/, "", key)
+  top[key] = 1
+  value = $0
+  sub(/^  "[^"]+":[[:space:]]*/, "", value)
+  sub(/,$/, "", value)
+  raw[key] = value
+  block = ""
+  if (value == "[" || value == "{") block = key
+  if (key == "kinds" && value ~ /^\[.*\]$/) {
+    gsub(/[][" ]/, "", value)
+    kind_count = split(value, inline_kinds, ",")
+    for (i = 1; i <= kind_count; i++) if (inline_kinds[i] != "") kinds[inline_kinds[i]] = ++kinds_seen
+  }
+  next
+}
+/^  []}],?$/ { block = ""; next }
+block == "kinds" {
+  value = $0
+  gsub(/["[:space:]]/, "", value)
+  kind_count = split(value, line_kinds, ",")
+  for (i = 1; i <= kind_count; i++) if (line_kinds[i] != "") kinds[line_kinds[i]] = ++kinds_seen
+  next
+}
+block == "entryPoints" && /^    "[^"]+":/ {
+  key = $0
+  sub(/^    "/, "", key)
+  sub(/".*$/, "", key)
+  value = $0
+  sub(/^    "[^"]+":[[:space:]]*"/, "", value)
+  sub(/",?$/, "", value)
+  entry[key] = value
+  next
+}
+block == "barWidget" && /^    "defaultSection":/ {
+  value = $0
+  sub(/^    "defaultSection":[[:space:]]*/, "", value)
+  sub(/,$/, "", value)
+  if (value !~ /^"(left|center|right)"$/) printf "  manifest.json: barWidget.defaultSection is %s, not left, center, or right\n", value
+}
+END {
+  if (raw["schemaVersion"] != "1") printf "  manifest.json: schemaVersion is %s, expected 1\n", (raw["schemaVersion"] == "" ? "none" : raw["schemaVersion"])
+  split("id name version kinds entryPoints", required, " ")
+  for (i = 1; i <= 5; i++) if (!(required[i] in top)) printf "  manifest.json: no top-level \"%s\"\n", required[i]
+  id = raw["id"]
+  gsub(/"/, "", id)
+  if (id !~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/) printf "  manifest.json: id \"%s\" is empty or not [A-Za-z0-9][A-Za-z0-9._-]*\n", id
+  if (id ~ /^omarchy\./) printf "  manifest.json: id %s is in the reserved omarchy.* namespace\n", id
+  if (id ~ /\.\./) printf "  manifest.json: id %s contains \"..\"\n", id
+  if (("kinds" in top) && kinds_seen == 0) print "  manifest.json: kinds is empty"
+  for (key in entry) {
+    value = entry[key]
+    if (value == "") printf "  manifest.json: entryPoints.%s is empty\n", key
+    else if (value ~ /^\//) printf "  manifest.json: entryPoints.%s is absolute: %s\n", key, value
+    else if (value ~ /\.\./) printf "  manifest.json: entryPoints.%s contains \"..\": %s\n", key, value
+    else if (!(value in tracked)) printf "  manifest.json: entryPoints.%s names %s, which is not a tracked file\n", key, value
+  }
+  for (kind in kinds) {
+    if ((kind in entry_key) && !(entry_key[kind] in entry)) printf "  manifest.json: kind %s needs an entryPoints.%s to load\n", kind, entry_key[kind]
+  }
+}
+AWK
+)
+plugin_problems=$(
+  git ls-files -s | awk -F '\t' '$1 ~ /^120000 / { printf "  %s: a symlink, and omarchy plugin add refuses a tree holding one\n", $2 }'
+  if [[ -f manifest.json && -n $(git ls-files -- manifest.json) ]]; then
+    awk -v tracked_list="$(git ls-files)" "$plugin_scan" manifest.json
+  else
+    printf '  manifest.json: not tracked, so the plugin has no manifest to install from\n'
+  fi
+)
+[[ -z "$plugin_problems" ]] || report 'the Omarchy plugin would not pass omarchy-plugin-validate:' "$plugin_problems"
 
 # Side-effect seams. Dependency inversion in this tree has a concrete shape:
 # processes, environment reads, HTTP clients, and the Tokio runtime are each
