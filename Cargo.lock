@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "allesbuien"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "allesbuien-core",
  "allesbuien-harness",
@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "allesbuien-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "futures",
  "jiff",
@@ -41,7 +41,7 @@ dependencies = [
 
 [[package]]
 name = "allesbuien-harness"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "allesbuien",
  "allesbuien-core",
@@ -52,7 +52,7 @@ dependencies = [
 
 [[package]]
 name = "allesbuien-testkit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "allesbuien-core",
  "tempfile",
@@ -588,7 +588,7 @@ dependencies = [
 
 [[package]]
 name = "gen-basemap"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "image",
  "serde_json",

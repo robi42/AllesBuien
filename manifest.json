@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.robi42.allesbuien",
+  "name": "AllesBuien",
+  "version": "0.2.0",
+  "author": "Robert Thurnher",
+  "license": "MIT",
+  "description": "Dutch weather and rain radar for Omarchy",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "plugin/BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "AllesBuien",
+    "description": "Opens or focuses the AllesBuien radar window",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "center"
+  }
+}
