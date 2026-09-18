@@ -115,8 +115,10 @@ cargo install --root ~/.local --path app
 install -Dm644 pkgbuild/allesbuien.desktop "$DATA_HOME/applications/allesbuien.desktop"
 install -Dm644 pkgbuild/allesbuien.svg "$DATA_HOME/icons/hicolor/scalable/apps/allesbuien.svg"
 install -Dm644 LICENSE "$DATA_HOME/licenses/allesbuien/LICENSE"
-update-desktop-database "$DATA_HOME/applications" || true
+update-desktop-database "$DATA_HOME/applications"
 ```
+
+The last command needs `desktop-file-utils`; if it is missing, install that package and run the line again, or the launcher will not appear in menus until the next time something rebuilds the index.
 
 ## Uninstall
 
@@ -141,7 +143,7 @@ rm -f "$HOME/.local/bin/allesbuien" \
   "$DATA_HOME/applications/allesbuien.desktop" \
   "$DATA_HOME/icons/hicolor/scalable/apps/allesbuien.svg"
 rm -rf "$DATA_HOME/licenses/allesbuien"
-update-desktop-database "$DATA_HOME/applications" || true
+update-desktop-database "$DATA_HOME/applications"
 ```
 
 Finally, only if you added the optional Hyprland wiring above, delete those two lines from `~/.config/hypr/bindings.lua` and run `hyprctl reload`.
@@ -151,6 +153,7 @@ Finally, only if you added the optional Hyprland wiring above, delete those two 
 - The application: the `allesbuien-bin` AUR package, the release package, or a package built from this repository.
 - `qt6-base` and `qt6-declarative`, which the package pulls in.
 - `libnotify`, optional; without it the app runs and simply never notifies.
+- `desktop-file-utils`, for `update-desktop-database` in the source-install and uninstall steps; the packaged install does not need it.
 - Omarchy itself, which ships `yay` for the widget's install click and `hyprctl` plus `jq` for `omarchy-launch-or-focus`.
 - Network access to Buienradar for observations, forecasts, and radar frames.
 - Application code is [MIT](LICENSE); the weather data carries Buienradar's non-commercial attribution terms, stated above.
