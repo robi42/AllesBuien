@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=AllesBuien
-Comment=Weather and rain radar for Omarchy
+Comment=Dutch weather and rain radar for Omarchy
 Exec=allesbuien
 Icon=allesbuien
 Terminal=false

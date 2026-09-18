@@ -1,9 +1,14 @@
 pkgname=allesbuien
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
+pkgdesc='Dutch weather and rain radar for Omarchy'
 arch=('x86_64')
+url='https://github.com/robi42/AllesBuien'
 license=('MIT')
 depends=('qt6-base' 'qt6-declarative')
+# core/src/notify.rs spawns notify-send, which libnotify owns; the app runs
+# without it and simply never notifies.
+optdepends=('libnotify: rain-soon desktop notifications')
 makedepends=('rust' 'qt6-base' 'qt6-declarative')
 source=()
 sha256sums=()

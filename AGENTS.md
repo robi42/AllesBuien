@@ -33,6 +33,9 @@ AllesBuien/
 ├── core/                 Platform-independent weather, radar, notification, config, and theme logic
 ├── app/                  Qt/CXX-Qt application, controllers, QML UI, assets, and GUI integration tests
 ├── assets/gen-basemap/   Deterministic pure-Rust Natural Earth basemap generator and checker
+├── plugin/               The Omarchy bar-widget launcher, loaded by omarchy-shell, not by the app
+├── manifest.json         The Omarchy plugin manifest the marketplace and the shell both read
+├── CHANGELOG.md          One section per release; the section is the tag annotation
 ├── bin/                  Canonical build, test, package-install, and gate entrypoints
 ├── tests/gates/          One known-bad input per gate, plus the allowlist of gates without one
 ├── pkgbuild/             Arch PKGBUILD, desktop entry, icon, and ignored package artifacts
@@ -41,6 +44,8 @@ AllesBuien/
 ├── .beads/               Tracked issue-tracker config and history; the Dolt database is ignored
 ├── .qmllint.ini          Committed qmllint strictness, so a Qt bump is a reviewable diff
 ├── mise.toml             Rust 1.98.0, actionlint, and shellcheck pins
+├── CLAUDE.md             A regular file importing AGENTS.md, never a symlink: `omarchy plugin
+│                         add` refuses a plugin folder that holds one anywhere
 └── lefthook.yml          Pre-commit rustfmt and the text-only gates
 ```
 
@@ -70,6 +75,8 @@ AllesBuien/
 | Quality gates | `bin/test`, `bin/check-fast`, `bin/check-qml-contract` | `bin/test` is the whole list and CI runs it; the other two are its cheap and post-build halves |
 | Proof that the gates can fail | `bin/check-gates`, `tests/gates/` | One known-bad input per gate, run in a scratch copy; `tests/gates/README.md` records what is covered and what is not |
 | The gate agents are held to | `.factory/gate`, `.factory/protected` | The wrapper around `bin/test`, and the paths whose diffs a human has to read |
+| Omarchy plugin | `manifest.json`, `plugin/BarWidget.qml` | The bar launcher and the manifest the shell validates; both are checked by hand, never by `bin/test` |
+| Release surfaces | `CHANGELOG.md`, README's *Releasing* section | The nine files carrying the version, and the manual plugin checks that precede a tag |
 
 ## Conventions
 
@@ -93,6 +100,9 @@ AllesBuien/
 - **Clock-reading tests:** `core/src/radar_timeline.rs` and `core/src/datetime.rs` read the host clock on purpose, so banning `now()` would condemn the wrong lines. Tests have to hold in any zone instead, and `bin/test` re-runs the suite under UTC, `Asia/Kolkata`, `Pacific/Auckland`, and `America/New_York` to prove it — Kolkata's half-hour offset being what catches an assertion that pinned the minutes to `:00`.
 - **Packaging:** `pkgver` is static. The canonical package build is exactly `(cd pkgbuild && makepkg -f)` as invoked by `bin/install` and automation.
 - **Attribution:** Buienradar free data is for non-commercial use with attribution, and the terms name exactly two visible obligations: the words `Buienradar.nl` are shown, and they link to the root domain `https://www.buienradar.nl`. Keep both in the app and in the README. Any label wrapped around them is ours to word or drop; the GUI test asserts the domain text and the link, not a sentence.
+- **Omarchy plugin is a launcher:** the widget runs `omarchy-launch-or-focus` when the app is installed and Omarchy's floating-terminal AUR install of `allesbuien-bin` when it is not, and nothing else; each click acts on a probe completed after the click, never on a remembered state, and the probe runs through the same `bash -lc` login shell `bar.run` uses, so both see `~/.local/bin`. No fetching, parsing, or theme logic in plugin QML — a convention no gate enforces, since `bin/check-fast`'s colour gate reads `app/qml` only. Its glyph is one static Nerd Font codepoint in the bar's font, never an image and never a weather symbol, because the Omarchy pill beside it already shows the condition and a second cloud or raindrop would read as a duplicate. Entry points must be tracked files and the tree may hold no symlink, because `omarchy plugin add` refuses one. It never names `omarchy.weather` in `clonedFrom`, so it coexists with the built-in pill instead of replacing it.
+- **AUR:** `allesbuien-bin` repackages the GitHub release asset and is what the widget installs. Its recipe lives in the AUR repo, not here, because its checksum is of an artefact built from the tagged commit; README's *Releasing* section is the bump procedure, and `pkgbuild/PKGBUILD` stays the source-less local recipe.
+- **Release surfaces:** nine files carry the version, listed by path in README's *Releasing* section; `release.yml` checks three of them against the tag and the rest are on whoever cuts the release. `CHANGELOG.md`'s section for a version is the text of its tag annotation.
 
 ## Anti-Patterns
 
@@ -110,10 +120,10 @@ AllesBuien/
 - Do NOT replace Buienradar with wttr.in/Open-Meteo, expand beyond Dutch radar, or remove the required attribution: the visible `Buienradar.nl` and its link to `https://www.buienradar.nl` both have to stay.
 - Do NOT copy the donor `map-nl-*` image, any unlicensed basemap, or OSM tile-server imagery. Basemaps come only from the pinned Natural Earth public-domain sources through `assets/gen-basemap`.
 - Do NOT write to `/home/robi42/Projects/buienradar`, add AllesBuien to the parent `/home/robi42/Projects` repository, or modify `/usr/share/omarchy`.
-- Do NOT turn this into a Quickshell widget, touch built-in `omarchy.weather`, add a server/deploy/Docker surface, or publish to the AUR.
-- Do NOT create `.SRCINFO`, an AUR remote, a dynamic `pkgver()` function, network-backed PKGBUILD sources, or alternative package-build invocations.
+- Do NOT turn the app into a Quickshell widget; the bar widget under `plugin/` launches, installs, or focuses and must stay that thin. Do NOT touch built-in `omarchy.weather` or add a server/deploy/Docker surface. Publishing `allesbuien-bin` to the AUR is a recorded decision of 2026-09-18, not a violation of this line.
+- Do NOT create `.SRCINFO`, an AUR remote, a dynamic `pkgver()` function, network-backed sources, or alternative package-build invocations **in `pkgbuild/`**; the AUR clone outside this tree is the one place those belong.
 - Do NOT run `makepkg -s`, `makepkg -i`, `makepkg -si`, or `makepkg -fsi`; only `(cd pkgbuild && makepkg -f)` is sanctioned.
-- Do NOT invoke bare `sudo` or any command that can wait for a password. Live install mode is user-scope Mode B unless the recorded decision is explicitly changed by its capability probe.
+- Do NOT invoke bare `sudo` or any command that can wait for a password. Live install mode is user-scope Mode B unless the recorded decision is explicitly changed by its capability probe. This governs agents and `bin/install`. The widget's click-to-install and the README's `yay`/`sudo pacman` lines are commands a person runs at their own terminal, so an agent exercising the widget swaps the install string for an inert echo in its throwaway copy rather than clicking the real one.
 - Do NOT meet the module-size budget by compressing formatting: joining statements onto one line, deleting blank lines, or removing doc comments to get under the number is a defect, not a fix. Comments and blank lines are not counted precisely so that explaining the code is always free. If a file has no honest cohesive seam, leave it over budget, raise its documented limit deliberately, and write down why.
 - Do NOT write build outputs or package artifacts outside ignored paths.
 - Do NOT use mutable GitHub Action references such as tags or branches; pin every third-party action to a full 40-character commit SHA and record the release tag in a comment.
