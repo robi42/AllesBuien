@@ -184,8 +184,9 @@ Validate what `omarchy plugin add` would clone — a clean checkout, because the
 ```bash
 git clone -q . /tmp/allesbuien-candidate
 omarchy plugin validate /tmp/allesbuien-candidate
-rm -rf /tmp/allesbuien-candidate
 ```
+
+Keep that clone: the click-through below installs it. It is deleted at the end, after the widget has been removed again.
 
 Lint the widget. `qs.Ui` resolves through a module root named `qs`, so the shell directory has to be reachable under that name:
 
@@ -196,7 +197,28 @@ mkdir -p /tmp/qmlroot && ln -sfn /usr/share/omarchy/shell /tmp/qmlroot/qs
 
 Two warnings are expected, and Omarchy's own first-party plugins produce both: `bar.run` is not visible on the `QtObject` the bar is declared as, and `QProcess::ExitStatus` has no QML type for `onExited`'s second parameter.
 
-Then add the clone as a plugin and click the icon: dimmed with the install tooltip while the application is absent, lit within five seconds of an install finishing, launching when no window is open, focusing when one is. To exercise the press path without running a package manager, swap `installCommand` in the *clone* for an inert `omarchy-launch-floating-terminal-with-presentation "echo dry-run"`; the real install click belongs to whoever is publishing the release.
+Then install the candidate and try it in a real bar:
+
+```bash
+omarchy plugin add /tmp/allesbuien-candidate --enable
+```
+
+Before clicking anything, make the install branch inert. A click while the application is absent runs `omarchy-pkg-aur-add`, which asks for a sudo password and installs a package; proving the press path does not need that, and the real install click belongs to whoever is publishing the release. Edit the copy the shell actually loads — `omarchy plugin add` clones the candidate, so editing the candidate changes nothing now, and an uncommitted edit there would never have been cloned in the first place:
+
+```bash
+$EDITOR ~/.config/omarchy/plugins/io.github.robi42.allesbuien/plugin/BarWidget.qml
+```
+
+Replace the `installCommand` string with `omarchy-launch-floating-terminal-with-presentation "echo dry-run"` and save; the shell reloads the plugin on the change.
+
+Now click the icon and watch the four states: dimmed with the install tooltip while the application is absent, and a click opening the dry-run terminal rather than an installer; lit within five seconds of an install finishing elsewhere (`cargo install --root ~/.local --path app` is enough); launching the window when none is open; focusing the open window instead of opening a second one. None of these may need a shell restart or a plugin reload.
+
+Finish by putting the desktop back as it was:
+
+```bash
+omarchy plugin remove io.github.robi42.allesbuien
+rm -rf /tmp/allesbuien-candidate
+```
 
 ### Releasing
 
