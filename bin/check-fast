@@ -247,8 +247,14 @@ release_surfaces=(
   README.md
 )
 readable_surfaces=()
+unreadable_surfaces=()
 for surface in "${release_surfaces[@]}"; do
-  if [[ -f $surface ]]; then
+  if [[ -f $surface && ! -r $surface ]]; then
+    # A file that exists but cannot be opened would stop awk with a fatal
+    # error and no report line; naming it here keeps it in the same report as
+    # a surface that is missing outright, which awk then also lists as none.
+    unreadable_surfaces+=("$surface")
+  elif [[ -f $surface ]]; then
     readable_surfaces+=("$surface")
   fi
 done
@@ -314,7 +320,12 @@ AWK
 release_labels=core/Cargo.toml,app/harness/Cargo.toml,app/testkit/Cargo.toml,assets/gen-basemap/Cargo.toml
 release_labels+=",Cargo.lock (allesbuien),Cargo.lock (allesbuien-core),Cargo.lock (allesbuien-harness)"
 release_labels+=",Cargo.lock (allesbuien-testkit),Cargo.lock (gen-basemap),pkgbuild/PKGBUILD,manifest.json"
-version_drift=$(awk -v surfaces="$release_labels" "$release_scan" "${readable_surfaces[@]}" /dev/null)
+version_drift=$(
+  for surface in "${unreadable_surfaces[@]}"; do
+    printf '  %s: tracked, but not readable in the working tree, so it went unscanned\n' "$surface"
+  done
+  awk -v surfaces="$release_labels" "$release_scan" "${readable_surfaces[@]}" /dev/null
+)
 [[ -z "$version_drift" ]] || report 'version surfaces that disagree with app/Cargo.toml (README.md Releasing lists all nine):' "$version_drift"
 
 # Omarchy plugin. omarchy-plugin-validate is what `omarchy plugin add` and the
