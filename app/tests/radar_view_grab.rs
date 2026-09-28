@@ -21,7 +21,7 @@ impl RadarApi for AnimatedRadarApi {
     fn frame<'a>(&'a self, url: &'a str) -> RadarFuture<'a, Vec<u8>> {
         Box::pin(async move {
             if url.ends_with("/0") {
-                Ok(include_bytes!("../../assets/screenshot.png").to_vec())
+                Ok(include_bytes!("../../preview.png").to_vec())
             } else {
                 Ok(allesbuien::BASEMAP_PNG.to_vec())
             }

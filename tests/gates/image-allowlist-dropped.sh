@@ -9,8 +9,8 @@
 gate="image allowlist"
 script="bin/check-fast"
 outcome="red"
-expect=("on the allowlist but no longer tracked: assets/screenshot.png")
+expect=("on the allowlist but no longer tracked: preview.png")
 
 mutate() {
-  rm assets/screenshot.png
+  rm preview.png
 }
