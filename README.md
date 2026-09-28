@@ -177,7 +177,7 @@ bin/build
 
 ### Plugin checks
 
-`bin/test` proves the Rust and packaging surfaces and nothing about the bar widget: CI runs in a bare Arch container, and `qs.Ui`, `omarchy-plugin-validate`, and the shell itself exist only on an Omarchy desktop. Run these by hand before every tag.
+`bin/test` holds only a text belt over the bar widget — the manifest's shape, entry points that are tracked files, no symlink anywhere, no literal colour — because CI runs in a bare Arch container, and `qs.Ui`, `omarchy-plugin-validate`, and the shell itself exist only on an Omarchy desktop. Run these three checks by hand before every tag.
 
 Validate what `omarchy plugin add` would clone — a clean checkout, because the validator walks ignored `target/` too and refuses every symlink it finds:
 
@@ -222,7 +222,7 @@ rm -rf /tmp/allesbuien-candidate
 
 ### Releasing
 
-Nine files carry the version and `release.yml` compares only three of them against the tag, so bump all nine: `app/Cargo.toml`, `core/Cargo.toml`, `app/harness/Cargo.toml`, `app/testkit/Cargo.toml`, `assets/gen-basemap/Cargo.toml`, the five workspace entries in `Cargo.lock` (`cargo update --workspace --offline`), `pkgver=` in `pkgbuild/PKGBUILD`, `"version"` in `manifest.json`, and the package filename in this README.
+Nine files carry the version and `release.yml` compares only three of them against the tag, so bump all nine; `bin/check-fast`'s `release version` gate refuses a commit that leaves one behind: `app/Cargo.toml`, `core/Cargo.toml`, `app/harness/Cargo.toml`, `app/testkit/Cargo.toml`, `assets/gen-basemap/Cargo.toml`, the five workspace entries in `Cargo.lock` (`cargo update --workspace --offline`), `pkgver=` in `pkgbuild/PKGBUILD`, `"version"` in `manifest.json`, and the package filename in this README.
 
 Then: write the release's `CHANGELOG.md` section; run the plugin checks above; `git tag -a vX.Y.Z` with that changelog section as the tag message and push the tag, which is what builds and attaches the release assets. Once the asset exists, bump `allesbuien-bin` in its AUR clone — `pkgver`, `sha256sums` from the published asset, `makepkg --printsrcinfo > .SRCINFO`, commit, push — so the widget's install click installs the new version. Finally re-verify the marketplace listing with the new HEAD SHA; it tracks the commit it was scanned at, not `main`.
 

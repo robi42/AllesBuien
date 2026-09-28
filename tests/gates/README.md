@@ -63,7 +63,7 @@ occurrences instead of reading structure would produce on a clean tree.
 
 Nothing here touches the real working tree. The runner copies the tracked and
 untracked-but-not-ignored files into a `mktemp` directory under `target/`,
-which is git-ignored, gives it a throwaway git repository so the six gates that
+which is git-ignored, gives it a throwaway git repository so the gates that
 read `git ls-files` see the fixture's additions and deletions, and removes it on
 exit. A killed run leaves `git status` clean and no worktree to prune. Signing
 is disabled for the throwaway commit, so the suite never queues behind the SSH
@@ -77,7 +77,7 @@ commands would keep passing long after the real gate changed underneath it.
 
 ## Coverage
 
-Nineteen of the twenty-three gates are covered. The four that are not all need a
+Twenty-one of the twenty-five gates are covered. The four that are not all need a
 compiled workspace, and a cold CXX-Qt build on this host is over twenty minutes:
 
 | gate | why it is out of scope |
@@ -112,6 +112,40 @@ the lock rather than pinning them. The rest of the cxx family is not compared:
 cxx's own manifest pins `cxx-build` and the `cxxbridge-*` crates exactly, so
 cargo already holds them in step.
 
+`release version` holds the nine files that carry the version to
+`app/Cargo.toml`: the other four Cargo manifests, the five workspace entries in
+`Cargo.lock`, `pkgver=` in the PKGBUILD, the top-level `"version"` in
+`manifest.json`, and every package filename in the README. `release.yml`
+compares only three of them, and only at tag time, after the README has already
+shipped a filename nobody can download. A surface that yields no version is
+reported as `none`, so deleting a `pkgver=` line is refused rather than skipped.
+Its two fixtures move `pkgver=` and the manifest's version, two of the three
+surfaces no Cargo command ever rewrites.
+
+`omarchy plugin` is the part of `omarchy-plugin-validate` that tracked text can
+answer: no symlink anywhere in the tree, a tracked `manifest.json` at
+`schemaVersion` 1 with its five required keys, an id in the validator's
+character set and outside `omarchy.*`, every entry point relative, free of
+`..`, and tracked, a non-empty `kinds` with an entry point for each kind in the
+validator's table, and a `barWidget.defaultSection` of `left`, `center`, or
+`right` when one is given. It is a belt, not the validator: it reads a
+pretty-printed manifest line by line and says nothing about JSON validity or
+value types, and CI's bare Arch container has neither `jq` nor an Omarchy
+desktop to run the real thing. README.md's *Plugin checks* run the validator by
+hand on a clean clone before every tag, which is still what proves the plugin
+installs. Its fixtures add a symlink at the root and delete the one entry
+point.
+
+`theme-owned colours` reads `plugin/*.qml` as well as `app/qml/*.qml`, because
+the bar widget has to follow the shell's theme as the window follows Omarchy's,
+and it has a hex fixture of its own in `plugin/` so the widened file list has
+been watched to fail. Deleting the entry point, above, also shows it reads an
+empty `plugin/` as nothing rather than as a glob grep cannot open. Its file
+list comes from the index, which can name a file the working tree has lost, so
+a file it cannot read is an offender rather than a clean scan; another of its
+fixtures leaves exactly that behind, using an assume-unchanged entry so the
+runner's `git add --all` does not stage the deletion away.
+
 The trade is deliberate. All four are stock invocations of tools whose failure
 behaviour is not in question, whereas every gate covered here is either
 hand-written shell — where the failure mode is a quoting mistake nobody sees —
@@ -139,8 +173,8 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-thirty-eight it runs, each of which fails loudly if its gate stops biting. One
-of those thirty-eight aims at the runner rather than at a gate: the slicer
+forty-four it runs, each of which fails loudly if its gate stops biting. One
+of those forty-four aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That
