@@ -128,10 +128,16 @@ Remove the widget first, then the application, in this order:
 omarchy plugin remove io.github.robi42.allesbuien
 ```
 
-For the AUR package — which is also what the widget's click installs — or for a package built from this repository with Mode A:
+For the AUR package, which is also what the widget's click installs:
 
 ```bash
-sudo pacman -Rns allesbuien-bin   # or: sudo pacman -Rns allesbuien
+sudo pacman -Rns allesbuien-bin
+```
+
+For a package built from this repository with Mode A:
+
+```bash
+sudo pacman -Rns allesbuien
 ```
 
 For Mode B, uninstall the Cargo binary and remove all user payloads from the same resolved XDG data directory:
