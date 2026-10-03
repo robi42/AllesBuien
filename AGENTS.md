@@ -35,6 +35,7 @@ AllesBuien/
 ├── assets/gen-basemap/   Deterministic pure-Rust Natural Earth basemap generator and checker
 ├── plugin/               The Omarchy bar-widget launcher, loaded by omarchy-shell, not by the app
 ├── manifest.json         The Omarchy plugin manifest the marketplace and the shell both read
+├── preview.png           The README image, and the preview the plugin marketplace shows
 ├── CHANGELOG.md          One section per release; the section is the tag annotation
 ├── bin/                  Canonical build, test, package-install, and gate entrypoints
 ├── tests/gates/          One known-bad input per gate, plus the allowlist of gates without one

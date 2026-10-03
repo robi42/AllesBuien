@@ -21,7 +21,7 @@ impl RadarApi for AnimatedRadarApi {
     fn frame<'a>(&'a self, url: &'a str) -> RadarFuture<'a, Vec<u8>> {
         Box::pin(async move {
             if url.ends_with("/0") {
-                Ok(include_bytes!("../../assets/screenshot.png").to_vec())
+                Ok(include_bytes!("../../preview.png").to_vec())
             } else {
                 Ok(allesbuien::BASEMAP_PNG.to_vec())
             }
@@ -79,6 +79,19 @@ fn renders_and_advances_provider_frames_when_radar_is_playing() {
             first_source.is_some()
         });
         let first_source = first_source.expect("the wait returned with a provider URL");
+        // Wait for the first frame itself to report Image.Ready before grabbing
+        // it: a frame that never decoded leaves only the basemap underneath,
+        // which can still differ from the second grab, so the comparison below
+        // would not notice. Playback keeps advancing, so the source is pinned
+        // too, or the next frame's Ready would answer for this one.
+        pump_until(
+            "the first provider frame reports Image.Ready",
+            SETTLE_BUDGET,
+            || {
+                booted.process_events();
+                source() == first_source && property(overlay, "status").value::<i32>() == Some(1)
+            },
+        );
         let first_image = grab_window(window);
         let mut second_source = None;
         pump_until("the playback Timer advances the URL", SETTLE_BUDGET, || {

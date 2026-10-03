@@ -4,7 +4,7 @@ Dutch weather and rain radar for Omarchy.
 
 AllesBuien is a native weather app for the Omarchy desktop. It combines current Dutch conditions, a five-day forecast, minute-resolution rain expectations, animated radar frames, rain-soon desktop notifications, and live Omarchy theme integration in a floating Qt Quick window.
 
-![AllesBuien showing current conditions, forecast, and Dutch rain radar](assets/screenshot.png)
+![AllesBuien showing current conditions, forecast, and Dutch rain radar](preview.png)
 
 [Buienradar.nl](https://www.buienradar.nl)
 

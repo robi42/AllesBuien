@@ -156,14 +156,17 @@ hardcoded=$(
 )
 [[ -z "$hardcoded" ]] || report 'colours written outside Theme.qml, or QML this gate could not read:' "$hardcoded"
 
-# Image allowlist. A blanket ban would be wrong - the basemap, the README
-# screenshot, and the desktop icon are all ours to ship - but Buienradar's map
-# artwork is licensed to Buienradar, and the cheapest way to vendor it is to
-# drop a PNG in and forget. Name the three, and anything else is a question
-# that has to be answered before it lands.
+# Image allowlist. A blanket ban would be wrong - the basemap, the screenshot
+# at the root (README image and marketplace preview), and the desktop icon are
+# all ours to ship - but Buienradar's map artwork is licensed to Buienradar,
+# and the cheapest way to vendor it is to drop a PNG in and forget. Name the
+# three, and anything else is a question that has to be answered before it
+# lands. The extension list includes avif because the plugin marketplace takes
+# a root preview.avif as readily as a preview.png, and a format missing from
+# the list is an image this gate never sees.
 echo "==> gate: image allowlist"
-tracked_images=$(git ls-files '*.png' '*.jpg' '*.jpeg' '*.gif' '*.webp' '*.svg' '*.ico' '*.bmp' | sort)
-allowed_images=$(printf '%s\n' app/assets/basemap-nl.png assets/screenshot.png pkgbuild/allesbuien.svg | sort)
+tracked_images=$(git ls-files '*.png' '*.jpg' '*.jpeg' '*.gif' '*.webp' '*.avif' '*.svg' '*.ico' '*.bmp' | sort)
+allowed_images=$(printf '%s\n' app/assets/basemap-nl.png preview.png pkgbuild/allesbuien.svg | sort)
 mismatched=$(
   comm -13 <(printf '%s\n' "$allowed_images") <(printf '%s\n' "$tracked_images") | sed 's/^/  tracked but not on the allowlist: /'
   comm -23 <(printf '%s\n' "$allowed_images") <(printf '%s\n' "$tracked_images") | sed 's/^/  on the allowlist but no longer tracked: /'
