@@ -1,5 +1,6 @@
 //! The Qt-bound scaffolding the GUI harnesses under `app/tests/` share: booting
-//! the real window over injected ports, and reading its rendered object tree.
+//! the real window over injected ports, reading its rendered object tree, and
+//! typing into it.
 //!
 //! [`allesbuien_testkit`] holds everything that does not need Qt. What is left
 //! here was copied across the harnesses verbatim — five copies of one block of
@@ -13,6 +14,7 @@
 //! because test probes must not ship in the production binary.
 
 pub mod boot;
+pub mod keys;
 pub mod probe;
 
 pub use boot::{Harness, HarnessBuilder};

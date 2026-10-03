@@ -70,7 +70,7 @@ AllesBuien/
 | Desktop UI | `app/qml/Main.qml` | Radar, current conditions, forecast, inline statuses, attribution |
 | GUI integration tests | `app/tests/` | Exactly one GUI test and one `QGuiApplication` per file/executable |
 | Shared GUI test doubles | `app/testkit/` | Qt-free crate: the inert stubs several harnesses need, plus `pump_until` |
-| Shared GUI boot and object-tree probes | `app/harness/` | Qt-linked dev crate: `HarnessBuilder` and the `unsafe` rendered-tree probes |
+| Shared GUI boot, object-tree probes, and key input | `app/harness/` | Qt-linked dev crate: `HarnessBuilder`, the `unsafe` rendered-tree probes, and keys typed through the window system |
 | Basemap provenance | `assets/BASEMAP-LICENSE` | Pinned Natural Earth source and shipped-image SHA-256 |
 | Packaging | `pkgbuild/PKGBUILD`, `pkgbuild/allesbuien.desktop` | Static package metadata and four installed payloads |
 | Quality gates | `bin/test`, `bin/check-fast`, `bin/check-qml-contract` | `bin/test` is the whole list and CI runs it; the other two are its cheap and post-build halves |

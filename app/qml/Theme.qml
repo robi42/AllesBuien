@@ -37,6 +37,11 @@ QtObject {
     readonly property color buttonFill: theme.available ? theme.themeController.themeMuted : theme.fallback.button
     readonly property color buttonText: theme.available ? theme.themeController.themeBackground : theme.fallback.buttonText
     readonly property color sliderTrack: theme.available ? theme.themeController.themeBackground : theme.fallback.midlight
+    // The keyboard-focus ring. The foreground rather than the accent: the
+    // slider handle is already accent-filled, so an accent ring would vanish on
+    // exactly the control it has to mark, while the foreground is the one
+    // colour every theme promises contrasts with each surface it sits on here.
+    readonly property color focusRing: theme.text
 
     // Spacing. One 4 px scale, five steps, no in-between values: every margin,
     // gap and pad in the tree resolves to one of these, which is what makes the

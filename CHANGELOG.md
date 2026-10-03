@@ -18,6 +18,10 @@ release's section is the text of its annotated tag and of its GitHub release not
   about two seconds of `omarchy-weather-location` rewriting or clearing it, and says which of the
   three sources — environment pin, desktop setting, or Amsterdam-West default — answered. A
   location outside the radar's coverage says so on the map, where 0.1.0 only left the marker off.
+- Keyboard control of the radar. Space and Enter play and pause wherever the focus is, Left and
+  Right step one frame and pause, Home and End jump to the first and the latest frame, and Tab
+  moves between the play button and the timeline, which show a focus ring. Escape still closes
+  the window.
 - Packaging metadata: `pkgdesc`, `url`, and an `optdepends` entry naming libnotify as what the
   rain-soon notifications need.
 
