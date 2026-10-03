@@ -5,6 +5,10 @@
 //! scheme can act twice or never depending on where the focus sits. Every key
 //! here goes in through the window system, as a keyboard's does, and every
 //! assertion reads the radar controller; `radar_transport` says how.
+//!
+//! The focus ring answers the keyboard and nothing else, and it has to survive
+//! the radar refresh that disables both controls every few minutes, so the
+//! refreshes here happen under keyboard focus and under a click's.
 
 use std::{
     fs,
@@ -17,9 +21,9 @@ use std::{
 
 use allesbuien::TimerIntervals;
 use allesbuien_core::radar::{RadarApi, RadarFuture};
-use allesbuien_harness::{Harness, HarnessBuilder, keys::Key, probe::focused_window};
+use allesbuien_harness::{HarnessBuilder, keys::Key, probe::focused_window};
 use allesbuien_testkit::{SETTLE_BUDGET, StubFeedApi, pump_until};
-use radar_transport::{Control, Rgb, Transport, spread};
+use radar_transport::{Control, Rgb, Transport, refresh_to, spread};
 
 mod radar_transport;
 
@@ -35,10 +39,7 @@ const NORD_FOREGROUND: Rgb = [0xd8, 0xde, 0xe9];
 /// measured for its row rules.
 const VISIBLE_LEVELS: i32 = 12;
 
-/// A key, the playback it should leave behind, and what that proves.
-type Step = (Key, (bool, i32), &'static str);
-
-/// A three-frame run on the first two fetches, then a run of one frame.
+/// Runs of three frames for the first four fetches, then a run of one.
 #[derive(Default)]
 struct ScriptedRunRadarApi {
     metadata_calls: AtomicUsize,
@@ -61,7 +62,7 @@ fn run_metadata(run: &str, count: usize) -> Vec<u8> {
 impl RadarApi for ScriptedRunRadarApi {
     fn metadata(&self) -> RadarFuture<'_, Vec<u8>> {
         let body = match self.metadata_calls.fetch_add(1, Ordering::SeqCst) {
-            0 | 1 => run_metadata("202608300900", 3),
+            0..=3 => run_metadata("202608300900", 3),
             _ => run_metadata("202608300910", 1),
         };
         Box::pin(async move { Ok(body) })
@@ -72,11 +73,12 @@ impl RadarApi for ScriptedRunRadarApi {
     }
 }
 
-/// Presses each key in turn and asserts the playback it leaves behind.
-fn press_all(transport: &Transport<'_>, steps: &[Step]) {
-    for &(key, expected, meaning) in steps {
-        assert_eq!(transport.press(key), expected, "{key:?}: {meaning}");
-    }
+/// Whether `control` shows its focus ring: whether the edge where both
+/// controls draw one is the theme's foreground. Without a ring that edge is the
+/// button's fill or the handle's surface-coloured gap, and asserting `false` in
+/// that state is what proves those differ visibly from the ring.
+fn ringed(transport: &Transport<'_>, control: Control) -> bool {
+    spread(transport.left_edge(control), NORD_FOREGROUND) < VISIBLE_LEVELS
 }
 
 /// Space, Return, Enter, and the keypad's Enter each toggle exactly once, with
@@ -87,27 +89,30 @@ fn press_all(transport: &Transport<'_>, steps: &[Step]) {
 fn toggles_once(transport: &Transport<'_>) {
     assert_eq!(transport.playback(), (true, 0), "a run of three plays");
     let unfocused = "toggles once with nothing focused";
-    press_all(
-        transport,
-        &[
-            (Key::Space, (false, 0), unfocused),
-            (Key::Return, (true, 0), unfocused),
-            (Key::Enter, (false, 0), unfocused),
-            (Key::KeypadEnter, (true, 0), unfocused),
-            (Key::Tab, (true, 0), "moves the focus and nothing else"),
-        ],
+    transport.press_all(&[
+        (Key::Space, (false, 0), unfocused),
+        (Key::Return, (true, 0), unfocused),
+        (Key::Enter, (false, 0), unfocused),
+        (Key::KeypadEnter, (true, 0), unfocused),
+        (Key::Backtab, (true, 0), "moves the focus and nothing else"),
+    ]);
+    assert!(
+        transport.flag(Control::Slider, "activeFocus"),
+        "Shift+Tab starts at the end"
     );
-    assert!(transport.flag(Control::PlayButton, "activeFocus"));
+    assert!(ringed(transport, Control::Handle), "and rings the slider");
+    transport.press(Key::Tab);
+    assert!(
+        transport.flag(Control::PlayButton, "activeFocus"),
+        "Tab wraps to the start"
+    );
     let once = "toggles once on the focused button";
-    press_all(
-        transport,
-        &[
-            (Key::Space, (false, 0), once),
-            (Key::Return, (true, 0), once),
-            (Key::Enter, (false, 0), once),
-            (Key::KeypadEnter, (true, 0), once),
-        ],
-    );
+    transport.press_all(&[
+        (Key::Space, (false, 0), once),
+        (Key::Return, (true, 0), once),
+        (Key::Enter, (false, 0), once),
+        (Key::KeypadEnter, (true, 0), once),
+    ]);
 }
 
 /// With the slider focused, the toggle still toggles once, and the arrows,
@@ -117,24 +122,21 @@ fn steps_and_holds(transport: &Transport<'_>) {
     transport.press(Key::Tab);
     assert!(transport.flag(Control::Slider, "activeFocus"));
     let once = "toggles once on the focused slider";
-    press_all(
-        transport,
-        &[
-            (Key::Space, (false, 0), once),
-            (Key::Return, (true, 0), once),
-            (Key::KeypadEnter, (false, 0), once),
-            (Key::Enter, (true, 0), once),
-            (Key::Right, (false, 1), "steps forward and pauses"),
-            (Key::Right, (false, 2), "steps onto the latest frame"),
-            (Key::Right, (false, 2), "stops at the latest frame"),
-            (Key::Left, (false, 1), "steps back"),
-            (Key::Home, (false, 0), "jumps to the first frame"),
-            (Key::Left, (false, 0), "stops at the first frame"),
-            (Key::Space, (true, 0), "resumes"),
-            (Key::End, (false, 2), "jumps to the latest frame and pauses"),
-            (Key::Tab, (false, 2), "wraps the focus to the play button"),
-        ],
-    );
+    transport.press_all(&[
+        (Key::Space, (false, 0), once),
+        (Key::Return, (true, 0), once),
+        (Key::KeypadEnter, (false, 0), once),
+        (Key::Enter, (true, 0), once),
+        (Key::Right, (false, 1), "steps forward and pauses"),
+        (Key::Right, (false, 2), "steps onto the latest frame"),
+        (Key::Right, (false, 2), "stops at the latest frame"),
+        (Key::Left, (false, 1), "steps back"),
+        (Key::Home, (false, 0), "jumps to the first frame"),
+        (Key::Left, (false, 0), "stops at the first frame"),
+        (Key::Space, (true, 0), "resumes"),
+        (Key::End, (false, 2), "jumps to the latest frame and pauses"),
+        (Key::Tab, (false, 2), "wraps the focus to the play button"),
+    ]);
     assert!(transport.flag(Control::PlayButton, "activeFocus"));
     transport.press(Key::Backtab);
     assert!(transport.flag(Control::Slider, "activeFocus"));
@@ -148,68 +150,85 @@ fn steps_and_holds(transport: &Transport<'_>) {
 }
 
 /// A Tab-focused control shows a ring in the theme's foreground, and loses it
-/// when the focus moves on. Starts with the slider focused by Shift+Tab.
+/// when the focus moves on. Starts with the slider focused by Shift+Tab, and
+/// leaves it focused by Tab.
 fn rings_follow_the_focus(transport: &Transport<'_>) {
-    let (button, handle) = (Control::PlayButton, Control::Handle);
-    assert!(transport.flag(Control::Slider, "visualFocus"));
-    let (handle_ring, button_plain) = (transport.left_edge(handle), transport.left_edge(button));
-
+    assert!(
+        ringed(transport, Control::Handle),
+        "Shift+Tab rings the slider"
+    );
+    assert!(
+        !ringed(transport, Control::PlayButton),
+        "only one ring at a time"
+    );
     transport.press(Key::Tab);
-    assert!(transport.flag(button, "visualFocus"));
-    assert!(!transport.flag(Control::Slider, "visualFocus"));
-    let (handle_plain, button_ring) = (transport.left_edge(handle), transport.left_edge(button));
-
-    for (control, ring, plain) in [
-        ("play button", button_ring, button_plain),
-        ("slider handle", handle_ring, handle_plain),
-    ] {
-        assert!(
-            spread(ring, plain) >= VISIBLE_LEVELS,
-            "the {control}'s ring {ring:?} cannot be told from {plain:?}"
-        );
-        assert!(
-            spread(ring, NORD_FOREGROUND) < VISIBLE_LEVELS,
-            "the {control}'s ring {ring:?} is not the theme's foreground"
-        );
-    }
-
+    assert!(
+        ringed(transport, Control::PlayButton),
+        "Tab rings the button"
+    );
+    assert!(
+        !ringed(transport, Control::Handle),
+        "the slider's ring left with Tab"
+    );
     transport.press(Key::Tab);
-    assert!(!transport.flag(button, "visualFocus"));
-    assert_eq!(
-        transport.left_edge(button),
-        button_plain,
+    assert!(
+        !ringed(transport, Control::PlayButton),
         "the button's ring left"
     );
-    assert_eq!(
-        transport.left_edge(handle),
-        handle_ring,
-        "the handle's ring returned"
+    assert!(
+        ringed(transport, Control::Handle),
+        "the slider's ring came back"
     );
 }
 
-/// A refresh empties the run while it fetches, which disables both controls.
-/// Qt hands the focus back when they re-enable, though not as keyboard focus,
-/// so the ring goes with the refresh, as `RadarTransport.qml` says, while the
-/// focus and every key carry on. Starts after a refresh with the slider focused.
-fn a_refresh_keeps_the_keys(transport: &Transport<'_>) {
+/// After a refresh under the keyboard's focus, the same control has the focus
+/// and the ring again, and the keys carry on from it. Leaves the play button
+/// focused by Tab.
+fn a_refresh_keeps_the_slider_ring(transport: &Transport<'_>) {
     assert_eq!(transport.playback(), (true, 0), "a refreshed run plays");
     assert!(
         transport.flag(Control::Slider, "activeFocus"),
         "the focus came back"
     );
     assert!(
-        !transport.flag(Control::Slider, "visualFocus"),
-        "the ring did not"
+        ringed(transport, Control::Handle),
+        "the ring came back with it"
     );
-    press_all(
-        transport,
-        &[
-            (Key::Space, (false, 0), "toggles once after a refresh"),
-            (Key::Right, (false, 1), "steps after a refresh"),
-            (Key::Tab, (false, 1), "moves on from where the focus was"),
-        ],
+    transport.press_all(&[
+        (Key::Space, (false, 0), "toggles once after a refresh"),
+        (Key::Right, (false, 1), "steps after a refresh"),
+        (Key::Tab, (false, 1), "moves on from where the focus was"),
+    ]);
+    assert!(
+        ringed(transport, Control::PlayButton),
+        "Tab rings the button"
     );
-    assert!(transport.flag(Control::PlayButton, "activeFocus"));
+}
+
+/// The play button keeps its ring across a refresh too. Focus that a click
+/// moves onto it is the mouse's, though: the click toggles once, like a key,
+/// and neither control shows a ring. A click on a control that already has the
+/// focus moves nothing, so it keeps whatever ring it had, as Qt's own
+/// `visualFocus` does.
+fn a_refresh_keeps_the_button_ring(transport: &Transport<'_>) {
+    let button = Control::PlayButton;
+    assert!(transport.flag(button, "activeFocus"), "the focus came back");
+    assert!(ringed(transport, button), "the ring came back with it");
+    transport.press(Key::Tab);
+    assert!(ringed(transport, Control::Handle), "Tab rings the slider");
+    assert_eq!(transport.click(button), (false, 0), "a click toggles once");
+    assert!(
+        transport.flag(button, "activeFocus"),
+        "the click took the focus"
+    );
+    assert!(
+        !ringed(transport, button),
+        "focus from a click shows no ring"
+    );
+    assert!(
+        !ringed(transport, Control::Handle),
+        "nor the control it left"
+    );
 }
 
 /// On a run of one frame there is nothing to play or step through: every key
@@ -221,33 +240,15 @@ fn one_frame_is_inert(transport: &Transport<'_>) {
         "a run of one does not play"
     );
     let inert = "is inert on a run of one";
-    press_all(
-        transport,
-        &[
-            (Key::Space, (false, 0), inert),
-            (Key::KeypadEnter, (false, 0), inert),
-            (Key::Right, (false, 0), inert),
-            (Key::End, (false, 0), inert),
-            (Key::Tab, (false, 0), inert),
-        ],
-    );
+    transport.press_all(&[
+        (Key::Space, (false, 0), inert),
+        (Key::KeypadEnter, (false, 0), inert),
+        (Key::Right, (false, 0), inert),
+        (Key::End, (false, 0), inert),
+        (Key::Tab, (false, 0), inert),
+    ]);
     assert!(!transport.flag(Control::PlayButton, "activeFocus"));
     assert!(!transport.flag(Control::Slider, "activeFocus"));
-}
-
-/// Refreshes the radar and waits until the run it brings holds `frames` frames.
-fn refresh_to(booted: &mut Harness, frames: i32) {
-    booted.refresh_radar();
-    pump_until(
-        &format!("a run of {frames} is adopted"),
-        SETTLE_BUDGET,
-        || {
-            booted.process_events();
-            booted
-                .radar_controller()
-                .is_some_and(|controller| *controller.frame_count() == frames)
-        },
-    );
 }
 
 #[test]
@@ -288,13 +289,25 @@ fn radar_playback_answers_each_key_once_wherever_the_focus_is() {
     steps_and_holds(&transport);
     rings_follow_the_focus(&transport);
 
-    // When / Then: a refresh comes and goes under the focused slider.
+    // When / Then: refreshes come and go under the keyboard's focus.
     refresh_to(&mut booted, 3);
-    a_refresh_keeps_the_keys(&Transport::find(&booted));
+    a_refresh_keeps_the_slider_ring(&Transport::find(&booted));
+    refresh_to(&mut booted, 3);
+    a_refresh_keeps_the_button_ring(&Transport::find(&booted));
 
-    // When: the next refresh brings a run of one frame.
+    // When / Then: a refresh under a click's focus brings no ring back.
+    refresh_to(&mut booted, 3);
+    let transport = Transport::find(&booted);
+    assert!(
+        transport.flag(Control::PlayButton, "activeFocus"),
+        "the focus came back"
+    );
+    assert!(
+        !ringed(&transport, Control::PlayButton),
+        "and still shows no ring"
+    );
+
+    // When / Then: a run of one frame leaves every key with nothing to do.
     refresh_to(&mut booted, 1);
-
-    // Then: every key finds nothing to do, and nothing breaks.
     one_frame_is_inert(&Transport::find(&booted));
 }

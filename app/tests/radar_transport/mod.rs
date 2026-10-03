@@ -2,9 +2,10 @@
 //!
 //! `radar_keys` asserts what each key does to playback and what the focus ring
 //! looks like. This is the half that reaches the window to find out: it types
-//! through [`allesbuien_harness::keys`], reads the outcome back off the radar
-//! controller rather than the QML that called it, and samples rendered pixels
-//! for the ring, because a ring is only proven by being seen.
+//! and clicks through [`allesbuien_harness::keys`] and
+//! [`allesbuien_harness::pointer`], refreshes the run, reads the outcome back
+//! off the radar controller rather than the QML that called it, and samples
+//! rendered pixels for the ring, because a ring is only proven by being seen.
 //!
 //! It lives beside its one consumer rather than in `allesbuien-harness`: a
 //! second harness that needs the play button and the slider by name is the
@@ -15,13 +16,34 @@ use std::ptr::NonNull;
 use allesbuien_harness::{
     Harness,
     keys::{Key, key_click, key_hold},
+    pointer::click,
     probe::{
         QObject, QQuickWindow, child, focused_window, grab_window, map_to_scene, number_of,
         property,
     },
 };
 
+use allesbuien_testkit::{SETTLE_BUDGET, pump_until};
+
 pub(crate) type Rgb = [i32; 3];
+
+/// A key, the playback it should leave behind, and what that proves.
+pub(crate) type Step = (Key, (bool, i32), &'static str);
+
+/// Refreshes the radar and waits until the run it brings holds `frames` frames.
+pub(crate) fn refresh_to(booted: &mut Harness, frames: i32) {
+    booted.refresh_radar();
+    pump_until(
+        &format!("a run of {frames} is adopted"),
+        SETTLE_BUDGET,
+        || {
+            booted.process_events();
+            booted
+                .radar_controller()
+                .is_some_and(|controller| *controller.frame_count() == frames)
+        },
+    );
+}
 
 /// The largest per-channel difference between two colours.
 pub(crate) fn spread(first: Rgb, second: Rgb) -> i32 {
@@ -92,6 +114,30 @@ impl<'a> Transport<'a> {
         self.playback()
     }
 
+    /// Presses each key in turn and asserts the playback it leaves behind.
+    pub(crate) fn press_all(&self, steps: &[Step]) {
+        for &(key, expected, meaning) in steps {
+            assert_eq!(self.press(key), expected, "{key:?}: {meaning}");
+        }
+    }
+
+    /// Clicks the middle of `control`, then reports the playback it left.
+    pub(crate) fn click(&self, control: Control) -> (bool, i32) {
+        let item = self.item(control);
+        // SAFETY: `window` and `item` came from the probes on the still-borrowed
+        // `booted`, and all three controls are `QQuickItem`s.
+        unsafe {
+            let middle = map_to_scene(
+                item,
+                number_of(item, "width") / 2.0,
+                number_of(item, "height") / 2.0,
+            );
+            click(self.window, &middle);
+        }
+        self.booted.process_events();
+        self.playback()
+    }
+
     /// Holds `key` for `repeats` auto-repeats, then reports the playback it left.
     pub(crate) fn hold(&self, key: Key, repeats: u16) -> (bool, i32) {
         // SAFETY: as in `press`.
@@ -100,7 +146,7 @@ impl<'a> Transport<'a> {
         self.playback()
     }
 
-    /// A boolean property of `control`, such as `activeFocus` or `visualFocus`.
+    /// A boolean property of `control`, such as `activeFocus`.
     pub(crate) fn flag(&self, control: Control, name: &str) -> bool {
         // SAFETY: the item came from the probes on the still-borrowed `booted`.
         unsafe { property(self.item(control), name) }

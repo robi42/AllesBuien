@@ -21,6 +21,31 @@ Rectangle {
     // controls and every key below.
     readonly property bool playable: radarTransport.radarController.frameCount > 1
 
+    // Whether the focus in this transport last arrived from the keyboard. The
+    // rings draw on this together with `activeFocus` rather than on Controls'
+    // own `visualFocus`, which only lasts until the next radar refresh: a
+    // refresh empties the run while it fetches, both controls disable, and Qt
+    // hands the focus back when they re-enable, but under a reason that is not
+    // a keyboard one, so `visualFocus` comes back false (measured). Only Tab,
+    // Shift+Tab, and a click write this latch, so it rides out that round trip
+    // and a keyboard user keeps the ring while a mouse user never gets one. A
+    // click on the control that already has the focus moves nothing and keeps
+    // its ring, as `visualFocus` does.
+    property bool keyboardFocus: false
+
+    // How the focused control got its focus, or -1 while neither has it. One
+    // reading of whichever control holds the focus, rather than a handler on
+    // each, because a move between the two reports its reason on both sides.
+    readonly property int controlFocusReason: playButton.activeFocus ? playButton.focusReason : frameSlider.activeFocus ? frameSlider.focusReason : -1
+
+    onControlFocusReasonChanged: {
+        const reason = radarTransport.controlFocusReason;
+        if (reason === Qt.TabFocusReason || reason === Qt.BacktabFocusReason || reason === Qt.ShortcutFocusReason)
+            radarTransport.keyboardFocus = true;
+        else if (reason === Qt.MouseFocusReason)
+            radarTransport.keyboardFocus = false;
+    }
+
     function togglePlayback(): void {
         if (radarTransport.radarController.playing)
             radarTransport.radarController.pause();
@@ -107,16 +132,6 @@ Rectangle {
         // glyph asks to be redrawn on each input it reads and once more when
         // the surface reports itself paintable, so the first paint does not
         // depend on which of those comes first.
-        //
-        // Both controls draw their focus ring on `visualFocus`, not
-        // `activeFocus`: Controls set it for focus that arrived by Tab and not
-        // for focus a mouse click left behind, so a ring answers the keyboard
-        // and nothing else. Every radar refresh empties the run while it
-        // fetches, which disables both controls, and Qt hands the focus back
-        // when they re-enable but not as keyboard focus (measured): the ring
-        // goes with the refresh, while the focus, the tab position, and every
-        // key carry on. The refresh restarts playback from the first frame as
-        // well, so the transport resets as a whole rather than half of it.
         Button {
             id: playButton
             objectName: "playButton"
@@ -128,7 +143,7 @@ Rectangle {
             background: Rectangle {
                 color: playButton.down ? radarTransport.theme.selection : radarTransport.theme.buttonFill
                 radius: radarTransport.theme.radiusSm
-                border.width: playButton.visualFocus ? radarTransport.focusRingWidth : 0
+                border.width: playButton.activeFocus && radarTransport.keyboardFocus ? radarTransport.focusRingWidth : 0
                 border.color: radarTransport.theme.focusRing
             }
             contentItem: Item {}
@@ -250,7 +265,7 @@ Rectangle {
                 radius: sliderHandle.width / 2
                 color: radarTransport.theme.accent
                 border.width: radarTransport.focusRingWidth
-                border.color: frameSlider.visualFocus ? radarTransport.theme.focusRing : radarTransport.theme.surface
+                border.color: frameSlider.activeFocus && radarTransport.keyboardFocus ? radarTransport.theme.focusRing : radarTransport.theme.surface
             }
 
             onMoved: radarTransport.radarController.seek(Math.round(frameSlider.value))

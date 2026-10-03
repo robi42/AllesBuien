@@ -1,6 +1,6 @@
 //! The Qt-bound scaffolding the GUI harnesses under `app/tests/` share: booting
 //! the real window over injected ports, reading its rendered object tree, and
-//! typing into it.
+//! typing and clicking into it.
 //!
 //! [`allesbuien_testkit`] holds everything that does not need Qt. What is left
 //! here was copied across the harnesses verbatim — five copies of one block of
@@ -15,6 +15,7 @@
 
 pub mod boot;
 pub mod keys;
+pub mod pointer;
 pub mod probe;
 
 pub use boot::{Harness, HarnessBuilder};
