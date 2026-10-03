@@ -20,9 +20,13 @@ BarWidget {
   property bool installed: false
   property bool pendingClick: false
 
-  // Focus the open window if there is one, else launch. This is the helper
-  // Omarchy's own launchers use, so the window is found the same way.
-  readonly property string launchCommand: "omarchy-launch-or-focus allesbuien allesbuien"
+  // Focus the open window if there is one, else launch, in the command shape
+  // Omarchy's launch_sole helper builds (its Obsidian binding: "^obsidian$").
+  // The helper tests the pattern against every window's class and title, any
+  // case, so a bare word would also focus a terminal or browser whose title
+  // mentions AllesBuien; anchored, only a class or whole title of AllesBuien
+  // answers. uwsm-app gives the app its own scope, as the install branch does.
+  readonly property string launchCommand: "omarchy-launch-or-focus '^allesbuien$' 'uwsm-app -- allesbuien'"
 
   // The body of omarchy-install-and-launch with the AUR helper in place of the
   // pacman-only one, because allesbuien-bin lives on the AUR. Omarchy's

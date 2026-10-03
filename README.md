@@ -74,7 +74,7 @@ And a location outside the radar's coverage says so on the map, rather than leav
 Nothing above touches your Hyprland configuration. If you want a keybinding and a floating window, add these two lines to `~/.config/hypr/bindings.lua` yourself, then reload:
 
 ```lua
-o.bind("SUPER + ALT + W", "AllesBuien", { launch = "allesbuien" })
+o.bind("SUPER + ALT + W", "AllesBuien", { launch = "allesbuien", focus = "^allesbuien$" })
 o.window("allesbuien", { float = true })
 ```
 
@@ -185,10 +185,12 @@ bin/build
 
 `bin/test` holds only a text belt over the bar widget — the manifest's shape, entry points that are tracked files, no symlink anywhere, no literal colour — because CI runs in a bare Arch container, and `qs.Ui`, `omarchy-plugin-validate`, and the shell itself exist only on an Omarchy desktop. Run these three checks by hand before every tag.
 
-Validate what `omarchy plugin add` would clone — a clean checkout, because the validator walks ignored `target/` too and refuses every symlink it finds:
+Validate what `omarchy plugin add` would clone: a clean checkout of `main` from GitHub, because the validator walks ignored `target/` too and refuses every symlink it finds, and because the commit these checks pass on is the one a release tags. The `rev-parse` line prints it; keep it for the tag, because the clone is deleted at the end:
 
 ```bash
-git clone -q . /tmp/allesbuien-candidate
+rm -rf /tmp/allesbuien-candidate
+git clone -q https://github.com/robi42/AllesBuien.git /tmp/allesbuien-candidate
+git -C /tmp/allesbuien-candidate rev-parse HEAD
 omarchy plugin validate /tmp/allesbuien-candidate
 ```
 
@@ -198,7 +200,7 @@ Lint the widget. `qs.Ui` resolves through a module root named `qs`, so the shell
 
 ```bash
 mkdir -p /tmp/qmlroot && ln -sfn /usr/share/omarchy/shell /tmp/qmlroot/qs
-/usr/lib/qt6/bin/qmllint -I /tmp/qmlroot plugin/BarWidget.qml
+/usr/lib/qt6/bin/qmllint -I /tmp/qmlroot /tmp/allesbuien-candidate/plugin/BarWidget.qml
 ```
 
 Two warnings are expected, and Omarchy's own first-party plugins produce both: `bar.run` is not visible on the `QtObject` the bar is declared as, and `QProcess::ExitStatus` has no QML type for `onExited`'s second parameter.
@@ -217,7 +219,7 @@ $EDITOR ~/.config/omarchy/plugins/io.github.robi42.allesbuien/plugin/BarWidget.q
 
 Replace the `installCommand` string with `omarchy-launch-floating-terminal-with-presentation "echo dry-run"` and save; the shell reloads the plugin on the change.
 
-Now click the icon and watch the four states: dimmed with the install tooltip while the application is absent, and a click opening the dry-run terminal rather than an installer; lit within five seconds of an install finishing elsewhere (`cargo install --root ~/.local --path app` is enough); launching the window when none is open; focusing the open window instead of opening a second one. None of these may need a shell restart or a plugin reload.
+Now click the icon and watch the four states: dimmed with the install tooltip while the application is absent, and a click opening the dry-run terminal rather than an installer; lit within five seconds of an install finishing elsewhere (`cargo install --root ~/.local --path app` is enough); launching the window when none is open; focusing the open window instead of opening a second one. None of these may need a shell restart or a plugin reload. Check the last two with another window open whose title mentions AllesBuien — this repository's GitHub page, as the browser's active tab, will do, but not a window titled exactly AllesBuien, which is the application's own title: the click has to launch or focus the application itself, never that window.
 
 Finish by putting the desktop back as it was:
 
@@ -230,7 +232,32 @@ rm -rf /tmp/allesbuien-candidate
 
 Nine files carry the version and `release.yml` compares only three of them against the tag, so bump all nine; `bin/check-fast`'s `release version` gate refuses a commit that leaves one behind: `app/Cargo.toml`, `core/Cargo.toml`, `app/harness/Cargo.toml`, `app/testkit/Cargo.toml`, `assets/gen-basemap/Cargo.toml`, the five workspace entries in `Cargo.lock` (`cargo update --workspace --offline`), `pkgver=` in `pkgbuild/PKGBUILD`, `"version"` in `manifest.json`, and the package filename in this README.
 
-Then: write the release's `CHANGELOG.md` section; run the plugin checks above; `git tag -a vX.Y.Z` with that changelog section as the tag message and push the tag, which is what builds and attaches the release assets. Once the asset exists, bump `allesbuien-bin` in its AUR clone — `pkgver`, `sha256sums` from the published asset, `makepkg --printsrcinfo > .SRCINFO`, commit, push — so the widget's install click installs the new version. Finally re-verify the marketplace listing with the new HEAD SHA; it tracks the commit it was scanned at, not `main`.
+Then write the release's `CHANGELOG.md` section, dated the day you tag, and land it on `main`. Once CI is green there, run the plugin checks above, which print the commit they checked. Tag that commit, not whatever happens to be checked out locally, with the section as the message under a first line naming the release, the way `v0.1.0`'s message begins:
+
+```bash
+git fetch origin
+sha=$(git rev-parse origin/main)   # must be the commit the plugin checks printed
+version=$(git show "$sha:app/Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -1)
+{ printf 'AllesBuien %s\n\n' "$version"
+  git show "$sha:CHANGELOG.md" | awk -v h="## [$version]" 'index($0, h) == 1 { f = 1; next } /^## \[/ { f = 0 } f'
+} > "/tmp/allesbuien-v$version.md"
+git tag -a "v$version" --cleanup=whitespace -F "/tmp/allesbuien-v$version.md" "$sha" &&
+  git cat-file -p "v$version"
+```
+
+`--cleanup=whitespace` is what keeps the section's `###` headings: git's default cleanup takes every line starting with `#` for a comment and deletes it. Before pushing, check that `git cat-file -p` printed the section with its headings and, on its `object` line, the commit the plugin checks printed, because the pushed tag is what builds and attaches the release assets. If either is wrong, or `git tag` says the tag already exists because an earlier attempt left it behind, do not push: delete it with `git tag -d "v$version"`, put right what was wrong, and run the block above again. Then, in the same terminal, push it:
+
+```bash
+git push origin "refs/tags/v$version"
+```
+
+The workflow leaves the release's description empty, and GitHub then shows the tag message as preformatted text, so once its run is green give the release the same notes as Markdown, read back from the tag itself; in a new terminal, set `version` first:
+
+```bash
+git tag -l --format='%(contents:body)' "v$version" | gh release edit "v$version" --notes-file -
+```
+
+Once the asset exists, bump `allesbuien-bin` in its AUR clone — `pkgver`, `sha256sums` from the published asset, `makepkg --printsrcinfo > .SRCINFO`, commit, push — so the widget's install click installs the new version. Do not re-run the release workflow after that: it would upload a rebuild with different bytes under the same name, and the AUR checksum would stop matching. Finally re-verify the marketplace listing with the new HEAD SHA; it tracks the commit it was scanned at, not `main`.
 
 Issues are tracked in-repo as [beads](https://github.com/steveyegge/beads): `bd ready` lists what is actionable, `bd show <id>` reads one.
 
