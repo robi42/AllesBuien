@@ -47,9 +47,10 @@ ApplicationWindow {
     }
 
     // A floating single-window utility that is opened from a keybind gets
-    // closed from the keyboard too. Escape only, and no wider keyboard
-    // navigation with it: tab order and arrow-key seek are a separate design
-    // question, and shipping half of one is worse than shipping none.
+    // closed from the keyboard too. Escape is the only key this file binds:
+    // the radar's playback keys are window-context Shortcuts in
+    // RadarTransport.qml, beside the two controls they drive, and the tab
+    // order is that file's item order.
     Shortcut {
         sequences: ["Escape"]
         onActivated: Qt.quit()

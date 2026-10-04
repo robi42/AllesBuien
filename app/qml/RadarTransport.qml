@@ -12,6 +12,46 @@ Rectangle {
     // where it is used, and anything that lands on the 4 px scale comes from the
     // theme rather than being restated here.
     readonly property int handleSize: 18
+    // The keyboard-focus ring, on both controls: a border on the play button's
+    // background, and the handle's own border changing colour on the slider.
+    readonly property int focusRingWidth: 2
+
+    // Rust's `play` already refuses a run of one frame; this is the same rule
+    // stated once for everything here that has to go inert with it — both
+    // controls and every key below.
+    readonly property bool playable: radarTransport.radarController.frameCount > 1
+
+    // Whether the focus in this transport last arrived from the keyboard. The
+    // rings draw on this together with `activeFocus` rather than on Controls'
+    // own `visualFocus`, which only lasts until the next radar refresh: a
+    // refresh empties the run while it fetches, both controls disable, and Qt
+    // hands the focus back when they re-enable, but under a reason that is not
+    // a keyboard one, so `visualFocus` comes back false (measured). Only Tab,
+    // Shift+Tab, and a click write this latch, so it rides out that round trip
+    // and a keyboard user keeps the ring while a mouse user never gets one. A
+    // click on the control that already has the focus moves nothing and keeps
+    // its ring, as `visualFocus` does.
+    property bool keyboardFocus: false
+
+    // How the focused control got its focus, or -1 while neither has it. One
+    // reading of whichever control holds the focus, rather than a handler on
+    // each, because a move between the two reports its reason on both sides.
+    readonly property int controlFocusReason: playButton.activeFocus ? playButton.focusReason : frameSlider.activeFocus ? frameSlider.focusReason : -1
+
+    onControlFocusReasonChanged: {
+        const reason = radarTransport.controlFocusReason;
+        if (reason === Qt.TabFocusReason || reason === Qt.BacktabFocusReason || reason === Qt.ShortcutFocusReason)
+            radarTransport.keyboardFocus = true;
+        else if (reason === Qt.MouseFocusReason)
+            radarTransport.keyboardFocus = false;
+    }
+
+    function togglePlayback(): void {
+        if (radarTransport.radarController.playing)
+            radarTransport.radarController.pause();
+        else
+            radarTransport.radarController.play();
+    }
 
     anchors.bottom: parent.bottom
     anchors.left: parent.left
@@ -19,6 +59,51 @@ Rectangle {
     height: 56
     color: radarTransport.theme.surface
     radius: radarTransport.theme.radiusLg
+
+    // The playback keys, wherever the focus is in the window. They are
+    // window-context Shortcuts rather than `Keys` handlers because Qt consults
+    // its shortcut map before it delivers a press to the focused item, and
+    // neither control here claims the press first: the focused Button would
+    // otherwise click on Space, Return, and Enter itself, and the focused
+    // Slider would step on Left and Right, so a handler-based scheme toggles
+    // twice or never depending on where the focus sits. A Shortcut pre-empts
+    // instead, so every key has one meaning and this list is all of them.
+    //
+    // A held Space is one toggle; a held arrow scrubs. Up and Down stay
+    // unbound: the timeline is horizontal, and they would only be a second
+    // spelling of Left and Right. Tab and Shift+Tab need nothing here — the
+    // play button and the slider are the window's only tab stops, in this
+    // file's item order.
+    Shortcut {
+        sequences: ["Space", "Return", "Enter"]
+        enabled: radarTransport.playable
+        autoRepeat: false
+        onActivated: radarTransport.togglePlayback()
+    }
+
+    Shortcut {
+        sequences: ["Left"]
+        enabled: radarTransport.playable
+        onActivated: radarTransport.radarController.seek(radarTransport.radarController.currentFrameIndex - 1)
+    }
+
+    Shortcut {
+        sequences: ["Right"]
+        enabled: radarTransport.playable
+        onActivated: radarTransport.radarController.seek(radarTransport.radarController.currentFrameIndex + 1)
+    }
+
+    Shortcut {
+        sequences: ["Home"]
+        enabled: radarTransport.playable
+        onActivated: radarTransport.radarController.seek(0)
+    }
+
+    Shortcut {
+        sequences: ["End"]
+        enabled: radarTransport.playable
+        onActivated: radarTransport.radarController.seek(radarTransport.radarController.frameCount - 1)
+    }
 
     RowLayout {
         anchors.fill: parent
@@ -49,14 +134,17 @@ Rectangle {
         // depend on which of those comes first.
         Button {
             id: playButton
+            objectName: "playButton"
             text: radarTransport.radarController.playing ? "Pause" : "Play"
-            enabled: radarTransport.radarController.frameCount > 1
+            enabled: radarTransport.playable
             Layout.preferredHeight: 36
             Layout.preferredWidth: 36
 
             background: Rectangle {
                 color: playButton.down ? radarTransport.theme.selection : radarTransport.theme.buttonFill
                 radius: radarTransport.theme.radiusSm
+                border.width: playButton.activeFocus && radarTransport.keyboardFocus ? radarTransport.focusRingWidth : 0
+                border.color: radarTransport.theme.focusRing
             }
             contentItem: Item {}
 
@@ -96,17 +184,18 @@ Rectangle {
                 }
             }
 
-            onClicked: radarTransport.radarController.playing ? radarTransport.radarController.pause() : radarTransport.radarController.play()
+            onClicked: radarTransport.togglePlayback()
         }
 
         Slider {
             id: frameSlider
+            objectName: "frameSlider"
             Layout.fillWidth: true
             from: 0
             to: Math.max(0, radarTransport.radarController.frameCount - 1)
             value: radarTransport.radarController.currentFrameIndex
             stepSize: 1
-            enabled: radarTransport.radarController.frameCount > 1
+            enabled: radarTransport.playable
 
             background: Rectangle {
                 id: sliderGroove
@@ -164,16 +253,19 @@ Rectangle {
                     visible: radarTransport.radarController.forecastBoundaryVisible
                 }
             }
+            // The surface-coloured border is a gap that lifts the handle off
+            // the track; under keyboard focus the same border becomes the ring.
             handle: Rectangle {
                 id: sliderHandle
+                objectName: "sliderHandle"
                 x: frameSlider.leftPadding + frameSlider.visualPosition * (frameSlider.availableWidth - sliderHandle.width)
                 y: frameSlider.topPadding + frameSlider.availableHeight / 2 - sliderHandle.height / 2
                 implicitWidth: radarTransport.handleSize
                 implicitHeight: radarTransport.handleSize
                 radius: sliderHandle.width / 2
                 color: radarTransport.theme.accent
-                border.width: 2
-                border.color: radarTransport.theme.surface
+                border.width: radarTransport.focusRingWidth
+                border.color: frameSlider.activeFocus && radarTransport.keyboardFocus ? radarTransport.theme.focusRing : radarTransport.theme.surface
             }
 
             onMoved: radarTransport.radarController.seek(Math.round(frameSlider.value))

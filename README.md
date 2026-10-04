@@ -69,6 +69,14 @@ Unlike Omarchy's own weather widget, **AllesBuien does not auto-detect your loca
 
 And a location outside the radar's coverage says so on the map, rather than leaving a blank raster that looks like a failed download. `omarchy-weather-location --set Malibu` — a name with no coordinates — is treated as no setting at all, because geocoding it would mean owning a copy of a setting the desktop already owns.
 
+## Keys
+
+- **Space** or **Enter** plays and pauses the radar, wherever the focus is.
+- **Left** and **Right** step one frame back or forward and pause.
+- **Home** and **End** jump to the first and the latest frame.
+- **Tab** moves between the play button and the timeline, which show a ring while they have keyboard focus.
+- **Escape** closes the window.
+
 ## Optional Hyprland wiring
 
 Nothing above touches your Hyprland configuration. If you want a keybinding and a floating window, add these two lines to `~/.config/hypr/bindings.lua` yourself, then reload:
