@@ -83,6 +83,12 @@ worktree=$root/worktree
 mkdir "$decoy"
 tar --extract --file "$root/tree.tar" --directory "$decoy"
 git -C "$decoy" -c init.defaultBranch=main init -q
+# A commit runs git maintenance, which takes a lock under .git/objects before
+# it detaches and leaves the background process to drop it whenever that gets
+# to run: a snapshot taken meanwhile can name a file that is gone before it is
+# read, or one the snapshot after it lacks. With none in the decoy, all that
+# changes under its .git is what a script did.
+git -C "$decoy" config maintenance.auto false
 git -C "$decoy" add --all -- .
 git -C "$decoy" -c user.name=gates -c user.email=gates@invalid -c commit.gpgsign=false \
   commit -q -m decoy
