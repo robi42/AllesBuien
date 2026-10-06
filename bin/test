@@ -36,11 +36,11 @@ echo "==> gate: workflow syntax"
 require_tool actionlint
 actionlint
 
-# The gate scripts that run git, run as git runs a command it spawns in a linked
-# worktree - the commit hook among them - against a decoy repository they have
-# to leave as they found it: run that way, bin/check-gates marked the main
-# checkout bare until it learnt to clear git's variables. It builds nothing, so
-# it sits with the checks that answer in seconds.
+# The gate scripts that run git, run as git runs a commit's hook in a linked
+# worktree and in the main checkout, against a decoy repository they have to
+# leave as they found it: run that way, bin/check-gates marked the main checkout
+# bare until it learnt to clear git's variables. It builds nothing, so it sits
+# with the checks that answer in seconds.
 ./bin/check-worktree-hook
 
 echo "==> gate: formatting"

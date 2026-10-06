@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The gate scripts that run git, run the way git runs a command it spawns in a
-# linked worktree, against a decoy repository they have to leave as they found
-# it.
+# The gate scripts that run git, run the way git runs a commit's hook, in a
+# linked worktree and in the main checkout, against a decoy repository they have
+# to leave as they found it.
 #
 # In a linked worktree - where the factory's builders commit - git hands every
 # command it runs GIT_DIR, and a pre-commit hook GIT_INDEX_FILE as well, both
@@ -17,14 +17,23 @@ set -euo pipefail
 # main checkout, where a human finally notices, is nowhere near the run that
 # broke it.
 #
+# In the main checkout git sets no GIT_DIR, but git commit -a hands the hook
+# GIT_INDEX_FILE=.git/index.lock, and git commit with paths
+# .git/next-index-<pid>.lock, each by its absolute path: the index the commit
+# is built from. A git add in another repository with it writes that
+# repository's files into the commit's index, and the commit then fails on an
+# object only the other repository holds, or takes along a file nobody staged.
+#
 # So this builds a decoy - a repository holding a copy of this tree, with a
-# linked worktree and a change staged in it, as there is while a commit runs its
-# hook - and runs each script below in that worktree with what git commit -a
-# hands the hook there: GIT_DIR, an index of the commit's own that only
-# GIT_INDEX_FILE names, and the commit's -c options as GIT_CONFIG_PARAMETERS. A
-# script that fails, that changes any file under the decoy's .git, or that
-# commits with those options fails the gate, which names the files and what
-# core.bare became.
+# linked worktree, and a change staged in each checkout, as there is while a
+# commit runs its hook - and runs each script below in both. In the worktree it
+# runs with what git commit -a hands the hook there: GIT_DIR, an index of the
+# commit's own that only GIT_INDEX_FILE names, and the commit's -c options as
+# GIT_CONFIG_PARAMETERS. In the main checkout it runs with what git commit with
+# paths hands the hook there: no GIT_DIR, the commit's index by its absolute
+# path, and the same options. A script that fails, that changes any file under
+# the decoy's .git, or that commits with those options fails the gate, which
+# names the files and what core.bare became.
 #
 # The list is the hook's script and every script that runs git in another
 # repository. bin/check-fast is what lefthook runs on every commit, beside cargo
@@ -71,27 +80,32 @@ git -C "$decoy" -c user.name=gates -c user.email=gates@invalid -c commit.gpgsign
 git -C "$decoy" worktree add -q -b task "$worktree"
 gitdir=$(git -C "$worktree" rev-parse --absolute-git-dir)
 
-# A linked worktree checked out inside that one, as a worktree made under a
+# A linked worktree checked out inside each checkout, as a worktree made under a
 # checkout is: untracked there, listed as one directory, and holding a .git file
 # that names the decoy's repository, so a copy of it carries that file along.
 git -C "$decoy" worktree add -q --detach "$worktree/nested"
+git -C "$decoy" worktree add -q --detach "$decoy/nested-main"
 
 # bin/check-gates will not start without the QML modules the build registers.
 # The fixture it runs here reads none of them, so an empty directory does, and
 # target/ is ignored.
-mkdir -p "$worktree/target/cxxqt/qml_modules"
+mkdir -p "$worktree/target/cxxqt/qml_modules" "$decoy/target/cxxqt/qml_modules"
 
 # state: every file under the decoy's .git, with its checksum.
 state() {
   (cd "$decoy/.git" && find . -type f -print0 | sort -z | xargs -0 sha256sum)
 }
 
-# The hook's index is the commit's own, a copy of the worktree's here, as git
-# commit -a hands the hook one; it is not called index.lock, as git's is,
-# because that name would lock the worktree's own index. The commit's -c options
-# reach the hook as GIT_CONFIG_PARAMETERS, and here they name a hooks directory
-# whose pre-commit leaves a mark, so a commit made anywhere with them shows.
+# The hook's index is the commit's own, a copy of the checkout's, as git commit
+# -a or with paths hands the hook one. The worktree's is not called index.lock,
+# as git's is, because that name would lock the worktree's own index; the main
+# checkout's is named as git commit with paths names its own, for pid 1, which
+# no git command has. The commit's -c options reach the hook as
+# GIT_CONFIG_PARAMETERS, and here they name a hooks directory whose pre-commit
+# leaves a mark, so a commit made anywhere with them shows.
+next_index=$decoy/.git/next-index-1.lock
 cp "$gitdir/index" "$gitdir/index-commit"
+cp "$decoy/.git/index" "$next_index"
 mkdir "$root/tripwire"
 printf '#!/bin/sh\ntouch "%s/tripped"\n' "$root" >"$root/tripwire/pre-commit"
 chmod +x "$root/tripwire/pre-commit"
@@ -103,68 +117,103 @@ as_hook() {
     GIT_CONFIG_PARAMETERS="'core.hookspath'='$root/tripwire'" "$@" 2>&1)
 }
 
+# as_main_hook command...: runs the command in the main checkout with what git
+# commit with paths hands its pre-commit hook there, where git sets no GIT_DIR,
+# and keeps what it printed in out.
+as_main_hook() {
+  out=$(cd "$decoy" && GIT_INDEX_FILE=$next_index GIT_PREFIX='' \
+    GIT_CONFIG_PARAMETERS="'core.hookspath'='$root/tripwire'" "$@" 2>&1)
+}
+
 # The variables have to name the decoy, or a decoy left as it was proves
-# nothing: a commit made somewhere else entirely with them lands there, and runs
-# the hook their -c options name. It runs before anything is staged: committed
-# here, the staged change would leave a script that commits with the variables
-# nothing to commit.
+# nothing: a commit made somewhere else entirely with the worktree's lands
+# there, and runs the hook their -c options name, and an add made in another
+# repository with the main checkout's writes the decoy's copy of the commit's
+# index, which then goes back to what it was. Both run before anything is
+# staged: committed here, the staged change would leave a script that commits
+# with the variables nothing to commit.
 mkdir "$root/elsewhere"
 before=$(state)
 if ! as_hook git -C "$root/elsewhere" -c user.name=gates -c user.email=gates@invalid \
   -c commit.gpgsign=false commit -q --allow-empty -m elsewhere; then
-  echo "FAIL a commit made with the hook's variables failed, so they name no repository:" >&2
+  echo "FAIL a commit made with the worktree's hook variables failed, so they name no repository:" >&2
   printf '%s\n' "$out" | sed 's/^/  | /' >&2
   exit 1
 fi
 if [[ $(state) == "$before" || ! -e $root/tripped ]]; then
-  echo "FAIL a commit made with the hook's variables left the decoy as it was, or ran none of their hooks, so this gate would prove nothing" >&2
+  echo "FAIL a commit made with the worktree's hook variables left the decoy as it was, or ran none of their hooks, so this gate would prove nothing" >&2
   exit 1
 fi
 rm "$root/tripped"
+git -C "$root/elsewhere" -c init.defaultBranch=main init -q
+: >"$root/elsewhere/file"
+before=$(sha256sum <"$next_index")
+if ! as_main_hook git -C "$root/elsewhere" add file; then
+  echo "FAIL an add made with the main checkout's hook variables failed, so they name no index:" >&2
+  printf '%s\n' "$out" | sed 's/^/  | /' >&2
+  exit 1
+fi
+if [[ $(sha256sum <"$next_index") == "$before" ]]; then
+  echo "FAIL an add made with the main checkout's hook variables left the decoy's copy of the commit's index as it was, so this gate would prove nothing" >&2
+  exit 1
+fi
+cp "$decoy/.git/index" "$next_index"
 
-# A change staged, as there is while a commit runs its hook, in both indexes.
-# The worktree's own index also lists a file the working tree no longer has,
-# which the commit's index does not, as after an rm that commit -a stages: a
-# script that reads this repository without GIT_INDEX_FILE meets that entry,
-# which bin/check-gates cannot copy and bin/check-fast's colour gate calls
-# unscanned.
-printf 'staged\n' >"$worktree/staged"
-git -C "$worktree" add staged
-GIT_INDEX_FILE=$gitdir/index-commit git -C "$worktree" add staged
-printf 'import QtQuick\n\nItem {\n}\n' >"$worktree/plugin/Ghost.qml"
-git -C "$worktree" add plugin/Ghost.qml
-rm "$worktree/plugin/Ghost.qml"
+# stage checkout index: stages a change in the checkout, in its own index and
+# in index, the commit's, as there is while a commit runs its hook. Its own
+# index also lists a file the working tree no longer has, which the commit's
+# does not, as after an rm that commit -a stages: a script that reads this
+# repository without GIT_INDEX_FILE meets that entry, which bin/check-gates
+# cannot copy and bin/check-fast's colour gate calls unscanned.
+stage() {
+  local checkout=$1 index=$2
+  printf 'staged\n' >"$checkout/staged"
+  git -C "$checkout" add staged
+  GIT_INDEX_FILE=$index git -C "$checkout" add staged
+  printf 'import QtQuick\n\nItem {\n}\n' >"$checkout/plugin/Ghost.qml"
+  git -C "$checkout" add plugin/Ghost.qml
+  rm "$checkout/plugin/Ghost.qml"
+}
+stage "$worktree" "$gitdir/index-commit"
+stage "$decoy" "$next_index"
 
-# check label command...: runs the command as git runs the hook, and ends the
-# gate at the first script that changes the decoy or fails, because the next
-# one would meet a decoy that is no longer the one this gate built. One FAIL
-# line, with everything under it indented, as bin/check-gates expects of a
-# whole script.
+# check label command...: runs the command as git runs the hook, in the
+# worktree and then in the main checkout, and ends the gate at the first run
+# that changes the decoy or fails, because the next one would meet a decoy that
+# is no longer the one this gate built. One FAIL line, with everything under it
+# indented, as bin/check-gates expects of a whole script.
 check() {
-  local label=$1 status=0 before changed bare
+  local label=$1 run where status before changed bare
   shift
-  before=$(state)
-  as_hook "$@" || status=$?
-  # The files whose line is in one state only, each named once, with those under
-  # objects/ counted rather than listed.
-  changed=$(comm -3 <(sort <<<"$before") <(state | sort) | awk '{ print substr($2, 3) }' | sort -u |
-    awk '/^objects\// { n++; next } { print "  " $0 } END { if (n) print "  " n " files under objects/" }')
-  if [[ -n $changed ]]; then
-    bare=$(git config --file "$decoy/.git/config" core.bare || echo unset)
-    printf "FAIL %s, run as git runs the hook in a linked worktree, changed that worktree's repository, where core.bare is now %s:\n%s\n" \
-      "$label" "$bare" "$changed" >&2
-    exit 1
-  fi
-  if [[ -e $root/tripped ]]; then
-    printf "FAIL %s, run as git runs the hook in a linked worktree, made a commit with the hook's -c options\n" "$label" >&2
-    exit 1
-  fi
-  if ((status != 0)); then
-    printf 'FAIL %s, run as git runs the hook in a linked worktree, exited %d:\n' "$label" "$status" >&2
-    printf '%s\n' "$out" | sed 's/^/  | /' >&2
-    exit 1
-  fi
-  printf '    %s left the decoy as it found it\n' "$label"
+  for run in as_hook as_main_hook; do
+    where='in a linked worktree'
+    if [[ $run == as_main_hook ]]; then
+      where='in the main checkout'
+    fi
+    status=0
+    before=$(state)
+    "$run" "$@" || status=$?
+    # The files whose line is in one state only, each named once, with those
+    # under objects/ counted rather than listed.
+    changed=$(comm -3 <(sort <<<"$before") <(state | sort) | awk '{ print substr($2, 3) }' | sort -u |
+      awk '/^objects\// { n++; next } { print "  " $0 } END { if (n) print "  " n " files under objects/" }')
+    if [[ -n $changed ]]; then
+      bare=$(git config --file "$decoy/.git/config" core.bare || echo unset)
+      printf "FAIL %s, run as git runs the hook %s, changed the decoy's repository, where core.bare is now %s:\n%s\n" \
+        "$label" "$where" "$bare" "$changed" >&2
+      exit 1
+    fi
+    if [[ -e $root/tripped ]]; then
+      printf "FAIL %s, run as git runs the hook %s, made a commit with the hook's -c options\n" "$label" "$where" >&2
+      exit 1
+    fi
+    if ((status != 0)); then
+      printf 'FAIL %s, run as git runs the hook %s, exited %d:\n' "$label" "$where" "$status" >&2
+      printf '%s\n' "$out" | sed 's/^/  | /' >&2
+      exit 1
+    fi
+  done
+  printf '    %s left the decoy as it found it, in a linked worktree and in the main checkout\n' "$label"
 }
 
 check bin/check-fast ./bin/check-fast

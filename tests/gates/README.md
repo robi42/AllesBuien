@@ -79,34 +79,42 @@ shares, which locks the main checkout out of every command that needs a work
 tree, and the scratch's commits land on the worktree's branch. The main
 checkout is no exception: git sets no `GIT_DIR` there, but a commit with `-a` or
 of named paths hands its hook an absolute `GIT_INDEX_FILE`, and the scratch's
-`git add` would write the commit's own index. A commit's `-c` options reach the
-hook too, as `GIT_CONFIG_PARAMETERS`, and would run the scratch's commit with
-them. So the runner reads the tree with those variables, since a commit with
-`-a` or of named paths hands its hook an index only `GIT_INDEX_FILE` names, and
-then clears git's local environment, as githooks(5) says to before running git
-in another repository; the fixtures and gates run in the scratch inherit that.
+`git add` would write the scratch's files into the commit's own index, so the
+commit fails on an object only the scratch holds. A commit's `-c` options reach
+the hook too, as `GIT_CONFIG_PARAMETERS`, and would run the scratch's commit
+with them. So the runner reads the tree with those variables, since a commit
+with `-a` or of named paths hands its hook an index only `GIT_INDEX_FILE` names,
+and then clears git's local environment, whether or not `GIT_DIR` is set, as
+githooks(5) says to before running git in another repository; the fixtures and
+gates run in the scratch inherit that.
 The copy also leaves out what git lists as a whole directory: a repository of
 its own, such as a linked worktree checked out under this one, whose `.git` file
 names this repository, so the scratch's `git status` would enter it and rewrite
 its index.
 
 `bin/check-worktree-hook`, the `worktree hook` gate, keeps it so. It builds a
-decoy repository from a copy of the tree, with a linked worktree, a change
-staged there and another linked worktree checked out inside it, and runs the
-hook's `bin/check-fast` and this runner, on one fixture whose `mutate` runs git,
-in that worktree with what `git commit -a` hands the hook: `GIT_DIR`, an index
-of the commit's own that only `GIT_INDEX_FILE` names, and `-c` options as
-`GIT_CONFIG_PARAMETERS`. The worktree's own index lists a file the working tree
-no longer has, so a script that reads it instead of the commit's fails on that
-file. A script that fails, changes any file under the decoy's `.git`, or makes a
-commit with those options fails the gate, which names the files and what
-`core.bare` became; a commit made elsewhere with the same variables has to
-change the decoy and run the hook the options name first, or an untouched decoy
-would prove nothing. Its six fixtures put a defect into each script in turn: the
-runner without the line that clears the variables, clearing them before it reads
-this repository, keeping the `-c` options, or copying the nested worktree, and
-`bin/check-fast` reading this repository without the variables, or running
-`git init` in a scratch directory of its own.
+decoy repository from a copy of the tree, with a linked worktree, and in each
+checkout a change staged and another linked worktree checked out inside it. It
+runs the hook's `bin/check-fast` and this runner, on one fixture whose `mutate`
+runs git, in both checkouts with what a commit hands the hook there. In the
+worktree that is what `git commit -a` hands it: `GIT_DIR`, an index of the
+commit's own that only `GIT_INDEX_FILE` names, and `-c` options as
+`GIT_CONFIG_PARAMETERS`. In the main checkout it is what `git commit` with
+paths hands it: no `GIT_DIR`, the commit's index by its absolute path,
+`.git/next-index-1.lock`, and the same options. Each checkout's own index lists
+a file the working tree no longer has, so a script that reads it instead of the
+commit's fails on that file. A script that fails, changes any file under the
+decoy's `.git`, or makes a commit with those options fails the gate, which
+names the files and what `core.bare` became. A commit made elsewhere with the
+worktree's variables has to change the decoy and run the hook the options name,
+and an add made elsewhere with the main checkout's has to change the decoy's
+copy of the commit's index, before any script runs, or an untouched decoy would
+prove nothing. Its seven fixtures put a defect into each script in turn: the
+runner without the line that clears the variables, clearing them only when
+`GIT_DIR` is set, clearing them before it reads this repository, keeping the
+`-c` options, or copying the nested worktree, and `bin/check-fast` reading this
+repository without the variables, or running `git init` in a scratch directory
+of its own.
 
 Gates are run, never reimplemented. `bin/check-fast` and
 `bin/check-qml-contract` are whole scripts and run as themselves; a gate that
@@ -217,8 +225,8 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-fifty-two it runs, each of which fails loudly if its gate stops biting. One
-of those fifty-two aims at the runner rather than at a gate: the slicer
+fifty-three it runs, each of which fails loudly if its gate stops biting. One
+of those fifty-three aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That
