@@ -21,7 +21,7 @@ A fixture is sourced by the runner and declares five things:
 | name | meaning |
 |------|---------|
 | `gate` | the gate's name, exactly as its script echoes it — the runner refuses a fixture naming a gate that no longer exists |
-| `script` | `bin/check-fast`, `bin/check-qml-contract`, or `bin/test` |
+| `script` | `bin/check-fast`, `bin/check-qml-contract`, `bin/check-worktree-hook`, or `bin/test` |
 | `outcome` | `red` if the gate must refuse this input, `green` if it must tolerate it |
 | `expect` | substrings the failure output must contain; a `red` fixture without one is rejected |
 | `mutate` | a function run with the scratch copy as its working directory |
@@ -69,6 +69,40 @@ exit. A killed run leaves `git status` clean and no worktree to prune. Signing
 is disabled for the throwaway commit, so the suite never queues behind the SSH
 agent.
 
+Nothing here touches the repository either. In a linked worktree, which is
+where the factory's builders commit, git hands every command it runs there
+`GIT_DIR`, and a pre-commit hook `GIT_INDEX_FILE` as well, both naming the
+worktree's repository; `git rebase -x bin/test` is enough to hand them to this
+runner. A git command run in the scratch with them acts on that repository
+instead: `git init` writes `core.bare = true` into the config every worktree
+shares, which locks the main checkout out of every command that needs a work
+tree, and the scratch's commits land on the worktree's branch. The main
+checkout is no exception: git sets no `GIT_DIR` there, but a commit with `-a` or
+of named paths hands its hook an absolute `GIT_INDEX_FILE`, and the scratch's
+`git add` would write the commit's own index. A commit's `-c` options reach the
+hook too, as `GIT_CONFIG_PARAMETERS`, and would run the scratch's commit with
+them. So the runner reads the tree with those variables, since a commit with
+`-a` or of named paths hands its hook an index only `GIT_INDEX_FILE` names, and
+then clears git's local environment, as githooks(5) says to before running git
+in another repository; the fixtures and gates run in the scratch inherit that.
+
+`bin/check-worktree-hook`, the `worktree hook` gate, keeps it so. It builds a
+decoy repository from a copy of the tree, with a linked worktree and a change
+staged there, and runs the hook's `bin/check-fast` and this runner, on one
+fixture whose `mutate` runs git, in that worktree with what `git commit -a`
+hands the hook: `GIT_DIR`, an index of the commit's own that only
+`GIT_INDEX_FILE` names, and `-c` options as `GIT_CONFIG_PARAMETERS`. The
+worktree's own index lists a file the working tree no longer has, so a script
+that reads it instead of the commit's fails on that file. A script that fails,
+changes any file under the decoy's `.git`, or makes a commit with those options
+fails the gate, which names the files and what `core.bare` became; a commit made
+elsewhere with the same variables has to change the decoy and run the hook the
+options name first, or an untouched decoy would prove nothing. Its five
+fixtures put a defect into each script in turn: the runner without the line
+that clears the variables, clearing them before it reads this repository, or
+keeping the `-c` options, and `bin/check-fast` reading this repository without
+the variables, or running `git init` in a scratch directory of its own.
+
 Gates are run, never reimplemented. `bin/check-fast` and
 `bin/check-qml-contract` are whole scripts and run as themselves; a gate that
 lives inside `bin/test` is sliced out of that file by name and executed as
@@ -77,7 +111,7 @@ commands would keep passing long after the real gate changed underneath it.
 
 ## Coverage
 
-Twenty-one of the twenty-five gates are covered. The four that are not all need a
+Twenty-two of the twenty-six gates are covered. The four that are not all need a
 compiled workspace, and a cold CXX-Qt build on this host is over twenty minutes:
 
 | gate | why it is out of scope |
@@ -173,8 +207,8 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-forty-five it runs, each of which fails loudly if its gate stops biting. One
-of those forty-five aims at the runner rather than at a gate: the slicer
+fifty it runs, each of which fails loudly if its gate stops biting. One
+of those fifty aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That

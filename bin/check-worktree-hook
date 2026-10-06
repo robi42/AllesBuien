@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The gate scripts that run git, run the way git runs a command it spawns in a
+# linked worktree, against a decoy repository they have to leave as they found
+# it.
+#
+# In a linked worktree - where the factory's builders commit - git hands every
+# command it runs GIT_DIR, and a pre-commit hook GIT_INDEX_FILE as well, both
+# absolute paths into the worktree's repository. A script that runs git in
+# another repository with them acts on that one instead: git init reinitialises
+# it and writes core.bare = true into the config every worktree shares, which
+# locks the main checkout out of every command that needs a work tree while the
+# worktrees go on, and the add and commit after it land on the worktree's index
+# and branch. Nothing about that fails. bin/check-gates, run that way with a
+# change staged, reported every fixture green while it did all of that, and the
+# main checkout, where a human finally notices, is nowhere near the run that
+# broke it.
+#
+# So this builds a decoy - a repository holding a copy of this tree, with a
+# linked worktree and a change staged in it, as there is while a commit runs its
+# hook - and runs each script below in that worktree with what git commit -a
+# hands the hook there: GIT_DIR, an index of the commit's own that only
+# GIT_INDEX_FILE names, and the commit's -c options as GIT_CONFIG_PARAMETERS. A
+# script that fails, that changes any file under the decoy's .git, or that
+# commits with those options fails the gate, which names the files and what
+# core.bare became.
+#
+# The list is the hook's script and every script that runs git in another
+# repository. bin/check-fast is what lefthook runs on every commit, beside cargo
+# fmt, which runs no git. It reads this repository with git ls-files and has to
+# keep the variables to do it, because a commit with -a, or of named paths,
+# hands the hook an index of its own that only GIT_INDEX_FILE names.
+# bin/check-gates fills a scratch repository and runs every fixture in it; the
+# hook does not run it, but bin/test does, and anything that runs bin/test
+# under git hands it the variables - git rebase -x is enough. It runs one
+# fixture here, one whose own mutate runs git, so it makes every kind of git
+# call it has and needs no build. A script that comes to run git in another
+# repository joins the list. This one enters the decoy, so it clears the
+# variables itself, and it cannot run itself: that is a decoy inside a decoy,
+# without end.
+echo "==> gate: worktree hook"
+
+if [[ ! -x bin/check-gates || ! -d tests/gates ]]; then
+  echo 'FAIL run this from the repository root, as bin/test does' >&2
+  exit 1
+fi
+
+root=$(mktemp -d)
+trap 'rm -rf "$root"' EXIT
+
+# The tree as bin/check-gates copies it, read as that script reads it: with
+# whatever variables this one was handed.
+git ls-files -z --cached --others --exclude-standard |
+  tar --null --files-from - --create --file "$root/tree.tar"
+
+# Every git command below works in the decoy, so git's local environment goes
+# first, as githooks(5) says it must before running git in another repository.
+local_env=$(git rev-parse --local-env-vars)
+mapfile -t local_env <<<"$local_env"
+unset -v "${local_env[@]}"
+
+decoy=$root/decoy
+worktree=$root/worktree
+mkdir "$decoy"
+tar --extract --file "$root/tree.tar" --directory "$decoy"
+git -C "$decoy" -c init.defaultBranch=main init -q
+git -C "$decoy" add --all -- .
+git -C "$decoy" -c user.name=gates -c user.email=gates@invalid -c commit.gpgsign=false \
+  commit -q -m decoy
+git -C "$decoy" worktree add -q -b task "$worktree"
+gitdir=$(git -C "$worktree" rev-parse --absolute-git-dir)
+
+# bin/check-gates will not start without the QML modules the build registers.
+# The fixture it runs here reads none of them, so an empty directory does, and
+# target/ is ignored.
+mkdir -p "$worktree/target/cxxqt/qml_modules"
+
+# state: every file under the decoy's .git, with its checksum.
+state() {
+  (cd "$decoy/.git" && find . -type f -print0 | sort -z | xargs -0 sha256sum)
+}
+
+# The hook's index is the commit's own, a copy of the worktree's here, as git
+# commit -a hands the hook one; it is not called index.lock, as git's is,
+# because that name would lock the worktree's own index. The commit's -c options
+# reach the hook as GIT_CONFIG_PARAMETERS, and here they name a hooks directory
+# whose pre-commit leaves a mark, so a commit made anywhere with them shows.
+cp "$gitdir/index" "$gitdir/index-commit"
+mkdir "$root/tripwire"
+printf '#!/bin/sh\ntouch "%s/tripped"\n' "$root" >"$root/tripwire/pre-commit"
+chmod +x "$root/tripwire/pre-commit"
+
+# as_hook command...: runs the command in the worktree with what git commit -a
+# hands its pre-commit hook there, and keeps what it printed in out.
+as_hook() {
+  out=$(cd "$worktree" && GIT_DIR=$gitdir GIT_INDEX_FILE=$gitdir/index-commit GIT_PREFIX='' \
+    GIT_CONFIG_PARAMETERS="'core.hookspath'='$root/tripwire'" "$@" 2>&1)
+}
+
+# The variables have to name the decoy, or a decoy left as it was proves
+# nothing: a commit made somewhere else entirely with them lands there, and runs
+# the hook their -c options name. It runs before anything is staged: committed
+# here, the staged change would leave a script that commits with the variables
+# nothing to commit.
+mkdir "$root/elsewhere"
+before=$(state)
+if ! as_hook git -C "$root/elsewhere" -c user.name=gates -c user.email=gates@invalid \
+  -c commit.gpgsign=false commit -q --allow-empty -m elsewhere; then
+  echo "FAIL a commit made with the hook's variables failed, so they name no repository:" >&2
+  printf '%s\n' "$out" | sed 's/^/  | /' >&2
+  exit 1
+fi
+if [[ $(state) == "$before" || ! -e $root/tripped ]]; then
+  echo "FAIL a commit made with the hook's variables left the decoy as it was, or ran none of their hooks, so this gate would prove nothing" >&2
+  exit 1
+fi
+rm "$root/tripped"
+
+# A change staged, as there is while a commit runs its hook, in both indexes.
+# The worktree's own index also lists a file the working tree no longer has,
+# which the commit's index does not, as after an rm that commit -a stages: a
+# script that reads this repository without GIT_INDEX_FILE meets that entry,
+# which bin/check-gates cannot copy and bin/check-fast's colour gate calls
+# unscanned.
+printf 'staged\n' >"$worktree/staged"
+git -C "$worktree" add staged
+GIT_INDEX_FILE=$gitdir/index-commit git -C "$worktree" add staged
+printf 'import QtQuick\n\nItem {\n}\n' >"$worktree/plugin/Ghost.qml"
+git -C "$worktree" add plugin/Ghost.qml
+rm "$worktree/plugin/Ghost.qml"
+
+# check label command...: runs the command as git runs the hook, and ends the
+# gate at the first script that changes the decoy or fails, because the next
+# one would meet a decoy that is no longer the one this gate built. One FAIL
+# line, with everything under it indented, as bin/check-gates expects of a
+# whole script.
+check() {
+  local label=$1 status=0 before changed bare
+  shift
+  before=$(state)
+  as_hook "$@" || status=$?
+  # The files whose line is in one state only, each named once, with those under
+  # objects/ counted rather than listed.
+  changed=$(comm -3 <(sort <<<"$before") <(state | sort) | awk '{ print substr($2, 3) }' | sort -u |
+    awk '/^objects\// { n++; next } { print "  " $0 } END { if (n) print "  " n " files under objects/" }')
+  if [[ -n $changed ]]; then
+    bare=$(git config --file "$decoy/.git/config" core.bare || echo unset)
+    printf "FAIL %s, run as git runs the hook in a linked worktree, changed that worktree's repository, where core.bare is now %s:\n%s\n" \
+      "$label" "$bare" "$changed" >&2
+    exit 1
+  fi
+  if [[ -e $root/tripped ]]; then
+    printf "FAIL %s, run as git runs the hook in a linked worktree, made a commit with the hook's -c options\n" "$label" >&2
+    exit 1
+  fi
+  if ((status != 0)); then
+    printf 'FAIL %s, run as git runs the hook in a linked worktree, exited %d:\n' "$label" "$status" >&2
+    printf '%s\n' "$out" | sed 's/^/  | /' >&2
+    exit 1
+  fi
+  printf '    %s left the decoy as it found it\n' "$label"
+}
+
+check bin/check-fast ./bin/check-fast
+check bin/check-gates ./bin/check-gates theme-colour-unreadable

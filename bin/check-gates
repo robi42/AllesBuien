@@ -68,6 +68,32 @@ git ls-files -z --cached --others --exclude-standard |
 mkdir -p "$scratch/$qml_modules"
 cp -a "$qml_modules/." "$scratch/$qml_modules/"
 
+# That was the last git command about this repository; every one below, the
+# fixtures' and the gates' included, works in the scratch. The read above keeps
+# the variables git handed this script, because a commit with -a, or of named
+# paths, hands its hook an index of its own that only GIT_INDEX_FILE names. But
+# in a linked worktree, which is where the factory's builders commit, git hands
+# GIT_DIR to every command it runs there - a hook, an alias, git rebase -x
+# bin/test - and both are absolute paths into the worktree's repository. In the
+# scratch they would act on that repository instead. git init reinitialises it
+# and, since that GIT_DIR does not end in /.git, guesses it bare and writes
+# core.bare = true into the config every worktree shares, which locks the main
+# checkout out of every command that needs a work tree while the worktrees go
+# on; the add and commit below then land on the worktree's index and branch.
+# Run that way with a change staged, this script reported every fixture green
+# while it did all of that, and it left a fixture's file in the worktree's
+# index. The main checkout is no exception: git sets no GIT_DIR there, but a
+# commit with -a or of named paths hands its hook an absolute GIT_INDEX_FILE,
+# so the add below would write the commit's own index. And a commit's -c
+# options reach its hook as GIT_CONFIG_PARAMETERS, so the commit below would
+# run with them, a hooks path among them. githooks(5) says to clear git's local
+# environment before running git in another repository, so this does, and
+# everything below inherits that. bin/check-worktree-hook runs this script as a
+# hook of git commit -a in a linked worktree and holds it to it.
+local_env=$(git rev-parse --local-env-vars)
+mapfile -t local_env <<<"$local_env"
+unset -v "${local_env[@]}"
+
 # A throwaway index, because six gates read `git ls-files` and a fixture that
 # adds or deletes a file has to be visible to them. --all is the correct verb
 # for an index nothing will ever commit to a real branch; signing is off so the

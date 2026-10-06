@@ -572,7 +572,7 @@ declared_gates=$(awk '
     sub(/".*$/, "")
     print
   }
-' bin/test bin/check-fast bin/check-qml-contract | sort -u)
+' bin/test bin/check-fast bin/check-qml-contract bin/check-worktree-hook | sort -u)
 covered_gates=$(awk '
   index($0, "gate=\"") == 1 {
     sub(/^gate="/, "")

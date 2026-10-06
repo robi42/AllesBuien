@@ -9,13 +9,14 @@
 # protecting the wrapper alone protects nothing.
 
 # The gate body. bin/test is the whole gate list and the one CI runs; the other
-# three are the scripts it delegates to. Deleting a gate here, or a fixture
+# four are the scripts it delegates to. Deleting a gate here, or a fixture
 # beside it, passes every remaining check in this tree - which is exactly the
 # move that has to be seen rather than inferred.
 bin/test
 bin/check-fast
 bin/check-qml-contract
 bin/check-gates
+bin/check-worktree-hook
 
 # The allowlist that excuses a gate from having a fixture. bin/check-fast reads
 # it in both directions, so it cannot silently fill up - but adding a name to it
