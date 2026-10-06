@@ -116,7 +116,7 @@ commands would keep passing long after the real gate changed underneath it.
 
 ## Coverage
 
-Twenty-two of the twenty-six gates are covered. The four that are not all need a
+Twenty-three of the twenty-seven gates are covered. The four that are not all need a
 compiled workspace, and a cold CXX-Qt build on this host is over twenty minutes:
 
 | gate | why it is out of scope |
@@ -160,6 +160,11 @@ shipped a filename nobody can download. A surface that yields no version is
 reported as `none`, so deleting a `pkgver=` line is refused rather than skipped.
 Its two fixtures move `pkgver=` and the manifest's version, two of the three
 surfaces no Cargo command ever rewrites.
+
+`lefthook pin` holds `lefthook.yml`'s `min_version` to the lefthook
+`mise.toml` pins. Lower, and an older lefthook first on PATH runs the hook
+again; higher, and the pinned one refuses every commit. Its fixture moves the
+pin and leaves `min_version` behind.
 
 `omarchy plugin` is the part of `omarchy-plugin-validate` that tracked text can
 answer: no symlink anywhere in the tree, a tracked `manifest.json` at
@@ -212,8 +217,8 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-fifty-one it runs, each of which fails loudly if its gate stops biting. One
-of those fifty-one aims at the runner rather than at a gate: the slicer
+fifty-two it runs, each of which fails loudly if its gate stops biting. One
+of those fifty-two aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That

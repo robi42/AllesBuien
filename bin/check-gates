@@ -56,6 +56,14 @@ mkdir -p target
 scratch=$(mktemp -d "$repo_root/target/violations.XXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 
+# The scratch holds a copy of mise.toml, and its [hooks] table is config mise
+# parses only from a trusted file. A linked worktree shares the trust of its
+# main checkout; a copy shares nothing, and wherever cargo, shellcheck, or
+# actionlint is a mise shim, the shim dies on the untrusted copy before the gate
+# runs, so every fixture that reaches one goes red at its baseline. The copy is
+# this tree's own file, so trusting it trusts nothing the tree does not.
+export MISE_TRUSTED_CONFIG_PATHS="$scratch${MISE_TRUSTED_CONFIG_PATHS:+:$MISE_TRUSTED_CONFIG_PATHS}"
+
 # The working tree as it stands, not HEAD: the suite has to judge the gates you
 # are about to commit, not the ones you last committed. Untracked-but-not-
 # ignored files come along for the same reason, and for a sharper one - a new

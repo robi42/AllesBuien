@@ -2,11 +2,32 @@
 # `bin/*` and `.github/workflows/*`, and an unpinned linter changes the gate's
 # verdict without a diff. `actionlint` carries the version the deleted
 # `.actionlint-version` file recorded; that file pinned a tool nothing ran.
-# mise provisions all three into the user's own prefix, so no gate ever needs
-# sudo. CI installs its own copies from pacman and accepts the version skew:
-# both linters fail loudly, so a newer server-side rule surfaces as a red run
-# rather than as a silently skipped check.
+# mise provisions every tool here into the user's own prefix, so no gate ever
+# needs sudo. CI installs its own copies from pacman and accepts the version
+# skew: both linters fail loudly, so a newer server-side rule surfaces as a red
+# run rather than as a silently skipped check.
+#
+# lefthook runs the pre-commit hook in lefthook.yml, whose min_version refuses
+# any lefthook older than this pin, so a global install no longer decides what
+# a commit runs; bin/check-fast's lefthook pin gate holds the two equal. The
+# postinstall hook below writes the hook into .git/hooks, which every worktree
+# shares, so `mise install` sets up both, and running it again rewrites the
+# hook after a change to lefthook.yml beyond its jobs. It does so only where
+# this directory is a checkout: in a copy without .git, such as the release's
+# source archive, lefthook install would find whatever repository holds the
+# copy, write a lefthook.yml into it and install its hooks there. CI runs
+# bin/test rather than the hook, and installs no lefthook.
+#
+# The [hooks] table is also why mise reads this file only once it is trusted.
+# `mise install` trusts the checkout it runs in, and a linked worktree shares
+# the trust of its main checkout, but a copy anywhere else starts untrusted,
+# and a mise shim run beside an untrusted copy dies before its tool starts.
+# bin/check-gates trusts its scratch copy for that reason.
 [tools]
 rust = "1.98.0"
 actionlint = "1.7.12"
 shellcheck = "0.11.0"
+lefthook = "2.1.16"
+
+[hooks]
+postinstall = "if [ -e .git ]; then lefthook install; fi"

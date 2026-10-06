@@ -16,7 +16,7 @@ bin/install                 # (cd pkgbuild && makepkg -f), then install
 lefthook run pre-commit     # cargo fmt --check and bin/check-fast
 ```
 
-`bash .factory/gate` is the definition of done and runs nothing but `bin/test`, which is the full workspace gate and the one CI runs — over twenty minutes from cold, because CXX-Qt regenerates C++. `bin/check-fast` is its text-only first step and what `lefthook` runs on every commit, so the hook can never hold a weaker opinion than the server. Tools are pinned in `mise.toml`; run `mise install` first.
+`bash .factory/gate` is the definition of done and runs nothing but `bin/test`, which is the full workspace gate and the one CI runs — over twenty minutes from cold, because CXX-Qt regenerates C++. `bin/check-fast` is its text-only first step and what `lefthook` runs on every commit, so the hook can never hold a weaker opinion than the server. Tools are pinned in `mise.toml`, lefthook among them; run `mise install` first, which also writes the hook into `.git/hooks`, where every worktree shares it. A commit fails when the hook finds no lefthook, or one older than `mise.toml` pins: that is the machine's to fix, so say so in your report rather than skipping the hook with `--no-verify` or `LEFTHOOK=0`.
 
 Do not change `.factory/gate` or any path listed in `.factory/protected` — a branch that touches one cannot be approved without a human reading the diff. `.factory/run/` is factory scratch and is git-ignored.
 
@@ -44,7 +44,7 @@ AllesBuien/
 ├── .factory/             Software-factory gate and protected-path list; ignored run/ scratch
 ├── .beads/               Tracked issue-tracker config and history; the Dolt database is ignored
 ├── .qmllint.ini          Committed qmllint strictness, so a Qt bump is a reviewable diff
-├── mise.toml             Rust 1.98.0, actionlint, and shellcheck pins
+├── mise.toml             Rust 1.98.0, actionlint, shellcheck, and lefthook pins; installs the hook
 ├── CLAUDE.md             A regular file importing AGENTS.md, never a symlink: `omarchy plugin
 │                         add` refuses a plugin folder that holds one anywhere
 └── lefthook.yml          Pre-commit rustfmt and the text-only gates
