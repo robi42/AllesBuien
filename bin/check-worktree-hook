@@ -44,16 +44,25 @@ set -euo pipefail
 # hook does not run it, but bin/test does, and anything that runs bin/test
 # under git hands it the variables - git rebase -x is enough. It runs one
 # fixture here, one whose own mutate runs git, so it makes every kind of git
-# call it has and needs no build. A script that comes to run git in another
-# repository joins the list. This one enters the decoy, so it clears the
-# variables itself, and it cannot run itself: that is a decoy inside a decoy,
-# without end.
+# call it has and needs no build. This gate is the third: bin/test runs it too,
+# so git rebase -x hands it the variables as well, and it builds its decoy with
+# git. It runs a copy of itself, passed nested, which builds a decoy of its own
+# and stops once it has made every git call this one makes, before it would
+# run the scripts, so no copy runs a copy. A script that comes to run git in
+# another repository joins the list.
 echo "==> gate: worktree hook"
 
 if [[ ! -x bin/check-gates || ! -d tests/gates ]]; then
   echo 'FAIL run this from the repository root, as bin/test does' >&2
   exit 1
 fi
+
+# nested is passed only by this gate, to the copy of itself it runs below.
+if (($# > 1)) || [[ $# -eq 1 && $1 != nested ]]; then
+  echo "FAIL unknown arguments: $*; the one there is, nested, is passed only by this gate to the copy of itself it runs" >&2
+  exit 1
+fi
+nested=${1-}
 
 root=$(mktemp -d)
 trap 'rm -rf "$root"' EXIT
@@ -177,6 +186,11 @@ stage() {
 stage "$worktree" "$gitdir/index-commit"
 stage "$decoy" "$next_index"
 
+# The copy of this gate that runs below has made every git call it has.
+if [[ -n $nested ]]; then
+  exit 0
+fi
+
 # check label command...: runs the command as git runs the hook, in the
 # worktree and then in the main checkout, and ends the gate at the first run
 # that changes the decoy or fails, because the next one would meet a decoy that
@@ -218,3 +232,4 @@ check() {
 
 check bin/check-fast ./bin/check-fast
 check bin/check-gates ./bin/check-gates theme-colour-unreadable
+check bin/check-worktree-hook ./bin/check-worktree-hook nested
