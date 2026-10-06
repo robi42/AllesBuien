@@ -79,14 +79,17 @@ shares, which locks the main checkout out of every command that needs a work
 tree, and the scratch's commits land on the worktree's branch. The main
 checkout is no exception: git sets no `GIT_DIR` there, but a commit with `-a` or
 of named paths hands its hook an absolute `GIT_INDEX_FILE`, and the scratch's
-`git add` would write the scratch's files into the commit's own index, so the
-commit fails on an object only the scratch holds. A commit's `-c` options reach
-the hook too, as `GIT_CONFIG_PARAMETERS`, and would run the scratch's commit
-with them. So the runner reads the tree with those variables, since a commit
-with `-a` or of named paths hands its hook an index only `GIT_INDEX_FILE` names,
-and then clears git's local environment, whether or not `GIT_DIR` is set, as
-githooks(5) says to before running git in another repository; the fixtures and
-gates run in the scratch inherit that.
+`git add` would write the scratch's files into the commit's own index. The
+commit then fails on an object only the scratch holds or, when the repository
+already holds every object it names, goes through with what the scratch
+staged: a commit of `README.md` whose hook ran this runner on
+`omarchy-plugin-entry-point-missing` deleted `plugin/BarWidget.qml` as well. A
+commit's `-c` options reach the hook too, as `GIT_CONFIG_PARAMETERS`, and would
+run the scratch's commit with them. So the runner reads the tree with those
+variables, since a commit with `-a` or of named paths hands its hook an index
+only `GIT_INDEX_FILE` names, and then clears git's local environment, whether
+or not `GIT_DIR` is set, as githooks(5) says to before running git in another
+repository; the fixtures and gates run in the scratch inherit that.
 The copy also leaves out what git lists as a whole directory: a repository of
 its own, such as a linked worktree checked out under this one, whose `.git` file
 names this repository, so the scratch's `git status` would enter it and rewrite

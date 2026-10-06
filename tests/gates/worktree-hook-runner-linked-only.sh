@@ -5,7 +5,9 @@
 # checkout git sets no GIT_DIR, but a commit with -a, or of named paths, hands
 # the hook the commit's own index by its absolute path, and the scratch's git
 # add writes the scratch's files into it: the commit then fails on an object
-# only the scratch holds. The gate names the decoy's copy of that index.
+# only the scratch holds, or, when the repository holds every object it names,
+# goes through with what the scratch staged. The gate names the decoy's copy of
+# that index.
 
 gate="worktree hook"
 script="bin/check-worktree-hook"
