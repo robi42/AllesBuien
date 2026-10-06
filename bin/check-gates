@@ -96,13 +96,17 @@ cp -a "$qml_modules/." "$scratch/$qml_modules/"
 # while it did all of that, and it left a fixture's file in the worktree's
 # index. The main checkout is no exception: git sets no GIT_DIR there, but a
 # commit with -a or of named paths hands its hook an absolute GIT_INDEX_FILE,
-# so the add below would write the commit's own index. And a commit's -c
-# options reach its hook as GIT_CONFIG_PARAMETERS, so the commit below would
-# run with them, a hooks path among them. githooks(5) says to clear git's local
-# environment before running git in another repository, so this does, whether
-# or not GIT_DIR is set, and everything below inherits that.
-# bin/check-worktree-hook runs this script as git runs a commit's hook, in a
-# linked worktree and in the main checkout, and holds it to both.
+# so the add below would write the commit's own index. And options given as
+# git -c reach whatever git runs as GIT_CONFIG_PARAMETERS, so the commit below
+# would run with them, a hooks path among them. Which of these a run hands over
+# depends on how git ran this script: git rebase -x hands GIT_DIR alone in a
+# linked worktree and only the -c options in the main checkout, and a commit
+# made without -c options leaves GIT_CONFIG_PARAMETERS unset. githooks(5) says
+# to clear git's local environment before running git in another repository,
+# so this does, whichever of them is set, and everything below inherits that.
+# bin/check-worktree-hook runs this script as git runs a commit's hook and as
+# git rebase -x runs it, in a linked worktree and in the main checkout, and
+# holds it to all four.
 local_env=$(git rev-parse --local-env-vars)
 mapfile -t local_env <<<"$local_env"
 unset -v "${local_env[@]}"

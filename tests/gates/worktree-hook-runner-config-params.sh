@@ -8,7 +8,7 @@
 gate="worktree hook"
 script="bin/check-worktree-hook"
 outcome="red"
-expect=("FAIL bin/check-gates" "made a commit with the hook's -c options")
+expect=("FAIL bin/check-gates" "made a commit with the -c options it was handed")
 
 mutate() {
   sed -i 's/^unset -v .*/unset -v GIT_DIR GIT_INDEX_FILE GIT_PREFIX/' bin/check-gates
