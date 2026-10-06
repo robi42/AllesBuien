@@ -50,8 +50,8 @@ root=$(mktemp -d)
 trap 'rm -rf "$root"' EXIT
 
 # The tree as bin/check-gates copies it, read as that script reads it: with
-# whatever variables this one was handed.
-git ls-files -z --cached --others --exclude-standard |
+# whatever variables this one was handed, and without a repository nested in it.
+git ls-files -z --cached --others --exclude-standard | grep -zv '/$' |
   tar --null --files-from - --create --file "$root/tree.tar"
 
 # Every git command below works in the decoy, so git's local environment goes
@@ -70,6 +70,11 @@ git -C "$decoy" -c user.name=gates -c user.email=gates@invalid -c commit.gpgsign
   commit -q -m decoy
 git -C "$decoy" worktree add -q -b task "$worktree"
 gitdir=$(git -C "$worktree" rev-parse --absolute-git-dir)
+
+# A linked worktree checked out inside that one, as a worktree made under a
+# checkout is: untracked there, listed as one directory, and holding a .git file
+# that names the decoy's repository, so a copy of it carries that file along.
+git -C "$decoy" worktree add -q --detach "$worktree/nested"
 
 # bin/check-gates will not start without the QML modules the build registers.
 # The fixture it runs here reads none of them, so an empty directory does, and

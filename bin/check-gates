@@ -61,8 +61,12 @@ trap 'rm -rf "$scratch"' EXIT
 # ignored files come along for the same reason, and for a sharper one - a new
 # module that git has not been told about yet is still a module cargo will try
 # to resolve, and leaving it behind turns every cargo-shaped gate red in the
-# scratch for a reason that has nothing to do with the fixture.
-git ls-files -z --cached --others --exclude-standard |
+# scratch for a reason that has nothing to do with the fixture. What git lists
+# as a whole directory, with a trailing slash, is a repository of its own - a
+# linked worktree checked out under this one, say - and stays behind: its .git
+# file names this repository, so the scratch's git status would enter it and
+# rewrite that worktree's index, and its ignored build output would come along.
+git ls-files -z --cached --others --exclude-standard | grep -zv '/$' |
   tar --null --files-from - --create --file - |
   tar --extract --file - --directory "$scratch"
 mkdir -p "$scratch/$qml_modules"
