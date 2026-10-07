@@ -12,11 +12,16 @@
 # a commit runs; bin/check-fast's lefthook pin gate holds the two equal. The
 # postinstall hook below writes the hook into .git/hooks, which every worktree
 # shares, so `mise install` sets up both, and running it again rewrites the
-# hook after a change to lefthook.yml beyond its jobs. It does so only where
-# this directory is a checkout: in a copy without .git, such as the release's
-# source archive, lefthook install would find whatever repository holds the
-# copy, write a lefthook.yml into it and install its hooks there. CI runs
-# bin/test rather than the hook, and installs no lefthook.
+# hook after a change to lefthook.yml beyond its jobs. It does so only in the
+# main checkout, whose .git is a directory, though mise runs the postinstall on
+# every `mise install`, in the directory of whichever copy of this file it
+# reads. In a linked worktree, whose .git is a file, lefthook install would
+# write the hook every worktree shares from that worktree's lefthook.yml; in a
+# copy without .git, such as the release's source archive, it would find
+# whatever repository holds the copy, write a lefthook.yml into it and install
+# its hooks there. lefthook install run by hand in a worktree still rewrites
+# the shared hook. CI runs bin/test rather than the hook, and installs no
+# lefthook.
 #
 # The [hooks] table is also why mise reads this file only once it is trusted.
 # `mise install` trusts the checkout it runs in, and a linked worktree shares
@@ -30,4 +35,4 @@ shellcheck = "0.11.0"
 lefthook = "2.1.16"
 
 [hooks]
-postinstall = "if [ -e .git ]; then lefthook install; fi"
+postinstall = "if [ -d .git ]; then lefthook install; fi"
