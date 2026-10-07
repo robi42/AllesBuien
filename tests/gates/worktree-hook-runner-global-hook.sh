@@ -10,7 +10,7 @@
 gate="worktree hook"
 script="bin/check-worktree-hook"
 outcome="red"
-expect=("FAIL bin/check-gates" "a commit ran the hook the global config names")
+expect=("FAIL bin/check-gates" "a commit ran the hook the global config names: pre-commit")
 
 mutate() {
   sed -i 's|-c core.hooksPath=/dev/null ||' bin/check-gates

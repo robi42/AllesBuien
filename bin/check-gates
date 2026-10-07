@@ -119,8 +119,11 @@ unset -v "${local_env[@]}"
 # cannot stop a hook the global config names, as core.hooksPath or through an
 # init.templateDir that puts hooks into every new repository, and a global
 # lefthook setup would run the scratch's own lefthook.yml in it on every run.
-# bin/check-worktree-hook runs this script under a global config whose hook
-# fails any commit that runs it.
+# --no-verify would not do: it skips pre-commit and commit-msg, and leaves
+# prepare-commit-msg, post-commit, reference-transaction and post-index-change
+# running.
+# bin/check-worktree-hook runs this script under a global config whose hooks
+# fail any commit that runs them.
 git -C "$scratch" -c init.defaultBranch=main init -q
 git -C "$scratch" add --all -- .
 git -C "$scratch" \

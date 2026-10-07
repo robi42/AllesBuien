@@ -57,9 +57,12 @@ set -euo pipefail
 # new repository, and a global lefthook setup would run that repository's own
 # lefthook.yml there. So the scripts commit with -c core.hooksPath=/dev/null,
 # and everything here runs under a global config of this gate's own, in place
-# of the machine's, whose hook fails any commit that runs it. A commit that
-# runs the hooks has to fail first, or a script whose commits pass would prove
-# nothing.
+# of the machine's, whose hooks fail any commit that runs them. --no-verify is
+# no way round it: it skips pre-commit and commit-msg, but a commit given it
+# still runs prepare-commit-msg, post-commit, reference-transaction and
+# post-index-change from the hooks directory the global config names, so
+# prepare-commit-msg fails the commit as pre-commit does. A commit that runs the
+# hooks has to fail first, or a script whose commits pass would prove nothing.
 #
 # The list is the hook's script and every script that runs git in another
 # repository. bin/check-fast is what lefthook runs on every commit, beside cargo
@@ -104,18 +107,18 @@ local_env=$(git rev-parse --local-env-vars)
 mapfile -t local_env <<<"$local_env"
 unset -v "${local_env[@]}"
 
-# A global config of this gate's own, in place of the machine's, whose hook
-# fails any commit that runs it. Every script below runs under it, and so does
-# every git command here, which is why the decoy's own commit looks for its
-# hooks in /dev/null too. Options given as git -c outrank it.
+# A global config of this gate's own, in place of the machine's, whose hooks
+# fail any commit that runs them, each naming itself: pre-commit, and
+# prepare-commit-msg, which a commit runs even with --no-verify. Every script
+# below runs under it, and so does every git command here, which is why the
+# decoy's own commit looks for its hooks in /dev/null too. Options given as
+# git -c outrank it.
 hooked='a commit ran the hook the global config names'
 mkdir "$root/hooks"
-cat >"$root/hooks/pre-commit" <<HOOK
-#!/bin/sh
-echo '$hooked' >&2
-exit 1
-HOOK
-chmod +x "$root/hooks/pre-commit"
+for hook in pre-commit prepare-commit-msg; do
+  printf '#!/bin/sh\necho "%s: %s" >&2\nexit 1\n' "$hooked" "$hook" >"$root/hooks/$hook"
+  chmod +x "$root/hooks/$hook"
+done
 git config --file "$root/gitconfig" core.hooksPath "$root/hooks"
 export GIT_CONFIG_GLOBAL=$root/gitconfig
 
