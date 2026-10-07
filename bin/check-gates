@@ -114,12 +114,18 @@ unset -v "${local_env[@]}"
 # A throwaway index, because six gates read `git ls-files` and a fixture that
 # adds or deletes a file has to be visible to them. --all is the correct verb
 # for an index nothing will ever commit to a real branch; signing is off so the
-# suite never queues behind the SSH agent.
+# suite never queues behind the SSH agent. And the commit looks for hooks in
+# /dev/null, where there are none: clearing git's local environment above
+# cannot stop a hook the global config names, as core.hooksPath or through an
+# init.templateDir that puts hooks into every new repository, and a global
+# lefthook setup would run the scratch's own lefthook.yml in it on every run.
+# bin/check-worktree-hook runs this script under a global config whose hook
+# fails any commit that runs it.
 git -C "$scratch" -c init.defaultBranch=main init -q
 git -C "$scratch" add --all -- .
 git -C "$scratch" \
   -c user.name=gates -c user.email=gates@invalid -c commit.gpgsign=false \
-  commit -q -m 'violations baseline'
+  -c core.hooksPath=/dev/null commit -q -m 'violations baseline'
 
 restore_scratch() {
   git -C "$scratch" reset -q --hard

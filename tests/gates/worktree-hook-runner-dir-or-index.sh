@@ -3,12 +3,12 @@
 # The runner clears git's variables only when GIT_DIR or GIT_INDEX_FILE is set,
 # as if those two were the only ones that reach another repository. git -c ...
 # rebase -x in the main checkout hands what it runs neither, only the -c
-# options, so the scratch's commit runs with them, a hooks path among them.
+# options, so the scratch's git commands run with them, a hooks path among them.
 
 gate="worktree hook"
 script="bin/check-worktree-hook"
 outcome="red"
-expect=("FAIL bin/check-gates" "rebase -x runs it in the main checkout" "made a commit with the -c options it was handed")
+expect=("FAIL bin/check-gates" "rebase -x runs it in the main checkout" "ran git with the -c options it was handed")
 
 mutate() {
   # The runner's one column-one unset is the line that clears them.

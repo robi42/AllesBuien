@@ -45,9 +45,21 @@ set -euo pipefail
 # commit with paths, given no options, hands the hook there: the commit's index
 # by its absolute path, and nothing else. Then it runs as git rebase -x runs a
 # command: in the worktree with GIT_DIR alone, and in the main checkout with
-# the options alone. A script that fails, that changes any file under the
-# decoy's .git, or that commits with those options fails the gate, which names
-# the files and what core.bare became.
+# the options alone. The options name a hooks path with a hook under every name
+# githooks(5) lists, each of which leaves its name. A script that fails, that
+# changes any file under the decoy's .git, or that runs git with those options
+# fails the gate, which names the files and what core.bare became, or the hooks
+# that ran.
+#
+# A script's commits in a repository of its own run with no hooks directory.
+# Clearing git's local environment cannot stop a hook the global config names,
+# as core.hooksPath or through an init.templateDir that puts hooks into every
+# new repository, and a global lefthook setup would run that repository's own
+# lefthook.yml there. So the scripts commit with -c core.hooksPath=/dev/null,
+# and everything here runs under a global config of this gate's own, in place
+# of the machine's, whose hook fails any commit that runs it. A commit that
+# runs the hooks has to fail first, or a script whose commits pass would prove
+# nothing.
 #
 # The list is the hook's script and every script that runs git in another
 # repository. bin/check-fast is what lefthook runs on every commit, beside cargo
@@ -92,6 +104,21 @@ local_env=$(git rev-parse --local-env-vars)
 mapfile -t local_env <<<"$local_env"
 unset -v "${local_env[@]}"
 
+# A global config of this gate's own, in place of the machine's, whose hook
+# fails any commit that runs it. Every script below runs under it, and so does
+# every git command here, which is why the decoy's own commit looks for its
+# hooks in /dev/null too. Options given as git -c outrank it.
+hooked='a commit ran the hook the global config names'
+mkdir "$root/hooks"
+cat >"$root/hooks/pre-commit" <<HOOK
+#!/bin/sh
+echo '$hooked' >&2
+exit 1
+HOOK
+chmod +x "$root/hooks/pre-commit"
+git config --file "$root/gitconfig" core.hooksPath "$root/hooks"
+export GIT_CONFIG_GLOBAL=$root/gitconfig
+
 decoy=$root/decoy
 worktree=$root/worktree
 mkdir "$decoy"
@@ -105,7 +132,7 @@ git -C "$decoy" -c init.defaultBranch=main init -q
 git -C "$decoy" config maintenance.auto false
 git -C "$decoy" add --all -- .
 git -C "$decoy" -c user.name=gates -c user.email=gates@invalid -c commit.gpgsign=false \
-  commit -q -m decoy
+  -c core.hooksPath=/dev/null commit -q -m decoy
 git -C "$decoy" worktree add -q -b task "$worktree"
 gitdir=$(git -C "$worktree" rev-parse --absolute-git-dir)
 
@@ -130,14 +157,24 @@ state() {
 # as git's is, because that name would lock the worktree's own index; the main
 # checkout's is named as git commit with paths names its own, for pid 1, which
 # no git command has. Options given as git -c reach what git runs as
-# GIT_CONFIG_PARAMETERS, and here they name a hooks directory whose pre-commit
-# leaves a mark, so a commit made anywhere with them shows.
+# GIT_CONFIG_PARAMETERS, and here they name a hooks directory with a hook under
+# every name githooks(5) lists, each of which leaves its name in tripped. git
+# init runs reference-transaction there, add and status post-index-change, and
+# a commit pre-commit and more, so a script that runs git anywhere with them
+# shows, though its commits name a hooks directory of their own, which
+# outranks them.
 next_index=$decoy/.git/next-index-1.lock
 cp "$gitdir/index" "$gitdir/index-commit"
 cp "$decoy/.git/index" "$next_index"
 mkdir "$root/tripwire"
-printf '#!/bin/sh\ntouch "%s/tripped"\n' "$root" >"$root/tripwire/pre-commit"
-chmod +x "$root/tripwire/pre-commit"
+for hook in applypatch-msg pre-applypatch post-applypatch pre-commit pre-merge-commit \
+  prepare-commit-msg commit-msg post-commit pre-rebase post-checkout post-merge pre-push \
+  pre-receive update proc-receive post-receive post-update reference-transaction \
+  push-to-checkout pre-auto-gc post-rewrite sendemail-validate fsmonitor-watchman \
+  p4-changelist p4-prepare-changelist p4-post-changelist p4-pre-submit post-index-change; do
+  printf '#!/bin/sh\necho %s >>"%s/tripped"\n' "$hook" "$root" >"$root/tripwire/$hook"
+  chmod +x "$root/tripwire/$hook"
+done
 options="'core.hookspath'='$root/tripwire'"
 
 # as_hook command...: runs the command in the worktree with what git commit -a,
@@ -193,6 +230,13 @@ if [[ $(state) == "$before" || ! -e $root/tripped ]]; then
 fi
 rm "$root/tripped"
 git -C "$root/elsewhere" -c init.defaultBranch=main init -q
+# And a commit that runs the hooks fails, or a script whose commits pass below
+# would prove nothing.
+if out=$(git -C "$root/elsewhere" -c user.name=gates -c user.email=gates@invalid \
+  -c commit.gpgsign=false commit -q --allow-empty -m hooked 2>&1) || [[ $out != *"$hooked"* ]]; then
+  echo "FAIL a commit ran no hook the global config names, so a script's commit that runs one would go unseen" >&2
+  exit 1
+fi
 : >"$root/elsewhere/file"
 before=$(sha256sum <"$next_index")
 if ! as_main_hook git -C "$root/elsewhere" add file; then
@@ -258,7 +302,9 @@ check() {
       exit 1
     fi
     if [[ -e $root/tripped ]]; then
-      printf "FAIL %s, run %s, made a commit with the -c options it was handed\n" "$label" "$where" >&2
+      printf "FAIL %s, run %s, ran git with the -c options it was handed, whose hooks ran:\n" \
+        "$label" "$where" >&2
+      sort -u "$root/tripped" | sed 's/^/  /' >&2
       exit 1
     fi
     if ((status != 0)); then

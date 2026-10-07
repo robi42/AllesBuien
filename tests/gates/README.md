@@ -85,7 +85,7 @@ already holds every object it names, goes through with what the scratch
 staged: a commit of `README.md` whose hook ran this runner on
 `omarchy-plugin-entry-point-missing` deleted `plugin/BarWidget.qml` as well.
 Options given as `git -c` reach whatever git runs, as `GIT_CONFIG_PARAMETERS`,
-and would run the scratch's commit with them. Which of the three a run hands
+and git in the scratch would run with them. Which of the three a run hands
 over depends on how git ran it: `git rebase -x` hands `GIT_DIR` alone in a
 linked worktree and only the `-c` options in the main checkout, and a commit
 made without `-c` options leaves `GIT_CONFIG_PARAMETERS` unset. So the runner
@@ -93,7 +93,12 @@ reads the tree with those variables, since a commit with `-a` or of named paths
 hands its hook an index only `GIT_INDEX_FILE` names, and then clears git's
 local environment, whichever of them is set, as githooks(5) says to before
 running git in another repository; the fixtures and gates run in the scratch
-inherit that.
+inherit that. The scratch's commit looks for its hooks in `/dev/null`, given as
+`-c core.hooksPath=/dev/null`, where there are none: clearing git's local
+environment cannot stop a hook the global config names, as `core.hooksPath` or
+through an `init.templateDir` that puts hooks into every new repository, and a
+global lefthook setup would run the scratch's own `lefthook.yml` there on every
+run.
 The copy also leaves out what git lists as a whole directory: a repository of
 its own, such as a linked worktree checked out under this one, whose `.git` file
 names this repository, so the scratch's `git status` would enter it and rewrite
@@ -115,27 +120,35 @@ commit's fails on that file. Then as `git rebase -x` runs a command, once each
 checkout's own index has become a copy of its commit's: in the worktree with
 `GIT_DIR` alone, and in the main checkout with the options alone. Clearing the
 variables only when one of them is set, or either of two, meets a run that
-hands over the others alone. A script that fails, changes any file under the
-decoy's `.git`, or makes a commit with those options fails the gate, which
-names the files and what `core.bare` became. A commit made elsewhere with the
-worktree's hook variables has to change the decoy and run the hook the options
-name, and an add made elsewhere with the main checkout's has to change the
-decoy's copy of the commit's index, before any script runs, or an untouched
-decoy would prove nothing; the runs as `git rebase -x` runs a command hand over
-the same `GIT_DIR` and the same options. The gate runs itself because
+hands over the others alone. The options name a hooks path with a hook under
+every name githooks(5) lists: `git init` runs `reference-transaction` there, and
+`git add` and `git status` `post-index-change`, so a script that runs git with
+them leaves a mark, though its commits look for their hooks in `/dev/null`,
+which outranks the options. A script that fails, changes any file under the
+decoy's `.git`, or runs git with those options fails the gate, which names the
+files and what `core.bare` became, or the hooks that ran. Everything runs under
+a global config of the gate's own, in place of the machine's, whose hook fails
+any commit that runs it, so a script whose commit runs the hook the global
+config names fails too. A commit made elsewhere with the worktree's hook
+variables has to change the decoy and run the hooks the options name, a commit
+made elsewhere without them has to fail on the global config's hook, and an add
+made elsewhere with the main checkout's has to change the decoy's copy of the
+commit's index, before any script runs, or an untouched decoy, or a commit that
+passes, would prove nothing; the runs as `git rebase -x` runs a command hand
+over the same `GIT_DIR` and the same options. The gate runs itself because
 `bin/test` runs it, under whatever variables `bin/test` was handed, and it
 builds the decoy with git: the copy, passed `nested`, builds a decoy of its
 own, makes every git call the gate makes, and stops before it would run the
-scripts. Its eleven fixtures put a defect into each script in turn: the runner
+scripts. Its twelve fixtures put a defect into each script in turn: the runner
 without the line that clears the variables; clearing them only when `GIT_DIR`
 is set, only when `GIT_INDEX_FILE` is, only when either of those two is, or
 only when `GIT_DIR` or `GIT_CONFIG_PARAMETERS` is; clearing them before it
-reads this repository, keeping the `-c` options, or copying the nested
-worktree; `bin/check-fast` reading this repository without the variables, or
-running `git init` in a scratch directory of its own; and the gate itself
-without the line that clears them. The last of the four keyed ones goes red
-only while the gate runs the main checkout's hook without `-c` options, so it
-holds the gate to that.
+reads this repository, keeping the `-c` options, copying the nested worktree,
+or committing with the hooks the global config names; `bin/check-fast` reading
+this repository without the variables, or running `git init` in a scratch
+directory of its own; and the gate itself without the line that clears them.
+The last of the four keyed ones goes red only while the gate runs the main
+checkout's hook without `-c` options, so it holds the gate to that.
 
 Gates are run, never reimplemented. `bin/check-fast` and
 `bin/check-qml-contract` are whole scripts and run as themselves; a gate that
@@ -246,8 +259,8 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-fifty-seven it runs, each of which fails loudly if its gate stops biting. One
-of those fifty-seven aims at the runner rather than at a gate: the slicer
+fifty-eight it runs, each of which fails loudly if its gate stops biting. One
+of those fifty-eight aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That
