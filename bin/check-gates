@@ -122,8 +122,10 @@ unset -v "${local_env[@]}"
 # --no-verify would not do: it skips pre-commit and commit-msg, and leaves
 # prepare-commit-msg, post-commit, reference-transaction and post-index-change
 # running.
-# bin/check-worktree-hook runs this script under a global config whose hooks
-# fail any commit that runs them.
+# Nor would GIT_CONFIG_GLOBAL=/dev/null on the commit alone: the git init above
+# read the global config, and the hooks an init.templateDir names are in the
+# scratch by then. bin/check-worktree-hook runs this script under a global
+# config whose hooks, and its template's, fail any commit that runs them.
 git -C "$scratch" -c init.defaultBranch=main init -q
 git -C "$scratch" add --all -- .
 git -C "$scratch" \

@@ -61,8 +61,13 @@ set -euo pipefail
 # no way round it: it skips pre-commit and commit-msg, but a commit given it
 # still runs prepare-commit-msg, post-commit, reference-transaction and
 # post-index-change from the hooks directory the global config names, so
-# prepare-commit-msg fails the commit as pre-commit does. A commit that runs the
-# hooks has to fail first, or a script whose commits pass would prove nothing.
+# prepare-commit-msg fails the commit as pre-commit does. Its init.templateDir
+# puts the same two hooks, under a complaint of their own, into every
+# repository git init makes, the scratches among them, where they stay after
+# the global config is gone: a commit that reads no global config, given
+# GIT_CONFIG_GLOBAL=/dev/null in place of the hooks path, still runs them. A
+# commit that runs the hooks has to fail first, each way, or a script whose
+# commits pass would prove nothing.
 #
 # The list is the hook's script and every script that runs git in another
 # repository. bin/check-fast is what lefthook runs on every commit, beside cargo
@@ -109,17 +114,22 @@ unset -v "${local_env[@]}"
 
 # A global config of this gate's own, in place of the machine's, whose hooks
 # fail any commit that runs them, each naming itself: pre-commit, and
-# prepare-commit-msg, which a commit runs even with --no-verify. Every script
-# below runs under it, and so does every git command here, which is why the
-# decoy's own commit looks for its hooks in /dev/null too. Options given as
-# git -c outrank it.
+# prepare-commit-msg, which a commit runs even with --no-verify. Its
+# init.templateDir copies the same two, with a complaint of their own, into
+# every repository git init makes, where a commit that reads no global config
+# still finds them. Every script below runs under it, and so does every git
+# command here, which is why the decoy's own commit looks for its hooks in
+# /dev/null too. Options given as git -c outrank it.
 hooked='a commit ran the hook the global config names'
-mkdir "$root/hooks"
+templated='a commit ran a hook git init copied from the global config'
+mkdir -p "$root/hooks" "$root/template/hooks"
 for hook in pre-commit prepare-commit-msg; do
   printf '#!/bin/sh\necho "%s: %s" >&2\nexit 1\n' "$hooked" "$hook" >"$root/hooks/$hook"
-  chmod +x "$root/hooks/$hook"
+  printf '#!/bin/sh\necho "%s: %s" >&2\nexit 1\n' "$templated" "$hook" >"$root/template/hooks/$hook"
+  chmod +x "$root/hooks/$hook" "$root/template/hooks/$hook"
 done
 git config --file "$root/gitconfig" core.hooksPath "$root/hooks"
+git config --file "$root/gitconfig" init.templateDir "$root/template"
 export GIT_CONFIG_GLOBAL=$root/gitconfig
 
 decoy=$root/decoy
@@ -238,6 +248,12 @@ git -C "$root/elsewhere" -c init.defaultBranch=main init -q
 if out=$(git -C "$root/elsewhere" -c user.name=gates -c user.email=gates@invalid \
   -c commit.gpgsign=false commit -q --allow-empty -m hooked 2>&1) || [[ $out != *"$hooked"* ]]; then
   echo "FAIL a commit ran no hook the global config names, so a script's commit that runs one would go unseen" >&2
+  exit 1
+fi
+if out=$(GIT_CONFIG_GLOBAL=/dev/null git -C "$root/elsewhere" -c user.name=gates \
+  -c user.email=gates@invalid -c commit.gpgsign=false commit -q --allow-empty -m templated 2>&1) ||
+  [[ $out != *"$templated"* ]]; then
+  echo "FAIL a commit that read no global config ran no hook git init copied from it, so a script's commit that runs one would go unseen" >&2
   exit 1
 fi
 : >"$root/elsewhere/file"
