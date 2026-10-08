@@ -93,12 +93,21 @@ reads the tree with those variables, since a commit with `-a` or of named paths
 hands its hook an index only `GIT_INDEX_FILE` names, and then clears git's
 local environment, whichever of them is set, as githooks(5) says to before
 running git in another repository; the fixtures and gates run in the scratch
-inherit that. The scratch's commit looks for its hooks in `/dev/null`, given as
-`-c core.hooksPath=/dev/null`, where there are none: clearing git's local
-environment cannot stop a hook the global config names, as `core.hooksPath` or
-through an `init.templateDir` that puts hooks into every new repository, and a
-global lefthook setup would run the scratch's own `lefthook.yml` there on every
-run.
+inherit that. The scratch's commit runs no hook: clearing git's local
+environment cannot stop one the global config names, and a global lefthook
+setup would run the scratch's own `lefthook.yml` there on every run. It looks
+for its hooks in `/dev/null`, given as `-c core.hooksPath=/dev/null`, where
+there are none, in place of a hooks directory: the one a `core.hooksPath` in
+the global config names, or the scratch's own, where an `init.templateDir`
+there puts hooks at `git init`. That does not reach a hook a config defines by
+name, as `hook.<name>.command`, which git 2.55.0 runs for each event its
+`hook.<name>.event` lists whatever `core.hooksPath` says: one the global config
+defines, or one in the scratch's own config, into which `git init` copies the
+`config` an `init.templateDir` holds. So the commit also sets
+`hook.<event>.enabled=false` for each event it runs: `pre-commit`,
+`prepare-commit-msg`, `commit-msg`, `post-commit`, `reference-transaction` and
+`post-index-change`. That setting leaves a hooks directory's hooks running, so
+the commit needs both.
 The copy also leaves out what git lists as a whole directory: a repository of
 its own, such as a linked worktree checked out under this one, whose `.git` file
 names this repository, so the scratch's `git status` would enter it and rewrite
@@ -128,35 +137,40 @@ which outranks the options. A script that fails, changes any file under the
 decoy's `.git`, or runs git with those options fails the gate, which names the
 files and what `core.bare` became, or the hooks that ran. Everything runs under
 a global config of the gate's own, in place of the machine's, whose pre-commit
-and prepare-commit-msg hooks fail any commit that runs them, so a script whose
-commit runs the hooks the global config names fails too, and so does one that
-skips them with `--no-verify` instead of naming `/dev/null`: that skips
-`pre-commit` and `commit-msg`, but not `prepare-commit-msg`, `post-commit`,
-`reference-transaction` or `post-index-change`. Its `init.templateDir` puts the
-same two hooks into every repository `git init` makes, so one whose commit reads
-no global config, given `GIT_CONFIG_GLOBAL=/dev/null` instead of naming
-`/dev/null` as its hooks path, still runs them and fails. A commit made
-elsewhere with the worktree's hook variables has to change the decoy and run
-the hooks the options name, a commit made elsewhere without them has to fail on
-the global config's hook, and so does one that reads no global config, on the
-hook `git init` copied, and an add made elsewhere with the main checkout's has
-to change the decoy's copy of the commit's index, before any script runs, or an
-untouched decoy, or a commit that passes, would prove nothing; the runs as
-`git rebase -x` runs a command hand over the same `GIT_DIR` and the same
-options. The gate runs
-itself because `bin/test` runs it, under whatever variables `bin/test` was
-handed, and it builds the decoy with git: the copy, passed `nested`, builds a
-decoy of its own, makes every git call the gate makes, and stops before it would
-run the scripts. Its fourteen fixtures put a defect into each script in turn:
-the runner without the line that clears the variables; clearing them only when
-`GIT_DIR` is set, only when `GIT_INDEX_FILE` is, only when either of those two
-is, or only when `GIT_DIR` or `GIT_CONFIG_PARAMETERS` is; clearing them before
-it reads this repository, keeping the `-c` options, copying the nested worktree,
-committing with the hooks the global config names, skipping them with
-`--no-verify`, or reading no global config instead, which leaves the hooks
-`git init` copied from it; `bin/check-fast` reading this repository without the
-variables, or running `git init` in a scratch directory of its own; and the
-gate itself without the line that clears them.
+and prepare-commit-msg hooks fail any commit that runs them. Each is there
+twice, in the hooks directory the config names and defined by name, so a
+script whose commit runs the hooks the global config names fails too, and so
+does one that skips them with `--no-verify` instead of naming `/dev/null`: that
+skips `pre-commit` and `commit-msg`, but not `prepare-commit-msg`,
+`post-commit`, `reference-transaction` or `post-index-change`. So does one that
+names `/dev/null` and leaves the hooks defined by name on for either event. Its
+`init.templateDir` puts both kinds into every repository `git init` makes, the
+hooks into its hooks directory and those defined by name into its config, so
+one whose commit reads no global config, given `GIT_CONFIG_GLOBAL=/dev/null`
+instead of either setting, still runs them and fails. A commit made elsewhere
+with the worktree's hook variables has to change the decoy and run the hooks
+the options name, commits made elsewhere without them have to fail on each kind
+of hook the global config has, and so do commits that read no global config,
+on each kind `git init` copied, and an add made elsewhere with the main
+checkout's has to change the decoy's copy of the commit's index, before any
+script runs, or an untouched decoy, or a commit that passes, would prove
+nothing; the runs as `git rebase -x` runs a command hand over the same
+`GIT_DIR` and the same options. The gate runs itself because `bin/test` runs
+it, under whatever variables `bin/test` was handed, and it builds the decoy
+with git: the copy, passed `nested`, builds a decoy of its own, makes every git
+call the gate makes, and stops before it would run the scripts. Its seventeen
+fixtures put a defect into each script in turn: the runner without the line
+that clears the variables; clearing them only when `GIT_DIR` is set, only when
+`GIT_INDEX_FILE` is, only when either of those two is, or only when `GIT_DIR`
+or `GIT_CONFIG_PARAMETERS` is; clearing them before it reads this repository,
+keeping the `-c` options, or copying the nested worktree; committing with the
+hooks the global config names, skipping them with `--no-verify`, or reading no
+global config instead, which leaves the hooks `git init` copied from it;
+committing with the hooks the global config defines by name, turning them off
+for `pre-commit` alone, or reading no global config instead, which leaves
+those defined in the config `git init` copied; `bin/check-fast` reading this
+repository without the variables, or running `git init` in a scratch directory
+of its own; and the gate itself without the line that clears them.
 The last of the four keyed ones goes red only while the gate runs the main
 checkout's hook without `-c` options, so it holds the gate to that.
 
@@ -269,8 +283,8 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-sixty it runs, each of which fails loudly if its gate stops biting. One
-of those sixty aims at the runner rather than at a gate: the slicer
+sixty-three it runs, each of which fails loudly if its gate stops biting. One
+of those sixty-three aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That

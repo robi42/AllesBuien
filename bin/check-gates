@@ -114,22 +114,36 @@ unset -v "${local_env[@]}"
 # A throwaway index, because six gates read `git ls-files` and a fixture that
 # adds or deletes a file has to be visible to them. --all is the correct verb
 # for an index nothing will ever commit to a real branch; signing is off so the
-# suite never queues behind the SSH agent. And the commit looks for hooks in
-# /dev/null, where there are none: clearing git's local environment above
-# cannot stop a hook the global config names, as core.hooksPath or through an
-# init.templateDir that puts hooks into every new repository, and a global
-# lefthook setup would run the scratch's own lefthook.yml in it on every run.
-# --no-verify would not do: it skips pre-commit and commit-msg, and leaves
-# prepare-commit-msg, post-commit, reference-transaction and post-index-change
-# running.
-# Nor would GIT_CONFIG_GLOBAL=/dev/null on the commit alone: the git init above
-# read the global config, and the hooks an init.templateDir names are in the
-# scratch by then. bin/check-worktree-hook runs this script under a global
-# config whose hooks, and its template's, fail any commit that runs them.
+# suite never queues behind the SSH agent. And the commit runs no hook:
+# clearing git's local environment above cannot stop one the global config
+# names, and a global lefthook setup would run the scratch's own lefthook.yml
+# in it on every run. It looks for hooks in /dev/null, where there are none, in
+# place of a hooks directory: the one a core.hooksPath in the global config
+# names, or the scratch's own, where an init.templateDir there puts hooks at git
+# init. --no-verify would not do: it skips pre-commit and commit-msg, and
+# leaves prepare-commit-msg, post-commit, reference-transaction and
+# post-index-change running. Nor does /dev/null reach a hook a config defines
+# by name, as hook.<name>.command, which git 2.55.0 runs for each event its
+# hook.<name>.event lists whatever core.hooksPath says: one the global config
+# defines, or one in the scratch's own config, into which git init copies the
+# config an init.templateDir holds. So the commit also sets
+# hook.<event>.enabled=false for each event it runs: pre-commit,
+# prepare-commit-msg, commit-msg and post-commit, reference-transaction as it
+# updates refs, and post-index-change as it writes the index. That setting
+# leaves a hooks directory's hooks running, so the commit needs both. Nor would
+# GIT_CONFIG_GLOBAL=/dev/null on the commit alone do in place of either: the
+# git init above read the global config, and what its init.templateDir holds
+# is in the scratch by then. bin/check-worktree-hook runs this script under a
+# global config whose hooks fail any commit that runs them: in the hooks
+# directory it names, defined by name, and both kinds again in its template.
 git -C "$scratch" -c init.defaultBranch=main init -q
 git -C "$scratch" add --all -- .
 git -C "$scratch" \
   -c user.name=gates -c user.email=gates@invalid -c commit.gpgsign=false \
+  -c hook.pre-commit.enabled=false -c hook.prepare-commit-msg.enabled=false \
+  -c hook.commit-msg.enabled=false -c hook.post-commit.enabled=false \
+  -c hook.reference-transaction.enabled=false \
+  -c hook.post-index-change.enabled=false \
   -c core.hooksPath=/dev/null commit -q -m 'violations baseline'
 
 restore_scratch() {
