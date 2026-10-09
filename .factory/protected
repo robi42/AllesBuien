@@ -7,6 +7,11 @@
 # .factory/gate and .factory/protected are always protected by the factory
 # itself. The list below exists because .factory/gate only delegates, so
 # protecting the wrapper alone protects nothing.
+#
+# Factory reads each line as a git pathspec, so a * matches across directories
+# too. With :(glob), a * stays within one directory, **/ matches any directories
+# or none, and a name covers only itself, so a directory that could be a link
+# takes one line for its name and one for what is under it.
 
 # The gate body. bin/test is the whole gate list and the one CI runs; the other
 # four are the scripts it delegates to. Deleting a gate here, or a fixture
@@ -30,3 +35,43 @@ tests/gates/uncovered
 # cargo-deny's advisory policy, enforced by .github/workflows/audit.yml.
 # Relaxing an entry here is a suppression wearing a config file's name.
 deny.toml
+
+# The files that steer the pre-commit hook every worktree shares: they decide
+# what that hook runs, and whether a commit in a worktree, or `mise install`,
+# rewrites it for every checkout. lefthook.yml's no_auto_install keeps a commit
+# from reinstalling the hook, and mise.toml's postinstall runs lefthook install
+# only in the main checkout. A branch that drops either, or adds a
+# lefthook-local file that turns no_auto_install off, rewrites the hook from
+# its own worktree at its next commit or `mise install`, before Factory sees
+# the branch; `mise install` in the main checkout writes it back.
+#
+# mise's config files, in any directory, since mise reads those of the
+# directory a command runs in and of every one above it: mise.toml, .mise.toml
+# and their local and per-environment forms, which **/ also finds under
+# .config/; the config files under mise/, .mise/ and .config/mise/;
+# .tool-versions; and a .miserc.toml, which can rename them. mise and .mise are
+# listed alone too, since a link of either name would hand mise a config file
+# from anywhere.
+:(glob)**/mise*.toml
+:(glob)**/.mise*.toml
+:(glob)**/mise
+:(glob)**/mise/**
+:(glob)**/.mise
+:(glob)**/.mise/**
+:(glob)**/.tool-versions
+# lefthook's, at the root: lefthook.yml, or the first of its other names, there
+# or in .config/; a lefthook-local file, which lefthook merges over it; and the
+# scripts a config names from .lefthook/.
+lefthook*
+.lefthook*
+.config/lefthook*
+# And .config itself, in any directory, as a name alone: a .config that is a
+# link hands mise, wherever a command runs, and lefthook, at the root, config
+# files from anywhere. Under a real .config, the files they read are covered
+# above.
+:(glob)**/.config
+# And the root .gitignore, whose re-includes keep a global ignore from hiding
+# a local one of these files, such as mise.local.toml or lefthook-local.yml: an
+# ignored file is in no diff and in no status, so neither this list nor
+# Factory's check for uncommitted changes would see it.
+.gitignore

@@ -21,7 +21,10 @@ assert_lefthook_installed: true
 # instead, and is the step to repeat after a change here beyond the jobs, such
 # as a new hook or one of these settings. In a linked worktree it leaves them
 # alone, but `lefthook install` run by hand there still rewrites them from that
-# worktree's lefthook.yml.
+# worktree's lefthook.yml, and so does a commit in a worktree whose lefthook.yml
+# lacks this key, or whose lefthook-local file turns it off. lefthook's config
+# files are protected paths, so Factory flags a branch that drops the key or
+# adds such a file, but only after that commit.
 no_auto_install: true
 
 # Formatting and the text-only gates, and nothing that needs a compiler.
