@@ -37,7 +37,7 @@ scratch=$(readlink -f -- "$scratch")
 trap 'rm -rf -- "$scratch"' EXIT
 
 mkdir "$scratch/bin"
-for tool in bash mktemp rm grep readlink sort; do
+for tool in bash chmod mktemp rm grep readlink sort; do
   if ! real=$(command -v "$tool"); then
     printf 'FAIL the runner needs %s, and it is not on PATH\n' "$tool" >&2
     exit 1
@@ -62,12 +62,13 @@ begin() {
   name=$1
   problem=
   case_dir=$scratch/$name
-  mkdir -p "$case_dir/plugin" "$case_dir/tmp"
+  mkdir -p "$case_dir/plugin" "$case_dir/tmp" "$case_dir/state"
   cp -- "$widget" "$case_dir/plugin/widget.sh"
   : >"$case_dir/log"
   app_path=
   env_vars=(
     "FAKE_LOG=$case_dir/log"
+    "FAKE_STATE=$case_dir/state"
     "TMPDIR=$case_dir/tmp"
     FAKE_PACKAGE=absent
     FAKE_PACKAGE_FILES=
@@ -446,6 +447,50 @@ expect_no_call "pacman [-U]"
 expect_calls "$launch_call"
 expect_output "README#install"
 expect_no_output "restart it"
+finish
+
+# What is installed changes while the package downloads. The click decides
+# again before pacman, and installs nothing unless its answer still holds.
+
+# Another installer moves the package past the pin: updating now would
+# downgrade it.
+begin update-overtaken-by-newer
+pin 0.2.0-1
+ours 0.1.0-1
+set_env FAKE_PACKAGE_AFTER_DOWNLOAD=0.3.0-1
+run install
+expect_status 1
+expect_no_call "pacman [-U]"
+expect_calls "$launch_call"
+expect_output "AllesBuien changed while the package downloaded, so nothing was installed"
+finish
+
+# A second click's update finishes first: this one would reinstall it.
+begin update-overtaken-by-another-click
+pin 0.2.0-1
+ours 0.1.0-1
+set_env FAKE_PACKAGE_AFTER_DOWNLOAD=0.2.0-1
+run install
+expect_status 1
+expect_no_call "pacman [-U]"
+expect_calls "$launch_call"
+expect_output "changed while the package downloaded"
+finish
+
+# A second click's install finishes first, on a machine that had no AllesBuien
+# when this click began.
+begin install-overtaken-by-another-click
+pin 0.2.0-1
+mkdir -p "$case_dir/usr-bin"
+app_path=$case_dir/usr-bin
+set_env FAKE_PACKAGE_AFTER_DOWNLOAD=0.2.0-1 \
+  "FAKE_PACKAGE_FILES=$case_dir/usr-bin/allesbuien" \
+  "FAKE_APP_AFTER_DOWNLOAD=$case_dir/usr-bin/allesbuien"
+run install
+expect_status 1
+expect_no_call "pacman [-U]"
+expect_calls "$launch_call"
+expect_output "changed while the package downloaded"
 finish
 
 # The pin itself. plugin/release.sha256 is what every widget installs from, so

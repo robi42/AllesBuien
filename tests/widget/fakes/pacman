@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Fake pacman for tests/widget/run.sh. FAKE_PACKAGE is `absent`, or the
-# version `pacman -Q allesbuien` prints; FAKE_PACKAGE_FILES is what
+# version `pacman -Q allesbuien` prints, unless the fake curl has since written
+# another to $FAKE_STATE/package; FAKE_PACKAGE_FILES is what
 # `pacman -Qlq allesbuien` lists; FAKE_PACMAN_U is `ok`, or `declined` for an
 # answered-no prompt. `-U` refuses a path that is not a file, as pacman does.
 
@@ -12,6 +13,11 @@ set -euo pipefail
   printf '\n'
 } >>"$FAKE_LOG"
 
+package=$FAKE_PACKAGE
+if [[ -f $FAKE_STATE/package ]]; then
+  package=$(<"$FAKE_STATE/package")
+fi
+
 not_found() {
   printf "error: package '%s' was not found\n" "$1" >&2
   exit 1
@@ -19,13 +25,13 @@ not_found() {
 
 case "${1-} ${2-}" in
   "-Q allesbuien")
-    if [[ $FAKE_PACKAGE == absent ]]; then
+    if [[ $package == absent ]]; then
       not_found allesbuien
     fi
-    printf 'allesbuien %s\n' "$FAKE_PACKAGE"
+    printf 'allesbuien %s\n' "$package"
     ;;
   "-Qlq allesbuien")
-    if [[ $FAKE_PACKAGE == absent ]]; then
+    if [[ $package == absent ]]; then
       not_found allesbuien
     fi
     printf '/usr/\n/usr/bin/\n%s\n' "$FAKE_PACKAGE_FILES"

@@ -25,12 +25,11 @@ The widget appears in the bar's center section as a `󰐷` radar dish. While the
 Or install the application by hand first and add the widget afterwards. Put [`plugin/release.sha256`](plugin/release.sha256) from this repository and the package it names, from the releases page, in one directory, check the package against the pin, and install that package:
 
 ```bash
-sha256sum -c release.sha256
-sudo pacman -U "./$(awk '{ print $2 }' release.sha256)"
+sha256sum -c release.sha256 && sudo pacman -U "./$(awk '{ print $2 }' release.sha256)"
 omarchy plugin add https://github.com/robi42/AllesBuien.git --enable
 ```
 
-`sha256sum -c` has to print `OK`. Anything else means the file is not the release this repository pinned, so do not install it.
+`sha256sum -c` has to print `OK`, and the `&&` runs pacman only if it does. Anything else means the file is not the release this repository pinned, so do not install it.
 
 `--enable` asks which bar section to place the widget in, with the center preselected. To skip the question, or to move the widget later:
 

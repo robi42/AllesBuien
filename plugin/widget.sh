@@ -153,9 +153,9 @@ no_pin_message() {
   printf 'Install AllesBuien by hand as README#install describes: %s\n' "$readme_install"
 }
 
-# Downloads the pinned asset into a private temp dir and checks it against the
-# pin. Fails, having said why, before anything reaches pacman.
-download_and_verify() {
+# Downloads the pinned asset into a private temp dir. Fails, having said why,
+# before anything reaches pacman.
+download_pinned() {
   local url=$repository/releases/download/v${pin_version%-*}/$pin_asset
   tmp=$(mktemp -d)
   printf 'Downloading %s\n' "$url"
@@ -165,10 +165,47 @@ download_and_verify() {
     printf 'Install AllesBuien by hand as README#install describes: %s\n' "$readme_install"
     return 1
   fi
+}
+
+# The download takes seconds, and meanwhile a second click, another installer,
+# or a plugin update can change what is installed or what is pinned: a click
+# acting on the answer it started with could then reinstall the pinned release
+# over itself, or downgrade an install that has moved past the pin. So the
+# decision is taken again once the file is here, and pacman gets it only if the
+# answer still holds, for the same pinned asset. Fails, having said so,
+# otherwise.
+still_wanted() {
+  local before=$decision asset=$pin_asset
+  decide
+  if [[ $decision == "$before" && $pin_asset == "$asset" ]]; then
+    return 0
+  fi
+  printf 'AllesBuien changed while the package downloaded, so nothing was installed.\n'
+  return 1
+}
+
+# Checks the download against the pin. Fails, having said why, before anything
+# reaches pacman.
+verify_download() {
   if ! (cd "$tmp" && sha256sum --check --strict "$pin_file"); then
     printf 'The download of %s does not match release.sha256, so nothing was installed.\n' "$pin_asset"
     printf 'Install AllesBuien by hand as README#install describes: %s\n' "$readme_install"
     return 1
+  fi
+}
+
+# Everything between a decision to install and pacman, each step stopping the
+# click if it fails.
+fetch_pinned() {
+  download_pinned && still_wanted && verify_download
+}
+
+# After a click that installed nothing, the app opens if it is installed: as it
+# was for an update that failed, or as it has become since the click began.
+launch_if_installed() {
+  if [[ $decision == 0 || $decision == 12 ]]; then
+    printf 'Opening AllesBuien.\n'
+    launch_detached
   fi
 }
 
@@ -188,7 +225,8 @@ install_verb() {
       ;;
     10)
       printf 'Installing AllesBuien %s from the GitHub release.\n' "$pin_version"
-      if ! download_and_verify; then
+      if ! fetch_pinned; then
+        launch_if_installed
         return 1
       fi
       if ! sudo pacman -U "$tmp/$pin_asset"; then
@@ -205,9 +243,8 @@ install_verb() {
       printf 'Updating AllesBuien from %s to %s.\n' "$installed_version" "$pin_version"
       # The app is installed and works, so the click ends with it open whatever
       # happens to the update: a failed download, a declined prompt, or success.
-      if ! download_and_verify; then
-        printf 'Opening the installed AllesBuien %s.\n' "$installed_version"
-        launch_detached
+      if ! fetch_pinned; then
+        launch_if_installed
         return 1
       fi
       if sudo pacman -U "$tmp/$pin_asset"; then
