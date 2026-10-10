@@ -37,7 +37,12 @@ fi
 # spelling, so the registry fills with snake_case where QML expects camelCase.
 # Catching it here names the members rather than the symptom.
 echo "==> gate: generated type names"
-snake_case=$(printf '%s\n' "$registered" | grep -E '^[A-Za-z0-9]+_[A-Za-z0-9_]*$' | sed 's/^/  /' || true)
+# cxx-qt-lib declares its containers under aliases such as QList_f64 and
+# QMap_QString_QVariant, and from Qt 6.12 qmltyperegistrar registers a property's
+# type by that alias. Those are the library's names, not a block that lost
+# #[auto_cxx_name], so they are left out.
+snake_case=$(printf '%s\n' "$registered" |
+  sed -nE '/^Q(List|Vector|Set|Map|Hash)_[A-Za-z0-9_]+$/d; /^[A-Za-z0-9]+_[A-Za-z0-9_]*$/s/^/  /p')
 if [[ -n "$snake_case" ]]; then
   printf 'FAIL snake_case names reached the QML type registry:\n' >&2
   printf '%s\n' "$snake_case" >&2
