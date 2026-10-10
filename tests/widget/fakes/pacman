@@ -6,6 +6,7 @@ set -euo pipefail
 # another to $FAKE_STATE/package; FAKE_PACKAGE_FILES is what
 # `pacman -Qlq allesbuien` lists; FAKE_PACMAN_U is `ok`, or `declined` for an
 # answered-no prompt. `-U` refuses a path that is not a file, as pacman does.
+# Once $FAKE_STATE/query-fails exists, `-Q` fails while `-Qlq` still answers.
 
 {
   printf '%s' "${0##*/}"
@@ -25,6 +26,10 @@ not_found() {
 
 case "${1-} ${2-}" in
   "-Q allesbuien")
+    if [[ -f $FAKE_STATE/query-fails ]]; then
+      printf 'error: failed to init transaction (unable to lock database)\n' >&2
+      exit 1
+    fi
     if [[ $package == absent ]]; then
       not_found allesbuien
     fi

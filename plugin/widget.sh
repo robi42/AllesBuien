@@ -92,14 +92,21 @@ owned_by_us() {
   if ! files=$(pacman -Qlq allesbuien 2>/dev/null); then
     return 1
   fi
-  resolved=$(readlink -f "$1")
+  if ! resolved=$(readlink -f "$1"); then
+    return 1
+  fi
   grep -qxF -- "$resolved" <<<"$files"
 }
 
 # Sets decision to one of the probe's exit codes, and installed_version when
 # the binary is ours. Only an installed version older than the pin by vercmp,
 # pkgrel included, is an update; equal or newer is left as it is, so a click
-# never downgrades.
+# never downgrades. Fails, leaving decision as it was, when the installed
+# version cannot be read - pacman -Q fails while another transaction holds its
+# database - because an unknown version must never count as an older one:
+# vercmp ranks an empty version below every other. Each step checks its own
+# failure rather than leaving it to set -e, which bash suspends when decide
+# runs inside a condition, as it does once a download is done.
 decide() {
   local binary line order
   installed_version=
@@ -115,9 +122,17 @@ decide() {
     decision=0
     return 0
   fi
-  line=$(pacman -Q allesbuien)
-  installed_version=${line##* }
-  order=$(vercmp "$installed_version" "$pin_version")
+  if ! line=$(pacman -Q allesbuien); then
+    return 1
+  fi
+  installed_version=${line#allesbuien }
+  if [[ -z $installed_version || $installed_version == "$line" ]]; then
+    printf 'widget.sh: pacman -Q allesbuien answered "%s"\n' "$line" >&2
+    return 1
+  fi
+  if ! order=$(vercmp "$installed_version" "$pin_version"); then
+    return 1
+  fi
   if [[ $order == -1 ]]; then
     decision=12
   else
@@ -153,11 +168,19 @@ no_pin_message() {
   printf 'Install AllesBuien by hand as README#install describes: %s\n' "$readme_install"
 }
 
+unreadable_message() {
+  printf 'Could not read which AllesBuien is installed, so nothing was installed.\n'
+  printf 'Try the click again once any other package installation has finished.\n'
+}
+
 # Downloads the pinned asset into a private temp dir. Fails, having said why,
 # before anything reaches pacman.
 download_pinned() {
   local url=$repository/releases/download/v${pin_version%-*}/$pin_asset
-  tmp=$(mktemp -d)
+  if ! tmp=$(mktemp -d); then
+    printf 'Could not create a temporary directory, so nothing was installed.\n'
+    return 1
+  fi
   printf 'Downloading %s\n' "$url"
   if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
     --tlsv1.2 --output "$tmp/$pin_asset" "$url"; then
@@ -176,7 +199,10 @@ download_pinned() {
 # otherwise.
 still_wanted() {
   local before=$decision asset=$pin_asset
-  decide
+  if ! decide; then
+    unreadable_message
+    return 1
+  fi
   if [[ $decision == "$before" && $pin_asset == "$asset" ]]; then
     return 0
   fi
@@ -212,7 +238,10 @@ launch_if_installed() {
 install_verb() {
   local running=0
   trap 'if [[ -n $tmp ]]; then rm -rf -- "$tmp"; fi' EXIT
-  decide
+  if ! decide; then
+    unreadable_message
+    return 1
+  fi
   case $decision in
     0)
       printf 'AllesBuien is already installed and there is nothing for this click to install. Opening it.\n'
@@ -262,7 +291,9 @@ install_verb() {
 
 case ${1-} in
   probe)
-    decide
+    if ! decide; then
+      exit 1
+    fi
     exit "$decision"
     ;;
   launch)

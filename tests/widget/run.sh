@@ -493,6 +493,44 @@ expect_calls "$launch_call"
 expect_output "changed while the package downloaded"
 finish
 
+# The installed version cannot be read. An unknown version is never older than
+# the pin, so nothing is installed. The decision taken again after a download
+# runs where bash suspends set -e, so these hold only because every step of it
+# checks its own failures.
+
+begin probe-query-fails
+pin 0.2.0-1
+ours 0.1.0-1
+printf 'locked\n' >"$case_dir/state/query-fails"
+run probe
+expect_status 1
+expect_output "unable to lock database"
+finish
+
+begin install-query-fails
+pin 0.2.0-1
+ours 0.1.0-1
+printf 'locked\n' >"$case_dir/state/query-fails"
+run install
+expect_status 1
+expect_no_call "curl"
+expect_no_call "pacman [-U]"
+expect_output "Could not read which AllesBuien is installed, so nothing was installed"
+finish
+
+# Another pacman transaction holds the database once the download is done.
+begin update-query-fails-after-download
+pin 0.2.0-1
+ours 0.1.0-1
+set_env FAKE_QUERY_FAILS_AFTER_DOWNLOAD=1
+run install
+expect_status 1
+expect_no_call "sha256sum"
+expect_no_call "pacman [-U]"
+expect_calls "$launch_call"
+expect_output "Could not read which AllesBuien is installed, so nothing was installed"
+finish
+
 # The pin itself. plugin/release.sha256 is what every widget installs from, so
 # the repository's own pin is held to two things here: the widget reads it as a
 # usable pin, and it names no release newer than app/Cargo.toml's version - a
