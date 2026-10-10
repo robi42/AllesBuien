@@ -1,4 +1,31 @@
-min_version: "2.0.0"
+# The lefthook mise.toml pins, and nothing older. The hook runs the first
+# lefthook on PATH, and a PATH that mise did not set up for this checkout can
+# carry a global install - this machine's is 2.1.6, which predates 2.1.7's
+# fixes for restoring unstaged changes - so an older one refuses to run it
+# instead. lefthook checks this before it runs a job or touches a hook, and
+# bin/check-fast's lefthook pin gate holds it to the pin in mise.toml.
+min_version: "2.1.16"
+
+# A commit fails when the hook finds no lefthook at all. Without this, the hook
+# script lefthook writes says it cannot find lefthook and lets the commit
+# through unchecked: a --no-verify nobody chose. lefthook writes the setting
+# into the hook when it installs it, so a change here reaches .git/hooks with
+# the next `mise install` in the main checkout, whose postinstall runs
+# `lefthook install`.
+assert_lefthook_installed: true
+
+# Every worktree shares one .git/hooks, and by default `lefthook run` rewrites
+# the hooks whenever the lefthook.yml it reads differs from the one they were
+# installed from, so a worktree on another commit would rewrite the hook every
+# other checkout runs. `mise install` in the main checkout installs them
+# instead, and is the step to repeat after a change here beyond the jobs, such
+# as a new hook or one of these settings. In a linked worktree it leaves them
+# alone, but `lefthook install` run by hand there still rewrites them from that
+# worktree's lefthook.yml, and so does a commit in a worktree whose lefthook.yml
+# lacks this key, or whose lefthook-local file turns it off. lefthook's config
+# files are protected paths, so Factory flags a branch that drops the key or
+# adds such a file, but only after that commit.
+no_auto_install: true
 
 # Formatting and the text-only gates, and nothing that needs a compiler.
 # Clippy belongs to bin/test and CI, not to every commit: clippy and test

@@ -1,0 +1,397 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The gate scripts that run git, run the ways git runs them - as a commit's
+# hook and as what git rebase -x runs, in a linked worktree and in the main
+# checkout - against a decoy repository they have to leave as they found it.
+#
+# In a linked worktree - where the factory's builders commit - git hands every
+# command it runs GIT_DIR, and a pre-commit hook GIT_INDEX_FILE as well, both
+# absolute paths into the worktree's repository. A script that runs git in
+# another repository with them acts on that one instead: git init reinitialises
+# it and writes core.bare = true into the config every worktree shares, which
+# locks the main checkout out of every command that needs a work tree while the
+# worktrees go on, and the add and commit after it land on the worktree's index
+# and branch. Nothing about that fails. bin/check-gates, run that way with a
+# change staged, reported every fixture green while it did all of that, and the
+# main checkout, where a human finally notices, is nowhere near the run that
+# broke it.
+#
+# In the main checkout git sets no GIT_DIR, but git commit -a hands the hook
+# GIT_INDEX_FILE=.git/index.lock, and git commit with paths
+# .git/next-index-<pid>.lock, each by its absolute path: the index the commit
+# is built from. A git add in another repository with it writes that
+# repository's files into the commit's index, and the commit then fails on an
+# object only the other repository holds, or takes along a file nobody staged.
+#
+# Which of them a script is handed depends on how git ran it, as commands that
+# printed their environment under git 2.55.0 showed. git rebase -x, like an
+# alias, hands what it runs GIT_DIR alone in a linked worktree, and neither
+# variable in the main checkout. Options given as git -c reach whatever git
+# runs, as GIT_CONFIG_PARAMETERS, which a commit made without them leaves
+# unset. So a script that clears git's variables only when one of them is set
+# keeps the others whenever that one is missing: keyed on GIT_INDEX_FILE, it
+# marks the worktree's repository bare under git rebase -x, and keyed on
+# GIT_DIR or GIT_INDEX_FILE, its commit runs the hooks that git -c ... rebase
+# -x names in the main checkout.
+#
+# So this builds a decoy - a repository holding a copy of this tree, with a
+# linked worktree, and a change staged in each checkout, as there is while a
+# commit runs its hook - and runs each script below four ways, so that each of
+# the three variables is the only one set in one of them. In the worktree it
+# runs with what git commit -a, given -c options, hands the hook there:
+# GIT_DIR, an index of the commit's own that only GIT_INDEX_FILE names, and the
+# options as GIT_CONFIG_PARAMETERS. In the main checkout it runs with what git
+# commit with paths, given no options, hands the hook there: the commit's index
+# by its absolute path, and nothing else. Then it runs as git rebase -x runs a
+# command: in the worktree with GIT_DIR alone, and in the main checkout with
+# the options alone. The options name a hooks path with a hook under every name
+# githooks(5) lists, each of which leaves its name. A script that fails, that
+# changes any file under the decoy's .git, or that runs git with those options
+# fails the gate, which names the files and what core.bare became, or the hooks
+# that ran.
+#
+# A script's commits in a repository of its own run no hook. Clearing git's
+# local environment cannot stop a hook the global config names, as
+# core.hooksPath or through an init.templateDir that puts hooks into every new
+# repository, and a global lefthook setup would run that repository's own
+# lefthook.yml there. So the scripts commit with -c core.hooksPath=/dev/null,
+# which stops the hooks a hooks directory holds, and with
+# hook.<event>.enabled=false for each event a commit runs, which stops those a
+# config defines by name, as hook.<name>.command: git 2.55.0 runs one of those
+# whatever core.hooksPath says. Everything here runs under a global config of
+# this gate's own, in place of the machine's, whose hooks fail any commit that
+# runs them, in the hooks directory it names and defined by name. --no-verify
+# is no way round it: it skips pre-commit and commit-msg, but a commit given it
+# still runs prepare-commit-msg, post-commit, reference-transaction and
+# post-index-change from the hooks directory the global config names, so
+# prepare-commit-msg fails the commit as pre-commit does. Its init.templateDir
+# puts both kinds, under complaints of their own, into every repository git
+# init makes, the scratches among them: the hooks into its hooks directory, and
+# those defined by name into its config. They stay there after the global
+# config is gone: a commit that reads no global config, given
+# GIT_CONFIG_GLOBAL=/dev/null in place of either setting, still runs them. A
+# commit that runs the hooks has to fail first, each way, or a script whose
+# commits pass would prove nothing.
+#
+# The list is the hook's script and every script that runs git in another
+# repository. bin/check-fast is what lefthook runs on every commit, beside cargo
+# fmt, which runs no git. It reads this repository with git ls-files and has to
+# keep the variables to do it, because a commit with -a, or of named paths,
+# hands the hook an index of its own that only GIT_INDEX_FILE names.
+# bin/check-gates fills a scratch repository and runs every fixture in it; the
+# hook does not run it, but bin/test does, and anything that runs bin/test
+# under git hands it some of the variables - git rebase -x in a linked
+# worktree hands it GIT_DIR. It runs one fixture here, one whose own mutate
+# runs git, so it makes every kind of git call it has and needs no build. This
+# gate is the third: bin/test runs it too, so git rebase -x hands it GIT_DIR as
+# well, and it builds its decoy with git. It runs a copy of itself, passed
+# nested, which builds a decoy of its own and stops once it has made every git
+# call this one makes, before it would run the scripts, so no copy runs a copy.
+# A script that comes to run git in another repository joins the list.
+echo "==> gate: worktree hook"
+
+if [[ ! -x bin/check-gates || ! -d tests/gates ]]; then
+  echo 'FAIL run this from the repository root, as bin/test does' >&2
+  exit 1
+fi
+
+# nested is passed only by this gate, to the copy of itself it runs below.
+if (($# > 1)) || [[ $# -eq 1 && $1 != nested ]]; then
+  echo "FAIL unknown arguments: $*; the one there is, nested, is passed only by this gate to the copy of itself it runs" >&2
+  exit 1
+fi
+nested=${1-}
+
+root=$(mktemp -d)
+trap 'rm -rf "$root"' EXIT
+
+# The tree as bin/check-gates copies it, read as that script reads it: with
+# whatever variables this one was handed, and without a repository nested in it.
+git ls-files -z --cached --others --exclude-standard | grep -zv '/$' |
+  tar --null --files-from - --create --file "$root/tree.tar"
+
+# Every git command below works in the decoy, so git's local environment goes
+# first, as githooks(5) says it must before running git in another repository.
+local_env=$(git rev-parse --local-env-vars)
+mapfile -t local_env <<<"$local_env"
+unset -v "${local_env[@]}"
+
+# A global config of this gate's own, in place of the machine's, whose hooks
+# fail any commit that runs them, each naming itself: pre-commit, and
+# prepare-commit-msg, which a commit runs even with --no-verify. Each is there
+# twice, in the hooks directory the config names and defined by name, which
+# /dev/null does not reach; the command a hook defined by name runs is given
+# the hook's arguments after it, which false ignores. Its init.templateDir
+# holds both kinds again, each under a complaint of its own: hooks, which git
+# init copies into the hooks directory of every repository it makes, and a
+# config defining the others, which it copies as that repository's config.
+# There a commit that reads no global config still finds them. Every script
+# below runs under it, and so does every git command here, which is why the
+# decoy's own commit looks for its hooks in /dev/null and turns off those
+# defined by name too. Options given as git -c outrank it.
+hooked='a commit ran the hook the global config names'
+defined='a commit ran a hook the global config defines'
+templated='a commit ran a hook git init copied from the global config'
+copied='a commit ran a hook git init copied into the repository config'
+mkdir -p "$root/hooks" "$root/template/hooks"
+for hook in pre-commit prepare-commit-msg; do
+  printf '#!/bin/sh\necho "%s: %s" >&2\nexit 1\n' "$hooked" "$hook" >"$root/hooks/$hook"
+  printf '#!/bin/sh\necho "%s: %s" >&2\nexit 1\n' "$templated" "$hook" >"$root/template/hooks/$hook"
+  chmod +x "$root/hooks/$hook" "$root/template/hooks/$hook"
+  git config --file "$root/gitconfig" "hook.gate-$hook.command" "echo '$defined: $hook' >&2; false"
+  git config --file "$root/gitconfig" "hook.gate-$hook.event" "$hook"
+  git config --file "$root/template/config" "hook.gate-template-$hook.command" "echo '$copied: $hook' >&2; false"
+  git config --file "$root/template/config" "hook.gate-template-$hook.event" "$hook"
+done
+git config --file "$root/gitconfig" core.hooksPath "$root/hooks"
+git config --file "$root/gitconfig" init.templateDir "$root/template"
+export GIT_CONFIG_GLOBAL=$root/gitconfig
+# The options that turn off the hooks defined by name for the two events this
+# gate's hooks are for, which its own commits below need. A script's commit
+# turns them off for every event it runs.
+named_off=(-c hook.pre-commit.enabled=false -c hook.prepare-commit-msg.enabled=false)
+
+decoy=$root/decoy
+worktree=$root/worktree
+mkdir "$decoy"
+tar --extract --file "$root/tree.tar" --directory "$decoy"
+git -C "$decoy" -c init.defaultBranch=main init -q
+# A commit runs git maintenance, which takes a lock under .git/objects before
+# it detaches and leaves the background process to drop it whenever that gets
+# to run: a snapshot taken meanwhile can name a file that is gone before it is
+# read, or one the snapshot after it lacks. With none in the decoy, all that
+# changes under its .git is what a script did.
+git -C "$decoy" config maintenance.auto false
+git -C "$decoy" add --all -- .
+git -C "$decoy" -c user.name=gates -c user.email=gates@invalid -c commit.gpgsign=false \
+  "${named_off[@]}" -c core.hooksPath=/dev/null commit -q -m decoy
+git -C "$decoy" worktree add -q -b task "$worktree"
+gitdir=$(git -C "$worktree" rev-parse --absolute-git-dir)
+
+# A linked worktree checked out inside each checkout, as a worktree made under a
+# checkout is: untracked there, listed as one directory, and holding a .git file
+# that names the decoy's repository, so a copy of it carries that file along.
+git -C "$decoy" worktree add -q --detach "$worktree/nested"
+git -C "$decoy" worktree add -q --detach "$decoy/nested-main"
+
+# bin/check-gates will not start without the QML modules the build registers.
+# The fixture it runs here reads none of them, so an empty directory does, and
+# target/ is ignored.
+mkdir -p "$worktree/target/cxxqt/qml_modules" "$decoy/target/cxxqt/qml_modules"
+
+# state: every file under the decoy's .git, with its checksum.
+state() {
+  (cd "$decoy/.git" && find . -type f -print0 | sort -z | xargs -0 sha256sum)
+}
+
+# The hook's index is the commit's own, a copy of the checkout's, as git commit
+# -a or with paths hands the hook one. The worktree's is not called index.lock,
+# as git's is, because that name would lock the worktree's own index; the main
+# checkout's is named as git commit with paths names its own, for pid 1, which
+# no git command has. Options given as git -c reach what git runs as
+# GIT_CONFIG_PARAMETERS, and here they name a hooks directory with a hook under
+# every name githooks(5) lists, each of which leaves its name in tripped. git
+# init runs reference-transaction there, add and status post-index-change, and
+# a commit pre-commit and more, so a script that runs git anywhere with them
+# shows, though its commits name a hooks directory of their own, which
+# outranks them.
+next_index=$decoy/.git/next-index-1.lock
+cp "$gitdir/index" "$gitdir/index-commit"
+cp "$decoy/.git/index" "$next_index"
+mkdir "$root/tripwire"
+for hook in applypatch-msg pre-applypatch post-applypatch pre-commit pre-merge-commit \
+  prepare-commit-msg commit-msg post-commit pre-rebase post-checkout post-merge pre-push \
+  pre-receive update proc-receive post-receive post-update reference-transaction \
+  push-to-checkout pre-auto-gc post-rewrite sendemail-validate fsmonitor-watchman \
+  p4-changelist p4-prepare-changelist p4-post-changelist p4-pre-submit post-index-change; do
+  printf '#!/bin/sh\necho %s >>"%s/tripped"\n' "$hook" "$root" >"$root/tripwire/$hook"
+  chmod +x "$root/tripwire/$hook"
+done
+options="'core.hookspath'='$root/tripwire'"
+
+# as_hook command...: runs the command in the worktree with what git commit -a,
+# given -c options, hands its pre-commit hook there, and keeps what it printed
+# in out.
+as_hook() {
+  out=$(cd "$worktree" && GIT_DIR=$gitdir GIT_INDEX_FILE=$gitdir/index-commit GIT_PREFIX='' \
+    GIT_CONFIG_PARAMETERS=$options "$@" 2>&1)
+}
+
+# as_main_hook command...: runs the command in the main checkout with what git
+# commit with paths, given no -c options, hands its pre-commit hook there: the
+# commit's index alone, since git sets no GIT_DIR there. It keeps what the
+# command printed in out.
+as_main_hook() {
+  out=$(cd "$decoy" && GIT_INDEX_FILE=$next_index GIT_PREFIX='' "$@" 2>&1)
+}
+
+# as_exec command...: runs the command in the worktree with what git rebase -x
+# hands what it runs there, as an alias does: GIT_DIR alone. It keeps what the
+# command printed in out.
+as_exec() {
+  out=$(cd "$worktree" && GIT_DIR=$gitdir GIT_PREFIX='' "$@" 2>&1)
+}
+
+# as_main_exec command...: runs the command in the main checkout with what git
+# -c ... rebase -x hands what it runs there: the options alone. It keeps what
+# the command printed in out.
+as_main_exec() {
+  out=$(cd "$decoy" && GIT_PREFIX='' GIT_CONFIG_PARAMETERS=$options "$@" 2>&1)
+}
+
+# The variables have to name the decoy, or a decoy left as it was proves
+# nothing: a commit made somewhere else entirely with the worktree's lands
+# there, and runs the hook their -c options name, and an add made in another
+# repository with the main checkout's writes the decoy's copy of the commit's
+# index, which then goes back to what it was. Both run before anything is
+# staged: committed here, the staged change would leave a script that commits
+# with the variables nothing to commit. The runs as git rebase -x runs a
+# command hand over the same GIT_DIR and the same options, so these hold for
+# them too. The commit turns off the hooks defined by name, the global
+# config's and those git init copied into the decoy's, which would fail it
+# whatever hooks path the options name.
+mkdir "$root/elsewhere"
+before=$(state)
+if ! as_hook git -C "$root/elsewhere" -c user.name=gates -c user.email=gates@invalid \
+  -c commit.gpgsign=false "${named_off[@]}" commit -q --allow-empty -m elsewhere; then
+  echo "FAIL a commit made with the worktree's hook variables failed, so they name no repository:" >&2
+  printf '%s\n' "$out" | sed 's/^/  | /' >&2
+  exit 1
+fi
+if [[ $(state) == "$before" || ! -e $root/tripped ]]; then
+  echo "FAIL a commit made with the worktree's hook variables left the decoy as it was, or ran none of their hooks, so this gate would prove nothing" >&2
+  exit 1
+fi
+rm "$root/tripped"
+git -C "$root/elsewhere" -c init.defaultBranch=main init -q
+# And a commit that runs the hooks fails, each kind, or a script whose commits
+# pass below would prove nothing: those in the global config's hooks
+# directory, those it defines by name, and, in a commit that reads no global
+# config, those git init copied from its template, into the hooks directory
+# and into the repository's config. Each commit turns off the other kinds
+# where it can, and has to fail with the complaint of the kind it is for.
+if out=$(git -C "$root/elsewhere" -c user.name=gates -c user.email=gates@invalid \
+  -c commit.gpgsign=false "${named_off[@]}" commit -q --allow-empty -m hooked 2>&1) ||
+  [[ $out != *"$hooked"* ]]; then
+  echo "FAIL a commit ran no hook the global config names, so a script's commit that runs one would go unseen" >&2
+  exit 1
+fi
+if out=$(git -C "$root/elsewhere" -c user.name=gates -c user.email=gates@invalid \
+  -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -q --allow-empty -m defined 2>&1) ||
+  [[ $out != *"$defined"* ]]; then
+  echo "FAIL a commit ran no hook the global config defines, so a script's commit that runs one would go unseen" >&2
+  exit 1
+fi
+if out=$(GIT_CONFIG_GLOBAL=/dev/null git -C "$root/elsewhere" -c user.name=gates \
+  -c user.email=gates@invalid -c commit.gpgsign=false "${named_off[@]}" commit -q --allow-empty -m templated 2>&1) ||
+  [[ $out != *"$templated"* ]]; then
+  echo "FAIL a commit that read no global config ran no hook git init copied from it, so a script's commit that runs one would go unseen" >&2
+  exit 1
+fi
+if out=$(GIT_CONFIG_GLOBAL=/dev/null git -C "$root/elsewhere" -c user.name=gates \
+  -c user.email=gates@invalid -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -q --allow-empty -m copied 2>&1) ||
+  [[ $out != *"$copied"* ]]; then
+  echo "FAIL a commit that read no global config ran no hook git init copied into the repository config, so a script's commit that runs one would go unseen" >&2
+  exit 1
+fi
+: >"$root/elsewhere/file"
+before=$(sha256sum <"$next_index")
+if ! as_main_hook git -C "$root/elsewhere" add file; then
+  echo "FAIL an add made with the main checkout's hook variables failed, so they name no index:" >&2
+  printf '%s\n' "$out" | sed 's/^/  | /' >&2
+  exit 1
+fi
+if [[ $(sha256sum <"$next_index") == "$before" ]]; then
+  echo "FAIL an add made with the main checkout's hook variables left the decoy's copy of the commit's index as it was, so this gate would prove nothing" >&2
+  exit 1
+fi
+cp "$decoy/.git/index" "$next_index"
+
+# stage checkout index: stages a change in the checkout, in its own index and
+# in index, the commit's, as there is while a commit runs its hook. Its own
+# index also lists a file the working tree no longer has, which the commit's
+# does not, as after an rm that commit -a stages: a script that reads this
+# repository without GIT_INDEX_FILE meets that entry, which bin/check-gates
+# cannot copy and bin/check-fast's colour gate calls unscanned.
+stage() {
+  local checkout=$1 index=$2
+  printf 'staged\n' >"$checkout/staged"
+  git -C "$checkout" add staged
+  GIT_INDEX_FILE=$index git -C "$checkout" add staged
+  printf 'import QtQuick\n\nItem {\n}\n' >"$checkout/plugin/Ghost.qml"
+  git -C "$checkout" add plugin/Ghost.qml
+  rm "$checkout/plugin/Ghost.qml"
+}
+stage "$worktree" "$gitdir/index-commit"
+stage "$decoy" "$next_index"
+
+# The copy of this gate that runs below has made every git call it has.
+if [[ -n $nested ]]; then
+  exit 0
+fi
+
+# check label command...: runs the command each way runs lists, in turn, and
+# ends the gate at the first run that changes the decoy or fails, because the
+# next one would meet a decoy that is no longer the one this gate built. One
+# FAIL line, with everything under it indented, as bin/check-gates expects of a
+# whole script.
+check() {
+  local label=$1 run where status before changed bare
+  shift
+  for run in "${runs[@]}"; do
+    case $run in
+      as_hook) where='as git runs the hook in a linked worktree' ;;
+      as_main_hook) where='as git runs the hook in the main checkout' ;;
+      as_exec) where='as git rebase -x runs it in a linked worktree' ;;
+      as_main_exec) where='as git -c ... rebase -x runs it in the main checkout' ;;
+    esac
+    status=0
+    before=$(state)
+    "$run" "$@" || status=$?
+    # The files whose line is in one state only, each named once, with those
+    # under objects/ counted rather than listed.
+    changed=$(comm -3 <(sort <<<"$before") <(state | sort) | awk '{ print substr($2, 3) }' | sort -u |
+      awk '/^objects\// { n++; next } { print "  " $0 } END { if (n) print "  " n " files under objects/" }')
+    if [[ -n $changed ]]; then
+      bare=$(git config --file "$decoy/.git/config" core.bare || echo unset)
+      printf "FAIL %s, run %s, changed the decoy's repository, where core.bare is now %s:\n%s\n" \
+        "$label" "$where" "$bare" "$changed" >&2
+      exit 1
+    fi
+    if [[ -e $root/tripped ]]; then
+      printf "FAIL %s, run %s, ran git with the -c options it was handed, whose hooks ran:\n" \
+        "$label" "$where" >&2
+      sort -u "$root/tripped" | sed 's/^/  /' >&2
+      exit 1
+    fi
+    if ((status != 0)); then
+      printf 'FAIL %s, run %s, exited %d:\n' "$label" "$where" "$status" >&2
+      printf '%s\n' "$out" | sed 's/^/  | /' >&2
+      exit 1
+    fi
+  done
+  printf '    %s left the decoy as it found it, run %s\n' "$label" "$run_as"
+}
+
+# As a commit runs its hook, with each checkout's own index listing a file the
+# working tree lacks, which only the commit's index leaves out.
+runs=(as_hook as_main_hook)
+run_as='as git runs the hook, in a linked worktree and in the main checkout'
+check bin/check-fast ./bin/check-fast
+check bin/check-gates ./bin/check-gates theme-colour-unreadable
+check bin/check-worktree-hook ./bin/check-worktree-hook nested
+
+# As git rebase -x runs a command. It names no index, and runs the command
+# between picks, when the checkout's own index matches its working tree, so
+# each checkout's own index becomes a copy of its commit's: still a change
+# staged, so that a script committing with GIT_DIR has something to commit, and
+# no file the working tree lacks. These are copies, not git calls, so the copy
+# of this gate has still made every git call this one makes.
+cp "$gitdir/index-commit" "$gitdir/index"
+cp "$next_index" "$decoy/.git/index"
+runs=(as_exec as_main_exec)
+run_as='as git rebase -x runs it, in a linked worktree and, given -c options, in the main checkout'
+check bin/check-fast ./bin/check-fast
+check bin/check-gates ./bin/check-gates theme-colour-unreadable
+check bin/check-worktree-hook ./bin/check-worktree-hook nested

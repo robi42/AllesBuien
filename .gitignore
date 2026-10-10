@@ -15,3 +15,13 @@
 # picks up a run's artefacts.
 /.factory/run/
 .beads/interactions.jsonl
+
+# mise's and lefthook's config files are protected paths, and a global ignore
+# must not hide a local one, such as mise.local.toml or lefthook-local.yml:
+# mise or lefthook would read it in Factory's worktree, where an ignored file is
+# in no diff and in no status, so Factory would never see it.
+!mise*.toml
+!.mise*.toml
+!.tool-versions
+!lefthook*
+!.lefthook*

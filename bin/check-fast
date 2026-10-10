@@ -221,6 +221,17 @@ lockstep=$(awk '
 ' Cargo.lock)
 [[ -z "$lockstep" ]] || report 'cxx and cxx-gen must share a patch number (cxx embeds it in every bridge symbol):' "$lockstep"
 
+# lefthook pin. lefthook.yml's min_version is the lefthook mise.toml pins, and
+# each guards the other: lower, and an older lefthook first on PATH runs the
+# hook again; higher, and the pinned one refuses every commit. A bump that moves
+# one and not the other is refused here, on the commit that makes it.
+echo "==> gate: lefthook pin"
+pinned_lefthook=$(sed -n 's/^lefthook = "\(.*\)"$/\1/p' mise.toml)
+min_lefthook=$(sed -n 's/^min_version: "\(.*\)"$/\1/p' lefthook.yml)
+[[ -n $pinned_lefthook && $pinned_lefthook == "$min_lefthook" ]] ||
+  report "lefthook.yml's min_version is not the lefthook mise.toml pins:" \
+    "  lefthook.yml: ${min_lefthook:-none}, mise.toml: ${pinned_lefthook:-none}"
+
 # Release version. Nine files carry the version - five Cargo.toml manifests,
 # the five workspace entries in Cargo.lock, pkgver= in the PKGBUILD, the Omarchy
 # manifest, and the package filename the README tells people to download - and
@@ -572,7 +583,7 @@ declared_gates=$(awk '
     sub(/".*$/, "")
     print
   }
-' bin/test bin/check-fast bin/check-qml-contract | sort -u)
+' bin/test bin/check-fast bin/check-qml-contract bin/check-worktree-hook | sort -u)
 covered_gates=$(awk '
   index($0, "gate=\"") == 1 {
     sub(/^gate="/, "")

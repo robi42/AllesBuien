@@ -21,7 +21,7 @@ A fixture is sourced by the runner and declares five things:
 | name | meaning |
 |------|---------|
 | `gate` | the gate's name, exactly as its script echoes it — the runner refuses a fixture naming a gate that no longer exists |
-| `script` | `bin/check-fast`, `bin/check-qml-contract`, or `bin/test` |
+| `script` | `bin/check-fast`, `bin/check-qml-contract`, `bin/check-worktree-hook`, or `bin/test` |
 | `outcome` | `red` if the gate must refuse this input, `green` if it must tolerate it |
 | `expect` | substrings the failure output must contain; a `red` fixture without one is rejected |
 | `mutate` | a function run with the scratch copy as its working directory |
@@ -69,6 +69,111 @@ exit. A killed run leaves `git status` clean and no worktree to prune. Signing
 is disabled for the throwaway commit, so the suite never queues behind the SSH
 agent.
 
+Nothing here touches the repository either. In a linked worktree, which is
+where the factory's builders commit, git hands every command it runs there
+`GIT_DIR`, and a pre-commit hook `GIT_INDEX_FILE` as well, both naming the
+worktree's repository; `git rebase -x bin/test` hands this runner `GIT_DIR`
+alone, which is enough. A git command run in the scratch with them acts on that
+repository instead: `git init` writes `core.bare = true` into the config every
+worktree shares, which locks the main checkout out of every command that needs
+a work tree, and the scratch's commits land on the worktree's branch. The main
+checkout is no exception: git sets no `GIT_DIR` there, but a commit with `-a` or
+of named paths hands its hook an absolute `GIT_INDEX_FILE`, and the scratch's
+`git add` would write the scratch's files into the commit's own index. The
+commit then fails on an object only the scratch holds or, when the repository
+already holds every object it names, goes through with what the scratch
+staged: a commit of `README.md` whose hook ran this runner on
+`omarchy-plugin-entry-point-missing` deleted `plugin/BarWidget.qml` as well.
+Options given as `git -c` reach whatever git runs, as `GIT_CONFIG_PARAMETERS`,
+and git in the scratch would run with them. Which of the three a run hands
+over depends on how git ran it: `git rebase -x` hands `GIT_DIR` alone in a
+linked worktree and only the `-c` options in the main checkout, and a commit
+made without `-c` options leaves `GIT_CONFIG_PARAMETERS` unset. So the runner
+reads the tree with those variables, since a commit with `-a` or of named paths
+hands its hook an index only `GIT_INDEX_FILE` names, and then clears git's
+local environment, whichever of them is set, as githooks(5) says to before
+running git in another repository; the fixtures and gates run in the scratch
+inherit that. The scratch's commit runs no hook: clearing git's local
+environment cannot stop one the global config names, and a global lefthook
+setup would run the scratch's own `lefthook.yml` there on every run. It looks
+for its hooks in `/dev/null`, given as `-c core.hooksPath=/dev/null`, where
+there are none, in place of a hooks directory: the one a `core.hooksPath` in
+the global config names, or the scratch's own, where an `init.templateDir`
+there puts hooks at `git init`. That does not reach a hook a config defines by
+name, as `hook.<name>.command`, which git 2.55.0 runs for each event its
+`hook.<name>.event` lists whatever `core.hooksPath` says: one the global config
+defines, or one in the scratch's own config, into which `git init` copies the
+`config` an `init.templateDir` holds. So the commit also sets
+`hook.<event>.enabled=false` for each event it runs: `pre-commit`,
+`prepare-commit-msg`, `commit-msg`, `post-commit`, `reference-transaction` and
+`post-index-change`. That setting leaves a hooks directory's hooks running, so
+the commit needs both.
+The copy also leaves out what git lists as a whole directory: a repository of
+its own, such as a linked worktree checked out under this one, whose `.git` file
+names this repository, so the scratch's `git status` would enter it and rewrite
+its index.
+
+`bin/check-worktree-hook`, the `worktree hook` gate, keeps it so. It builds a
+decoy repository from a copy of the tree, with a linked worktree, and in each
+checkout a change staged and another linked worktree checked out inside it. It
+runs the hook's `bin/check-fast`, this runner, on one fixture whose `mutate`
+runs git, and itself four ways, so that each of the three variables is the
+only one set in one of them. First as a commit runs its hook: in the worktree
+with what `git commit -a`, given `-c` options, hands it there — `GIT_DIR`, an
+index of the commit's own that only `GIT_INDEX_FILE` names, and the options as
+`GIT_CONFIG_PARAMETERS` — and in the main checkout with what `git commit` with
+paths, given none, hands it there — the commit's index by its absolute path,
+`.git/next-index-1.lock`, and nothing else. Each checkout's own index lists a
+file the working tree no longer has, so a script that reads it instead of the
+commit's fails on that file. Then as `git rebase -x` runs a command, once each
+checkout's own index has become a copy of its commit's: in the worktree with
+`GIT_DIR` alone, and in the main checkout with the options alone. Clearing the
+variables only when one of them is set, or either of two, meets a run that
+hands over the others alone. The options name a hooks path with a hook under
+every name githooks(5) lists: `git init` runs `reference-transaction` there, and
+`git add` and `git status` `post-index-change`, so a script that runs git with
+them leaves a mark, though its commits look for their hooks in `/dev/null`,
+which outranks the options. A script that fails, changes any file under the
+decoy's `.git`, or runs git with those options fails the gate, which names the
+files and what `core.bare` became, or the hooks that ran. Everything runs under
+a global config of the gate's own, in place of the machine's, whose pre-commit
+and prepare-commit-msg hooks fail any commit that runs them. Each is there
+twice, in the hooks directory the config names and defined by name, so a
+script whose commit runs the hooks the global config names fails too, and so
+does one that skips them with `--no-verify` instead of naming `/dev/null`: that
+skips `pre-commit` and `commit-msg`, but not `prepare-commit-msg`,
+`post-commit`, `reference-transaction` or `post-index-change`. So does one that
+names `/dev/null` and leaves the hooks defined by name on for either event. Its
+`init.templateDir` puts both kinds into every repository `git init` makes, the
+hooks into its hooks directory and those defined by name into its config, so
+one whose commit reads no global config, given `GIT_CONFIG_GLOBAL=/dev/null`
+instead of either setting, still runs them and fails. A commit made elsewhere
+with the worktree's hook variables has to change the decoy and run the hooks
+the options name, commits made elsewhere without them have to fail on each kind
+of hook the global config has, and so do commits that read no global config,
+on each kind `git init` copied, and an add made elsewhere with the main
+checkout's has to change the decoy's copy of the commit's index, before any
+script runs, or an untouched decoy, or a commit that passes, would prove
+nothing; the runs as `git rebase -x` runs a command hand over the same
+`GIT_DIR` and the same options. The gate runs itself because `bin/test` runs
+it, under whatever variables `bin/test` was handed, and it builds the decoy
+with git: the copy, passed `nested`, builds a decoy of its own, makes every git
+call the gate makes, and stops before it would run the scripts. Its seventeen
+fixtures put a defect into each script in turn: the runner without the line
+that clears the variables; clearing them only when `GIT_DIR` is set, only when
+`GIT_INDEX_FILE` is, only when either of those two is, or only when `GIT_DIR`
+or `GIT_CONFIG_PARAMETERS` is; clearing them before it reads this repository,
+keeping the `-c` options, or copying the nested worktree; committing with the
+hooks the global config names, skipping them with `--no-verify`, or reading no
+global config instead, which leaves the hooks `git init` copied from it;
+committing with the hooks the global config defines by name, turning them off
+for `pre-commit` alone, or reading no global config instead, which leaves
+those defined in the config `git init` copied; `bin/check-fast` reading this
+repository without the variables, or running `git init` in a scratch directory
+of its own; and the gate itself without the line that clears them.
+The last of the four keyed ones goes red only while the gate runs the main
+checkout's hook without `-c` options, so it holds the gate to that.
+
 Gates are run, never reimplemented. `bin/check-fast` and
 `bin/check-qml-contract` are whole scripts and run as themselves; a gate that
 lives inside `bin/test` is sliced out of that file by name and executed as
@@ -77,7 +182,7 @@ commands would keep passing long after the real gate changed underneath it.
 
 ## Coverage
 
-Twenty-one of the twenty-five gates are covered. The four that are not all need a
+Twenty-three of the twenty-seven gates are covered. The four that are not all need a
 compiled workspace, and a cold CXX-Qt build on this host is over twenty minutes:
 
 | gate | why it is out of scope |
@@ -121,6 +226,11 @@ shipped a filename nobody can download. A surface that yields no version is
 reported as `none`, so deleting a `pkgver=` line is refused rather than skipped.
 Its two fixtures move `pkgver=` and the manifest's version, two of the three
 surfaces no Cargo command ever rewrites.
+
+`lefthook pin` holds `lefthook.yml`'s `min_version` to the lefthook
+`mise.toml` pins. Lower, and an older lefthook first on PATH runs the hook
+again; higher, and the pinned one refuses every commit. Its fixture moves the
+pin and leaves `min_version` behind.
 
 `omarchy plugin` is the part of `omarchy-plugin-validate` that tracked text can
 answer: no symlink anywhere in the tree, a tracked `manifest.json` at
@@ -173,8 +283,8 @@ would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
 it, on the commit that would introduce the unproven gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-forty-five it runs, each of which fails loudly if its gate stops biting. One
-of those forty-five aims at the runner rather than at a gate: the slicer
+sixty-four it runs, each of which fails loudly if its gate stops biting. One
+of those sixty-four aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That
