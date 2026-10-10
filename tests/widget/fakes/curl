@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fake curl for tests/widget/run.sh. FAKE_CURL=ok writes FAKE_DOWNLOAD to the
+# --output path; FAKE_CURL=fail exits 22 as curl --fail does on an HTTP error.
+
+{
+  printf '%s' "${0##*/}"
+  printf ' [%s]' "$@"
+  printf '\n'
+} >>"$FAKE_LOG"
+
+output=
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  if [[ ${args[i]} == --output ]]; then
+    output=${args[i + 1]-}
+  fi
+done
+if [[ -z $output ]]; then
+  printf 'fake curl: no --output path\n' >&2
+  exit 2
+fi
+if [[ $FAKE_CURL == fail ]]; then
+  printf 'curl: (22) The requested URL returned error: 404\n' >&2
+  exit 22
+fi
+printf '%s' "$FAKE_DOWNLOAD" >"$output"

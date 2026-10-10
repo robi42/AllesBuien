@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fake omarchy-launch-or-focus for tests/widget/run.sh: the log line is the
+# launch.
+
+{
+  printf '%s' "${0##*/}"
+  printf ' [%s]' "$@"
+  printf '\n'
+} >>"$FAKE_LOG"

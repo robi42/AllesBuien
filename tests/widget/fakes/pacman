@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fake pacman for tests/widget/run.sh. FAKE_PACKAGE is `absent`, or the
+# version `pacman -Q allesbuien` prints; FAKE_PACKAGE_FILES is what
+# `pacman -Qlq allesbuien` lists; FAKE_PACMAN_U is `ok`, or `declined` for an
+# answered-no prompt. `-U` refuses a path that is not a file, as pacman does.
+
+{
+  printf '%s' "${0##*/}"
+  printf ' [%s]' "$@"
+  printf '\n'
+} >>"$FAKE_LOG"
+
+not_found() {
+  printf "error: package '%s' was not found\n" "$1" >&2
+  exit 1
+}
+
+case "${1-} ${2-}" in
+  "-Q allesbuien")
+    if [[ $FAKE_PACKAGE == absent ]]; then
+      not_found allesbuien
+    fi
+    printf 'allesbuien %s\n' "$FAKE_PACKAGE"
+    ;;
+  "-Qlq allesbuien")
+    if [[ $FAKE_PACKAGE == absent ]]; then
+      not_found allesbuien
+    fi
+    printf '/usr/\n/usr/bin/\n%s\n' "$FAKE_PACKAGE_FILES"
+    ;;
+  "-U "*)
+    if [[ $# -ne 2 || ! -f $2 ]]; then
+      printf "error: '%s': cannot open package file\n" "${2-}" >&2
+      exit 1
+    fi
+    if [[ $FAKE_PACMAN_U == declined ]]; then
+      printf ':: Proceed with installation? [Y/n] n\n'
+      exit 1
+    fi
+    printf '(1/1) installing allesbuien\n'
+    ;;
+  *)
+    printf 'fake pacman: unexpected arguments: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fake pgrep for tests/widget/run.sh: FAKE_RUNNING=1 is a running app.
+
+{
+  printf '%s' "${0##*/}"
+  printf ' [%s]' "$@"
+  printf '\n'
+} >>"$FAKE_LOG"
+
+if [[ $FAKE_RUNNING == 1 ]]; then
+  printf '4242\n'
+  exit 0
+fi
+exit 1

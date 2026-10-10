@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fake sudo for tests/widget/run.sh: logs, then runs the command as it is, so
+# the fake pacman behind it is what answers.
+
+{
+  printf '%s' "${0##*/}"
+  printf ' [%s]' "$@"
+  printf '\n'
+} >>"$FAKE_LOG"
+
+exec "$@"

@@ -1,0 +1,13 @@
+[package]
+name = "allesbuien-widget-tests"
+# No version of its own: this crate ships nothing and is not a release surface,
+# so it carries Cargo's default rather than one more number to bump.
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lints]
+workspace = true
+
+# Deliberately dependency-free: the proof it runs is shell, and the two tests
+# only start bash and shellcheck and report what they say.
