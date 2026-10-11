@@ -27,7 +27,7 @@ not_found() {
 case "${1-} ${2-}" in
   "-Q allesbuien")
     if [[ -f $FAKE_STATE/query-fails ]]; then
-      printf 'error: failed to init transaction (unable to lock database)\n' >&2
+      printf 'fake pacman: -Q made to fail\n' >&2
       exit 1
     fi
     if [[ $package == absent ]]; then

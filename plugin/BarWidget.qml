@@ -22,13 +22,12 @@ BarWidget {
   //
   // The answer is widget.sh probe's exit code, and the contract is stated once,
   // there: 0 launch or focus; 10 absent with a release pinned, so a click
-  // installs it; 11 absent with nothing usable pinned, so a click says where to
-  // read about installing by hand; 12 ours and older than the pin, so a click
-  // updates. Any other code is the script failing, and looks and clicks like
-  // 11: the click opens a terminal where the failure can be read. It is not
-  // taken for absence, though, because it says nothing about whether the app
-  // is there: a probe fails while another pacman transaction holds the
-  // database, on a machine where the app is installed.
+  // installs it; 11 absent with nothing it can install, so a click says why
+  // and where to read about installing by hand; 12 ours and older than the pin,
+  // so a click updates. Any other code is the script failing, and looks and
+  // clicks like 11: the click opens a terminal where the failure can be read.
+  // It is not taken for absence, though, because it says nothing about whether
+  // the app is there: a probe whose pacman query failed has not found out.
   property bool known: false
   property int probeStatus: 0
   property bool pendingClick: false

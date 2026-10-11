@@ -7,8 +7,7 @@ set -euo pipefail
 # FAKE_PACKAGE_AFTER_DOWNLOAD is the allesbuien version the fake pacman reports
 # from then on, FAKE_APP_AFTER_DOWNLOAD a path at which an allesbuien appears,
 # as another click or another installer would leave them, and
-# FAKE_QUERY_FAILS_AFTER_DOWNLOAD=1 makes `pacman -Q` fail from then on, as it
-# does while another pacman transaction holds the database.
+# FAKE_QUERY_FAILS_AFTER_DOWNLOAD=1 makes `pacman -Q` fail from then on.
 
 {
   printf '%s' "${0##*/}"
@@ -36,7 +35,7 @@ if [[ -n ${FAKE_PACKAGE_AFTER_DOWNLOAD-} ]]; then
   printf '%s\n' "$FAKE_PACKAGE_AFTER_DOWNLOAD" >"$FAKE_STATE/package"
 fi
 if [[ ${FAKE_QUERY_FAILS_AFTER_DOWNLOAD-} == 1 ]]; then
-  printf 'locked\n' >"$FAKE_STATE/query-fails"
+  printf 'fail\n' >"$FAKE_STATE/query-fails"
 fi
 if [[ -n ${FAKE_APP_AFTER_DOWNLOAD-} ]]; then
   printf '#!/usr/bin/env bash\n' >"$FAKE_APP_AFTER_DOWNLOAD"

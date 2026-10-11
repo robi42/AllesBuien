@@ -343,7 +343,7 @@ expect_status 1
 expect_calls "$curl_call"
 expect_no_call "sha256sum"
 expect_no_call "sudo"
-expect_no_call "pacman"
+expect_no_call "pacman [-U]"
 expect_no_call "omarchy-launch-or-focus"
 expect_output "Could not download $asset"
 expect_output "README#install"
@@ -356,7 +356,7 @@ run install
 expect_status 1
 expect_calls "$check_call" "sha256sum-verdict $asset FAILED"
 expect_no_call "sudo"
-expect_no_call "pacman"
+expect_no_call "pacman [-U]"
 expect_no_call "omarchy-launch-or-focus"
 expect_output "does not match release.sha256"
 expect_output "README#install"
@@ -501,16 +501,16 @@ finish
 begin probe-query-fails
 pin 0.2.0-1
 ours 0.1.0-1
-printf 'locked\n' >"$case_dir/state/query-fails"
+printf 'fail\n' >"$case_dir/state/query-fails"
 run probe
 expect_status 1
-expect_output "unable to lock database"
+expect_output "fake pacman: -Q made to fail"
 finish
 
 begin install-query-fails
 pin 0.2.0-1
 ours 0.1.0-1
-printf 'locked\n' >"$case_dir/state/query-fails"
+printf 'fail\n' >"$case_dir/state/query-fails"
 run install
 expect_status 1
 expect_no_call "curl"
@@ -518,7 +518,7 @@ expect_no_call "pacman [-U]"
 expect_output "Could not read which AllesBuien is installed, so nothing was installed"
 finish
 
-# Another pacman transaction holds the database once the download is done.
+# pacman -Q fails once the download is done.
 begin update-query-fails-after-download
 pin 0.2.0-1
 ours 0.1.0-1
@@ -529,6 +529,29 @@ expect_no_call "sha256sum"
 expect_no_call "pacman [-U]"
 expect_calls "$launch_call"
 expect_output "Could not read which AllesBuien is installed, so nothing was installed"
+finish
+
+# pacman records an allesbuien package, but no allesbuien is on PATH: its
+# binary was deleted, or is kept off PATH. Installing the pin over it could
+# downgrade it, and nothing says whose it is, so the click installs nothing.
+
+begin probe-package-without-binary
+pin 0.2.0-1
+set_env FAKE_PACKAGE=0.3.0-1
+run probe
+expect_status 11
+finish
+
+begin install-package-without-binary
+pin 0.2.0-1
+set_env FAKE_PACKAGE=0.3.0-1
+run install
+expect_status 1
+expect_no_call "curl"
+expect_no_call "pacman [-U]"
+expect_no_call "omarchy-launch-or-focus"
+expect_output "pacman records the allesbuien package, version 0.3.0-1, but no allesbuien command is on PATH"
+expect_output "README#install"
 finish
 
 # The pin itself. plugin/release.sha256 is what every widget installs from, so

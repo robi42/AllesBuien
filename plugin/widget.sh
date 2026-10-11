@@ -12,8 +12,10 @@ set -euo pipefail
 #                         0   launch or focus: installed and current, installed
 #                             but not ours to update, or installed with no pin
 #                         10  absent, and a release is pinned: a click installs
-#                         11  absent, and nothing usable is pinned: a click says
-#                             where to read about installing by hand
+#                         11  absent, and nothing this widget can install: no
+#                             usable pin, or an allesbuien package that pacman
+#                             records with no allesbuien on PATH; a click says
+#                             why, and where to read about installing by hand
 #                         12  ours and older than the pin: a click updates
 #                       Any other code is this script failing; the widget
 #                       treats it as 11, so the next click opens a terminal
@@ -46,6 +48,7 @@ pin_asset=
 pin_version=
 pin_problem=
 installed_version=
+stray_package=
 decision=
 tmp=
 
@@ -101,17 +104,26 @@ owned_by_us() {
 # Sets decision to one of the probe's exit codes, and installed_version when
 # the binary is ours. Only an installed version older than the pin by vercmp,
 # pkgrel included, is an update; equal or newer is left as it is, so a click
-# never downgrades. Fails, leaving decision as it was, when the installed
-# version cannot be read - pacman -Q fails while another transaction holds its
-# database - because an unknown version must never count as an older one:
-# vercmp ranks an empty version below every other. Each step checks its own
-# failure rather than leaving it to set -e, which bash suspends when decide
-# runs inside a condition, as it does once a download is done.
+# never downgrades. Fails, leaving decision as it was, when pacman cannot
+# report the installed version, because an unknown version must never count as
+# an older one: vercmp ranks an empty version below every other. Each step
+# checks its own failure rather than leaving it to set -e, which bash suspends
+# when decide runs inside a condition, as it does once a download is done.
+#
+# No allesbuien on PATH is a fresh install only if pacman records no
+# allesbuien package either. A package whose binary is gone - deleted by hand,
+# or kept off PATH - may be newer than the pin, so installing the pin over it
+# could downgrade it, and nothing on PATH says whose it is: stray_package holds
+# its version, and the click installs nothing and says why.
 decide() {
   local binary line order
   installed_version=
+  stray_package=
   if ! binary=$(command -v allesbuien); then
-    if read_pin; then
+    if line=$(pacman -Q allesbuien 2>/dev/null); then
+      stray_package=${line#allesbuien }
+      decision=11
+    elif read_pin; then
       decision=10
     else
       decision=11
@@ -170,7 +182,13 @@ no_pin_message() {
 
 unreadable_message() {
   printf 'Could not read which AllesBuien is installed, so nothing was installed.\n'
-  printf 'Try the click again once any other package installation has finished.\n'
+  printf "pacman's own message above says why.\n"
+}
+
+stray_package_message() {
+  printf 'pacman records the allesbuien package, version %s, but no allesbuien command is on PATH,\n' "$stray_package"
+  printf 'so this click cannot tell what it would replace and installs nothing.\n'
+  printf 'Reinstall or remove that package by hand, as README#install describes: %s\n' "$readme_install"
 }
 
 # Downloads the pinned asset into a private temp dir. Fails, having said why,
@@ -249,7 +267,11 @@ install_verb() {
       return 0
       ;;
     11)
-      no_pin_message
+      if [[ -n $stray_package ]]; then
+        stray_package_message
+      else
+        no_pin_message
+      fi
       return 1
       ;;
     10)
