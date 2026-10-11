@@ -42,8 +42,12 @@ case "${1-} ${2-}" in
     printf '/usr/\n/usr/bin/\n%s\n' "$FAKE_PACKAGE_FILES"
     ;;
   "-U "*)
-    if [[ $# -ne 2 || ! -f $2 ]]; then
-      printf "error: '%s': cannot open package file\n" "${2-}" >&2
+    if [[ $# -ne 3 || $2 != --needed ]]; then
+      printf 'fake pacman: expected -U --needed <file>, got: %s\n' "$*" >&2
+      exit 2
+    fi
+    if [[ ! -f $3 ]]; then
+      printf "error: '%s': cannot open package file\n" "$3" >&2
       exit 1
     fi
     if [[ $FAKE_PACMAN_U == declined ]]; then

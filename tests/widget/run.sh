@@ -185,8 +185,8 @@ pacman_only_after_a_passing_check() {
       "sha256sum-verdict "*" OK")
         verified+="${line#sha256sum-verdict } "
         ;;
-      "pacman [-U] ["*)
-        path=${line#"pacman [-U] ["}
+      "pacman [-U] "*)
+        path=${line##*[}
         path=${path%]}
         if [[ $verified != *" ${path##*/} OK "* ]]; then
           note "pacman -U got ${path##*/} without a passing sha256sum check before it"
@@ -223,8 +223,9 @@ finish() {
 readonly launch_call="omarchy-launch-or-focus [^allesbuien\$] [uwsm-app -- allesbuien]"
 readonly curl_call="curl [--fail] [--silent] [--show-error] [--location] [--proto] [=https] [--proto-redir] [=https] [--tlsv1.2] [--output] [<tmp>/$asset] [$url]"
 readonly check_call="sha256sum [--check] [--strict] [<case>/plugin/release.sha256]"
-readonly sudo_call="sudo [pacman] [-U] [<tmp>/$asset]"
-readonly pacman_call="pacman [-U] [<tmp>/$asset]"
+readonly auth_call="sudo [-v]"
+readonly sudo_call="sudo [pacman] [-U] [--needed] [<tmp>/$asset]"
+readonly pacman_call="pacman [-U] [--needed] [<tmp>/$asset]"
 
 # The probe: one exit code per state.
 
@@ -332,7 +333,7 @@ begin install-happy
 pin 0.2.0-1
 run install
 expect_status 0
-expect_calls "$curl_call" "$check_call" "sha256sum-verdict $asset OK" "$sudo_call" "$pacman_call" "$launch_call"
+expect_calls "$curl_call" "$check_call" "sha256sum-verdict $asset OK" "$auth_call" "$sudo_call" "$pacman_call" "$launch_call"
 finish
 
 begin install-download-failure
@@ -462,7 +463,7 @@ run install
 expect_status 1
 expect_no_call "pacman [-U]"
 expect_calls "$launch_call"
-expect_output "AllesBuien changed while the package downloaded, so nothing was installed"
+expect_output "AllesBuien changed since this click began, so nothing was installed"
 finish
 
 # A second click's update finishes first: this one would reinstall it.
@@ -474,7 +475,7 @@ run install
 expect_status 1
 expect_no_call "pacman [-U]"
 expect_calls "$launch_call"
-expect_output "changed while the package downloaded"
+expect_output "changed since this click began"
 finish
 
 # A second click's install finishes first, on a machine that had no AllesBuien
@@ -490,7 +491,43 @@ run install
 expect_status 1
 expect_no_call "pacman [-U]"
 expect_calls "$launch_call"
-expect_output "changed while the package downloaded"
+expect_output "changed since this click began"
+finish
+
+# An install lands while sudo's password prompt waits, which can be as long as
+# the person likes: the last decision comes after the prompt, so it sees it.
+begin update-overtaken-during-password-prompt
+pin 0.2.0-1
+ours 0.1.0-1
+set_env FAKE_PACKAGE_AFTER_AUTH=0.3.0-1
+run install
+expect_status 1
+expect_calls "$auth_call"
+expect_no_call "pacman [-U]"
+expect_calls "$launch_call"
+expect_output "AllesBuien changed since this click began, so nothing was installed"
+finish
+
+# sudo is not satisfied: nothing is installed, and an installed app still opens.
+begin install-sudo-declined
+pin 0.2.0-1
+set_env FAKE_SUDO_V=declined
+run install
+expect_status 1
+expect_no_call "pacman [-U]"
+expect_no_call "omarchy-launch-or-focus"
+expect_output "sudo did not authorise pacman, so nothing was installed"
+finish
+
+begin update-sudo-declined
+pin 0.2.0-1
+ours 0.1.0-1
+set_env FAKE_SUDO_V=declined
+run install
+expect_status 1
+expect_no_call "pacman [-U]"
+expect_calls "$launch_call"
+expect_output "sudo did not authorise pacman"
 finish
 
 # The installed version cannot be read. An unknown version is never older than
@@ -525,7 +562,6 @@ ours 0.1.0-1
 set_env FAKE_QUERY_FAILS_AFTER_DOWNLOAD=1
 run install
 expect_status 1
-expect_no_call "sha256sum"
 expect_no_call "pacman [-U]"
 expect_calls "$launch_call"
 expect_output "Could not read which AllesBuien is installed, so nothing was installed"

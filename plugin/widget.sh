@@ -44,6 +44,7 @@ readonly self
 readonly pin_file=${self%/*}/release.sha256
 
 # Filled by read_pin and decide.
+pin_digest=
 pin_asset=
 pin_version=
 pin_problem=
@@ -52,13 +53,14 @@ stray_package=
 decision=
 tmp=
 
-# Sets pin_asset and pin_version from a usable pin and succeeds; fails when
+# Sets pin_digest, pin_asset and pin_version from a usable pin and succeeds; fails when
 # there is none. A pin that exists but cannot be read, or does not have the one
 # line's shape, is no pin at all - installing what a malformed line seems to
 # name would be guessing - and pin_problem says which, for the person reading
 # the terminal and on stderr for whoever reads the probe's.
 read_pin() {
   local contents pattern
+  pin_digest=
   pin_asset=
   pin_version=
   pin_problem=
@@ -68,10 +70,11 @@ read_pin() {
   if [[ ! -f $pin_file || ! -r $pin_file ]] || ! contents=$(<"$pin_file"); then
     pin_problem="$pin_file cannot be read"
   else
-    pattern='^[0-9a-f]{64}  (allesbuien-([^-]+-[0-9]+)-x86_64\.pkg\.tar\.zst)$'
+    pattern='^([0-9a-f]{64})  (allesbuien-([^-]+-[0-9]+)-x86_64\.pkg\.tar\.zst)$'
     if [[ $contents != *$'\n'* && $contents =~ $pattern ]]; then
-      pin_asset=${BASH_REMATCH[1]}
-      pin_version=${BASH_REMATCH[2]}
+      pin_digest=${BASH_REMATCH[1]}
+      pin_asset=${BASH_REMATCH[2]}
+      pin_version=${BASH_REMATCH[3]}
       return 0
     fi
     pin_problem="$pin_file is not one sha256sum line naming an allesbuien package: ${contents%%$'\n'*}"
@@ -208,26 +211,6 @@ download_pinned() {
   fi
 }
 
-# The download takes seconds, and meanwhile a second click, another installer,
-# or a plugin update can change what is installed or what is pinned: a click
-# acting on the answer it started with could then reinstall the pinned release
-# over itself, or downgrade an install that has moved past the pin. So the
-# decision is taken again once the file is here, and pacman gets it only if the
-# answer still holds, for the same pinned asset. Fails, having said so,
-# otherwise.
-still_wanted() {
-  local before=$decision asset=$pin_asset
-  if ! decide; then
-    unreadable_message
-    return 1
-  fi
-  if [[ $decision == "$before" && $pin_asset == "$asset" ]]; then
-    return 0
-  fi
-  printf 'AllesBuien changed while the package downloaded, so nothing was installed.\n'
-  return 1
-}
-
 # Checks the download against the pin. Fails, having said why, before anything
 # reaches pacman.
 verify_download() {
@@ -238,10 +221,46 @@ verify_download() {
   fi
 }
 
+# Takes sudo's password now, with its -v, rather than when pacman starts. The
+# prompt waits as long as the person does, and the last decision has to come
+# after every such wait; sudo then reuses the credential for pacman a moment
+# later. Fails, having said so, if sudo is not satisfied.
+authorise() {
+  if ! sudo -v; then
+    printf 'sudo did not authorise pacman, so nothing was installed.\n'
+    return 1
+  fi
+}
+
+# The download, the check, and the password prompt take time, and meanwhile a
+# second click, another installer, or a plugin update can change what is
+# installed or what is pinned: a click acting on the answer it started with
+# could then reinstall the pinned release over itself, or downgrade an install
+# that has moved past the pin. So the decision is taken again last, and pacman
+# gets the file only if the answer still holds, for the same pin line. Fails,
+# having said so, otherwise.
+still_wanted() {
+  local before=$decision asset=$pin_asset digest=$pin_digest
+  if ! decide; then
+    unreadable_message
+    return 1
+  fi
+  if [[ $decision == "$before" && $pin_asset == "$asset" && $pin_digest == "$digest" ]]; then
+    return 0
+  fi
+  printf 'AllesBuien changed since this click began, so nothing was installed.\n'
+  return 1
+}
+
 # Everything between a decision to install and pacman, each step stopping the
-# click if it fails.
-fetch_pinned() {
-  download_pinned && still_wanted && verify_download
+# click if it fails, the last decision last. From the moment pacman starts it
+# holds its database lock, through its own confirmation prompt until it
+# commits, so no other install can land after that decision but in the instant
+# before pacman takes the lock. pacman has no flag that refuses a downgrade;
+# --needed on the install skips a package that has become the pinned version
+# in that instant.
+prepare_install() {
+  download_pinned && verify_download && authorise && still_wanted
 }
 
 # After a click that installed nothing, the app opens if it is installed: as it
@@ -276,11 +295,11 @@ install_verb() {
       ;;
     10)
       printf 'Installing AllesBuien %s from the GitHub release.\n' "$pin_version"
-      if ! fetch_pinned; then
+      if ! prepare_install; then
         launch_if_installed
         return 1
       fi
-      if ! sudo pacman -U "$tmp/$pin_asset"; then
+      if ! sudo pacman -U --needed "$tmp/$pin_asset"; then
         printf 'Nothing was installed. Install AllesBuien by hand as README#install describes: %s\n' "$readme_install"
         return 1
       fi
@@ -294,11 +313,11 @@ install_verb() {
       printf 'Updating AllesBuien from %s to %s.\n' "$installed_version" "$pin_version"
       # The app is installed and works, so the click ends with it open whatever
       # happens to the update: a failed download, a declined prompt, or success.
-      if ! fetch_pinned; then
+      if ! prepare_install; then
         launch_if_installed
         return 1
       fi
-      if sudo pacman -U "$tmp/$pin_asset"; then
+      if sudo pacman -U --needed "$tmp/$pin_asset"; then
         if ((running)); then
           printf 'AllesBuien is running; restart it to use %s.\n' "$pin_version"
         fi

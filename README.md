@@ -225,12 +225,12 @@ Then install the candidate and try it in a real bar:
 omarchy plugin add /tmp/allesbuien-candidate --enable
 ```
 
-Before clicking anything, make the install step inert. A click while the application is absent, or while an update is ready, runs `sudo pacman -U`, which asks for a password and installs a package; proving the press path does not need that, and the real install click belongs to whoever is publishing the release. Edit the copy the shell actually loads — `omarchy plugin add` clones the candidate, so editing the candidate changes nothing now, and an uncommitted edit there would never have been cloned in the first place:
+Before clicking anything, make the install step inert. A click while the application is absent, or while an update is ready, runs `sudo -v` and `sudo pacman -U`, which ask for a password and install a package; proving the press path does not need that, and the real install click belongs to whoever is publishing the release. Edit the copy the shell actually loads — `omarchy plugin add` clones the candidate, so editing the candidate changes nothing now, and an uncommitted edit there would never have been cloned in the first place:
 
 ```bash
 widget=~/.config/omarchy/plugins/io.github.robi42.allesbuien/plugin/widget.sh
-sed -i 's/sudo pacman -U/echo dry-run pacman -U/' "$widget"
-grep -c 'echo dry-run pacman -U' "$widget"   # 2: the install and the update
+sed -i 's/sudo -v/echo dry-run sudo -v/; s/sudo pacman -U/echo dry-run pacman -U/' "$widget"
+grep -c 'echo dry-run' "$widget"   # 3: the password prompt, the install, and the update
 ```
 
 The widget runs the script afresh on every probe and click, so the edit takes effect at once. An edited installed copy also stops `omarchy plugin update` from fast-forwarding it, which is one more reason these checks end by removing the plugin.
