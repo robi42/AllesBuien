@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fake sudo for tests/widget/run.sh: logs, then runs the command as it is, so
+# the fake pacman behind it is what answers. `sudo -v` is the password prompt:
+# FAKE_SUDO_V=declined fails it, and FAKE_PACKAGE_AFTER_AUTH is the allesbuien
+# version the fake pacman reports once it is answered, as an install that
+# landed while the prompt waited would leave it.
+
+{
+  printf '%s' "${0##*/}"
+  printf ' [%s]' "$@"
+  printf '\n'
+} >>"$FAKE_LOG"
+
+if [[ ${1-} == -v ]]; then
+  if [[ ${FAKE_SUDO_V-ok} == declined ]]; then
+    printf 'sudo: 3 incorrect password attempts\n' >&2
+    exit 1
+  fi
+  if [[ -n ${FAKE_PACKAGE_AFTER_AUTH-} ]]; then
+    printf '%s\n' "$FAKE_PACKAGE_AFTER_AUTH" >"$FAKE_STATE/package"
+  fi
+  exit 0
+fi
+exec "$@"

@@ -1,9 +1,12 @@
-// The Omarchy bar launcher for AllesBuien. It opens, focuses, or installs the
-// native app and does nothing else: no weather is fetched, parsed, or drawn
-// here, and no colour is named - the button takes its font, size, and palette
-// from the bar it is placed in.
+// The Omarchy bar launcher for AllesBuien. It opens or focuses the native app,
+// and installs or updates the release that release.sha256 pins, and does
+// nothing else: no weather is fetched, parsed, or drawn here, and no colour is
+// named - the button takes its font, size, and palette from the bar it is
+// placed in. Every decision and every install step lives in widget.sh beside
+// this file; this file maps that script's exit codes onto the button.
 import QtQuick
 import Quickshell.Io
+import qs.Commons
 import qs.Ui
 
 BarWidget {
@@ -13,44 +16,59 @@ BarWidget {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  // Whether a probe has ever finished, and what it found. Before the first one
-  // returns the button looks ordinary and a click simply waits: a dimmed icon
-  // on an installed machine would be a lie told for a few milliseconds.
+  // Whether a probe has ever finished, and what it answered. Before the first
+  // one returns the button looks ordinary and a click simply waits: a dimmed
+  // icon on an installed machine would be a lie told for a few milliseconds.
+  //
+  // The answer is widget.sh probe's exit code, and the contract is stated once,
+  // there: 0 launch or focus; 10 absent with a release pinned, so a click
+  // installs it; 11 absent with nothing it can install, so a click says why
+  // and where to read about installing by hand; 12 ours and older than the pin,
+  // so a click updates. Any other code is the script failing, and looks and
+  // clicks like 11: the click opens a terminal where the failure can be read.
+  // It is not taken for absence, though, because it says nothing about whether
+  // the app is there: a probe whose pacman query failed has not found out.
   property bool known: false
-  property bool installed: false
+  property int probeStatus: 0
   property bool pendingClick: false
 
-  // Focus the open window if there is one, else launch, in the command shape
-  // Omarchy's launch_sole helper builds (its Obsidian binding: "^obsidian$").
-  // The helper tests the pattern against every window's class and title, any
-  // case, so a bare word would also focus a terminal or browser whose title
-  // mentions AllesBuien; anchored, only a class or whole title of AllesBuien
-  // answers. uwsm-app gives the app its own scope, as the install branch does.
-  readonly property string launchCommand: "omarchy-launch-or-focus '^allesbuien$' 'uwsm-app -- allesbuien'"
+  readonly property bool installed: root.probeStatus === 0 || root.probeStatus === 12
+  readonly property bool absent: root.probeStatus === 10 || root.probeStatus === 11
+  readonly property bool updateReady: root.probeStatus === 12
+  readonly property bool installable: root.probeStatus === 10
 
-  // The body of omarchy-install-and-launch with the AUR helper in place of the
-  // pacman-only one, because allesbuien-bin lives on the AUR. Omarchy's
-  // floating terminal is where yay asks for the password, so the prompt is
-  // visible rather than hidden behind a bar click. The last clause is for the
-  // reader who arrives before the AUR package exists, or without a network.
-  readonly property string installCommand: "omarchy-launch-floating-terminal-with-presentation \"echo 'Installing AllesBuien from the AUR...'; omarchy-pkg-aur-add allesbuien-bin && (setsid uwsm-app -- allesbuien >/dev/null 2>&1 &) || echo 'Could not install allesbuien-bin. Install it by hand: https://github.com/robi42/AllesBuien#install'\""
+  // widget.sh sits beside this file wherever the shell loaded the plugin from,
+  // so its path comes from this file's own URL rather than from a plugins
+  // directory written down here.
+  readonly property string scriptPath: decodeURIComponent(String(Qt.resolvedUrl("widget.sh")).replace(/^file:\/\//, ""))
+
+  // bar.run hands its string to `bash -lc`, so the path is quoted for that
+  // shell. The install command is quoted twice: once for bar.run's shell, and
+  // once for the `bash -c` into which Omarchy's floating-terminal wrapper
+  // splices its arguments. It runs the script as a login shell there too, since
+  // the terminal inherits the app launcher's environment rather than the one
+  // the probe saw. Omarchy's floating terminal is where pacman asks for the
+  // password, so the prompt is visible rather than hidden behind a bar click.
+  readonly property string launchCommand: "bash " + Util.shellQuote(root.scriptPath) + " launch"
+  readonly property string installCommand: "omarchy-launch-floating-terminal-with-presentation "
+    + Util.shellQuote("bash -l " + Util.shellQuote(root.scriptPath) + " install")
 
   function dispatch(): void {
     if (!root.bar) return
 
-    root.bar.run(root.installed ? root.launchCommand : root.installCommand)
+    root.bar.run(root.probeStatus === 0 ? root.launchCommand : root.installCommand)
   }
 
   // bar.run is `bash -lc`, whose PATH carries ~/.local/bin. A probe run through
   // any other shell would miss a user-scope install there and offer to install
   // an app that is already on the machine, so the probe uses the same login
-  // shell the launch will.
+  // shell the launch will. The path travels as $0, never re-tokenised.
   Process {
     id: probe
-    command: ["bash", "-lc", "command -v allesbuien"]
+    command: ["bash", "-lc", "exec bash \"$0\" probe", root.scriptPath]
 
     onExited: function (exitCode) {
-      root.installed = exitCode === 0
+      root.probeStatus = exitCode
       root.known = true
 
       // A click always acts on a probe that finished after the press, never on
@@ -65,12 +83,16 @@ BarWidget {
 
   // Only while the app is known to be missing, so the icon lights within five
   // seconds of an install finishing elsewhere and nothing polls forever on a
-  // machine that never installs it. The other direction is not polled; the
-  // next click catches it.
+  // machine that never installs it. A failed probe is not known absence, so it
+  // starts no polling either; the next click or load probes again. The other
+  // direction is not polled; the next click catches it. A newer pin arrives through `omarchy plugin update`,
+  // whose rescan recreates this widget, and the load-time probe is what turns
+  // the icon urgent; after an update it stays so until the next click, which
+  // probes, finds the app current, and launches it.
   Timer {
     interval: 5000
     repeat: true
-    running: root.known && !root.installed
+    running: root.known && root.absent
     onTriggered: probe.running = true
   }
 
@@ -83,7 +105,12 @@ BarWidget {
     text: "󰐷" // U+F0437, Nerd Font md-radar: a dish, never a weather condition -
               // the Omarchy weather pill beside it already draws the sky.
     dimmed: root.known && !root.installed
-    tooltipText: root.known && !root.installed ? "AllesBuien is not installed — click to install it from the AUR" : "AllesBuien"
+    // The bar's urgent colour, as Omarchy's own update indicator uses it.
+    active: root.known && root.updateReady
+    tooltipText: !root.known || root.probeStatus === 0 ? "AllesBuien"
+      : root.updateReady ? "AllesBuien update ready — click to install it"
+      : root.installable ? "AllesBuien is not installed — click to install it from the GitHub release"
+      : "AllesBuien is not installed — see github.com/robi42/AllesBuien#install"
     onPressed: function () {
       root.pendingClick = true
       probe.running = true

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fake `sha256sum --check --strict <pin>` for tests/widget/run.sh. A fake
+# download's digest is its content, so a case decides whether the check passes
+# by what it has the fake curl write. Like the real one it reads the file the
+# pin names relative to the working directory, prints `<name>: OK` or
+# `<name>: FAILED`, and exits 1 on a mismatch. It also logs its verdict, which
+# is what lets the runner prove that pacman only ever saw a file that passed.
+
+{
+  printf '%s' "${0##*/}"
+  printf ' [%s]' "$@"
+  printf '\n'
+} >>"$FAKE_LOG"
+
+if [[ $# -ne 3 || $1 != --check || $2 != --strict ]]; then
+  printf 'fake sha256sum: unexpected arguments: %s\n' "$*" >&2
+  exit 2
+fi
+read -r digest name <"$3"
+verdict=FAILED
+if [[ -f $name && $(<"$name") == "$digest" ]]; then
+  verdict=OK
+fi
+printf 'sha256sum-verdict %s %s\n' "$name" "$verdict" >>"$FAKE_LOG"
+printf '%s: %s\n' "$name" "$verdict"
+if [[ $verdict == FAILED ]]; then
+  printf 'sha256sum: WARNING: 1 computed checksum did NOT match\n' >&2
+  exit 1
+fi

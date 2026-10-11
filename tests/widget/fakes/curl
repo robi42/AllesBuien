@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fake curl for tests/widget/run.sh. FAKE_CURL=ok writes FAKE_DOWNLOAD to the
+# --output path; FAKE_CURL=fail exits 22 as curl --fail does on an HTTP error.
+# A download takes seconds, and what is installed can change meanwhile:
+# FAKE_PACKAGE_AFTER_DOWNLOAD is the allesbuien version the fake pacman reports
+# from then on, FAKE_APP_AFTER_DOWNLOAD a path at which an allesbuien appears,
+# as another click or another installer would leave them, and
+# FAKE_QUERY_FAILS_AFTER_DOWNLOAD=1 makes `pacman -Q` fail from then on.
+
+{
+  printf '%s' "${0##*/}"
+  printf ' [%s]' "$@"
+  printf '\n'
+} >>"$FAKE_LOG"
+
+output=
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  if [[ ${args[i]} == --output ]]; then
+    output=${args[i + 1]-}
+  fi
+done
+if [[ -z $output ]]; then
+  printf 'fake curl: no --output path\n' >&2
+  exit 2
+fi
+if [[ $FAKE_CURL == fail ]]; then
+  printf 'curl: (22) The requested URL returned error: 404\n' >&2
+  exit 22
+fi
+printf '%s' "$FAKE_DOWNLOAD" >"$output"
+if [[ -n ${FAKE_PACKAGE_AFTER_DOWNLOAD-} ]]; then
+  printf '%s\n' "$FAKE_PACKAGE_AFTER_DOWNLOAD" >"$FAKE_STATE/package"
+fi
+if [[ ${FAKE_QUERY_FAILS_AFTER_DOWNLOAD-} == 1 ]]; then
+  printf 'fail\n' >"$FAKE_STATE/query-fails"
+fi
+if [[ -n ${FAKE_APP_AFTER_DOWNLOAD-} ]]; then
+  printf '#!/usr/bin/env bash\n' >"$FAKE_APP_AFTER_DOWNLOAD"
+  chmod +x "$FAKE_APP_AFTER_DOWNLOAD"
+fi

@@ -12,8 +12,11 @@ release's section is the text of its annotated tag and of its GitHub release not
 - An Omarchy bar launcher. `manifest.json` and `plugin/BarWidget.qml` make this repository an
   Omarchy plugin: a single radar-dish button (the Nerd Font glyph `md-radar`) that focuses the
   open AllesBuien window, launches it, or — while the app is not installed — opens Omarchy's
-  floating terminal and installs `allesbuien-bin` from the AUR. It sits beside the built-in
-  weather pill without replacing it.
+  floating terminal, downloads the release package `plugin/release.sha256` pins, checks it
+  against that digest, and installs it with pacman. Once `omarchy plugin update` brings a newer
+  pin, the button turns the bar's urgent colour and the same click updates the app; an install
+  the widget does not own is only ever launched. It sits beside the built-in weather pill
+  without replacing it.
 - Location following. The window adopts `~/.local/state/omarchy/settings/weather.json` within
   about two seconds of `omarchy-weather-location` rewriting or clearing it, and says which of the
   three sources — environment pin, desktop setting, or Amsterdam-West default — answered. A

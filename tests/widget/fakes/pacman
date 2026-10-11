@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fake pacman for tests/widget/run.sh. FAKE_PACKAGE is `absent`, or the
+# version `pacman -Q allesbuien` prints, unless the fake curl has since written
+# another to $FAKE_STATE/package; FAKE_PACKAGE_FILES is what
+# `pacman -Qlq allesbuien` lists; FAKE_PACMAN_U is `ok`, or `declined` for an
+# answered-no prompt. `-U` refuses a path that is not a file, as pacman does.
+# Once $FAKE_STATE/query-fails exists, `-Q` fails while `-Qlq` still answers.
+
+{
+  printf '%s' "${0##*/}"
+  printf ' [%s]' "$@"
+  printf '\n'
+} >>"$FAKE_LOG"
+
+package=$FAKE_PACKAGE
+if [[ -f $FAKE_STATE/package ]]; then
+  package=$(<"$FAKE_STATE/package")
+fi
+
+not_found() {
+  printf "error: package '%s' was not found\n" "$1" >&2
+  exit 1
+}
+
+case "${1-} ${2-}" in
+  "-Q allesbuien")
+    if [[ -f $FAKE_STATE/query-fails ]]; then
+      printf 'fake pacman: -Q made to fail\n' >&2
+      exit 1
+    fi
+    if [[ $package == absent ]]; then
+      not_found allesbuien
+    fi
+    printf 'allesbuien %s\n' "$package"
+    ;;
+  "-Qlq allesbuien")
+    if [[ $package == absent ]]; then
+      not_found allesbuien
+    fi
+    printf '/usr/\n/usr/bin/\n%s\n' "$FAKE_PACKAGE_FILES"
+    ;;
+  "-U "*)
+    if [[ $# -ne 3 || $2 != --needed ]]; then
+      printf 'fake pacman: expected -U --needed <file>, got: %s\n' "$*" >&2
+      exit 2
+    fi
+    if [[ ! -f $3 ]]; then
+      printf "error: '%s': cannot open package file\n" "$3" >&2
+      exit 1
+    fi
+    if [[ $FAKE_PACMAN_U == declined ]]; then
+      printf ':: Proceed with installation? [Y/n] n\n'
+      exit 1
+    fi
+    printf '(1/1) installing allesbuien\n'
+    ;;
+  *)
+    printf 'fake pacman: unexpected arguments: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac

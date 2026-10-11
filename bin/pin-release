@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Writes plugin/release.sha256, the pin the bar widget installs and updates
+# from, for a release whose asset GitHub already serves. Run it from the
+# repository root once the release run for the tag is green; README.md's
+# Releasing section says where it sits in the order, and AGENTS.md's Release
+# pin convention says why the pin exists at all.
+#
+#   bin/pin-release [version]
+#
+# The version defaults to app/Cargo.toml's and the pkgrel comes from
+# pkgbuild/PKGBUILD, which together name the asset. The digest is the one
+# GitHub records for that asset, and it is written only after a download of
+# the asset has passed `sha256sum --check` against it, so a pin cannot name
+# bytes nobody has seen. The download goes through gh, authenticated, so this
+# works while the repository is private; the widget's own download is
+# anonymous and works only once it is public. Nothing here runs git: the
+# script prints the commit to make, and making it is the releaser's call.
+
+readonly repository=robi42/AllesBuien
+readonly pin=plugin/release.sha256
+
+fail() {
+  printf 'pin-release: %s\n' "$1" >&2
+  exit 1
+}
+
+for tool in gh sha256sum mktemp; do
+  if ! command -v "$tool" >/dev/null; then
+    fail "$tool is not installed"
+  fi
+done
+if [[ ! -f app/Cargo.toml || ! -f pkgbuild/PKGBUILD || ! -d plugin ]]; then
+  fail 'run this from the repository root'
+fi
+
+if [[ $# -gt 1 ]]; then
+  fail 'usage: bin/pin-release [version]'
+fi
+if [[ $# -eq 1 ]]; then
+  version=$1
+else
+  version=$(sed -n 's/^version = "\(.*\)"$/\1/p' app/Cargo.toml)
+  version=${version%%$'\n'*}
+fi
+pkgrel=$(sed -n 's/^pkgrel=//p' pkgbuild/PKGBUILD)
+if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  fail "the version '$version' is not x.y.z"
+fi
+if [[ ! $pkgrel =~ ^[0-9]+$ ]]; then
+  fail "pkgbuild/PKGBUILD's pkgrel '$pkgrel' is not a number"
+fi
+
+readonly asset=allesbuien-$version-$pkgrel-x86_64.pkg.tar.zst
+tag=v$version
+
+# The asset name is built from the two checked parts above, so it can sit in
+# the jq filter as a literal.
+if ! digest=$(gh api "repos/$repository/releases/tags/$tag" \
+  --jq ".assets[] | select(.name == \"$asset\") | .digest"); then
+  fail "could not read the $tag release from GitHub"
+fi
+if [[ -z $digest ]]; then
+  fail "the $tag release carries no asset named $asset"
+fi
+if [[ ! $digest =~ ^sha256:([0-9a-f]{64})$ ]]; then
+  fail "GitHub's digest for $asset is '$digest', not sha256: and 64 hex digits"
+fi
+line="${BASH_REMATCH[1]}  $asset"
+
+tmp=$(mktemp -d)
+trap 'rm -rf -- "$tmp"' EXIT
+printf '%s\n' "$line" >"$tmp/release.sha256"
+if ! gh release download "$tag" --repo "$repository" --pattern "$asset" --dir "$tmp"; then
+  fail "could not download $asset from the $tag release"
+fi
+if ! (cd "$tmp" && sha256sum --check --strict release.sha256); then
+  fail "the downloaded $asset does not match GitHub's digest; $pin is unchanged"
+fi
+
+cp -- "$tmp/release.sha256" "$pin"
+printf '\nWrote %s:\n  %s\n\n' "$pin" "$line"
+printf 'Read the line, then commit and push it on main:\n'
+printf '  git add %s && git commit -m "Pin the %s release asset" -- %s\n' "$pin" "$tag" "$pin"
