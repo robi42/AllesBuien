@@ -24,13 +24,17 @@ BarWidget {
   // there: 0 launch or focus; 10 absent with a release pinned, so a click
   // installs it; 11 absent with nothing usable pinned, so a click says where to
   // read about installing by hand; 12 ours and older than the pin, so a click
-  // updates. Any other code is the script failing, and is treated as 11: the
-  // click opens a terminal where the failure can be read.
+  // updates. Any other code is the script failing, and looks and clicks like
+  // 11: the click opens a terminal where the failure can be read. It is not
+  // taken for absence, though, because it says nothing about whether the app
+  // is there: a probe fails while another pacman transaction holds the
+  // database, on a machine where the app is installed.
   property bool known: false
   property int probeStatus: 0
   property bool pendingClick: false
 
   readonly property bool installed: root.probeStatus === 0 || root.probeStatus === 12
+  readonly property bool absent: root.probeStatus === 10 || root.probeStatus === 11
   readonly property bool updateReady: root.probeStatus === 12
   readonly property bool installable: root.probeStatus === 10
 
@@ -80,15 +84,16 @@ BarWidget {
 
   // Only while the app is known to be missing, so the icon lights within five
   // seconds of an install finishing elsewhere and nothing polls forever on a
-  // machine that never installs it. The other direction is not polled; the
-  // next click catches it. A newer pin arrives through `omarchy plugin update`,
+  // machine that never installs it. A failed probe is not known absence, so it
+  // starts no polling either; the next click or load probes again. The other
+  // direction is not polled; the next click catches it. A newer pin arrives through `omarchy plugin update`,
   // whose rescan recreates this widget, and the load-time probe is what turns
   // the icon urgent; after an update it stays so until the next click, which
   // probes, finds the app current, and launches it.
   Timer {
     interval: 5000
     repeat: true
-    running: root.known && !root.installed
+    running: root.known && root.absent
     onTriggered: probe.running = true
   }
 
