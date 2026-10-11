@@ -27,3 +27,11 @@ multiple_crate_versions = "allow"
 # nesting budget is written down beside the other lints rather than found only
 # in a config key.
 excessive_nesting = "warn"
+
+# Dependencies build without debug info, the C++ that cxx-qt-lib compiles
+# included. Debug info is about 90% of each Qt-linked test binary, 126 of
+# 141 MB, and there are two dozen of them: Blik, on the same stack, ran CI's
+# runner out of disk this way once its gate linked a dozen. The workspace's own
+# crates keep theirs, so a backtrace still names every function.
+[profile.dev.package."*"]
+debug = false
