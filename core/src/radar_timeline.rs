@@ -96,7 +96,7 @@ pub fn observed_fraction(first_forecast_index: usize, frame_count: usize) -> f64
     }
     #[expect(
         clippy::cast_precision_loss,
-        reason = "frame counts are vendor-capped at 24 and lossless in f64"
+        reason = "frame counts are vendor-capped at a few dozen and lossless in f64"
     )]
     let fraction = (first_forecast_index as f64 - 0.5) / last as f64;
     fraction.clamp(0.0, 1.0)
@@ -117,7 +117,7 @@ mod tests {
     use super::{RadarTimeline, boundary_visible, observed_fraction};
 
     /// A ten-frame run at the endpoint's fixed 5-minute cadence. The split is
-    /// window-agnostic, so this stays smaller than the live 26-frame window.
+    /// window-agnostic, so this stays smaller than the live 32-frame window.
     const RUN: [&str; 10] = [
         "2026-08-31T18:30:00",
         "2026-08-31T18:35:00",
@@ -216,16 +216,16 @@ mod tests {
     }
     #[test]
     fn a_live_run_puts_the_boundary_half_a_step_before_the_first_prediction() {
-        // Given: the shipped window — 2 observations, 24 predictions.
+        // Given: the shipped window — 2 observations, 30 predictions.
         // When
-        let fraction = observed_fraction(2, 26);
+        let fraction = observed_fraction(2, 32);
 
-        // Then: 1.5 steps of 25, i.e. just inside the left edge.
+        // Then: 1.5 steps of 31, i.e. just inside the left edge.
         assert!(
-            (fraction - 0.06).abs() < 1e-9,
+            (fraction - 1.5 / 31.0).abs() < 1e-9,
             "unexpected fraction {fraction}"
         );
-        assert!(boundary_visible(2, 26));
+        assert!(boundary_visible(2, 32));
     }
 
     #[test]

@@ -53,6 +53,10 @@ release's section is the text of its annotated tag and of its GitHub release not
 - A rain-soon notification says rain starts about now instead of in zero minutes.
 - Every radar legend bucket gets the equal block the key promises, and the station label is
   written in the app's language.
+- The rain graph's cursor reaches the graph's last bar. The radar animation now runs two and a
+  half hours ahead instead of two: it counts from the latest radar image, usually five to
+  fifteen minutes old, while the rain expectation counts from the present, so two hours of radar
+  often ended a bar or two short of the graph.
 
 ### Security
 

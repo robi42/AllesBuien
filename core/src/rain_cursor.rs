@@ -1,9 +1,14 @@
 //! Locates an animating radar frame inside the rain expectation series.
 //!
-//! The two feeds are independent but their windows now overlap: the radar run is
-//! 26 frames from roughly five minutes back to two hours ahead, and raintext is
-//! 24 samples covering two hours forward, so they share a right edge and differ
-//! only at the handful of already-observed radar frames.
+//! The two feeds are independent but their windows overlap: raintext is 24
+//! samples covering two hours forward from about the present, and the radar
+//! window is 32 frames, from five minutes before the vendor's run to two and a
+//! half hours after it. The run trails the present by several minutes, and the
+//! radar asks for the extra half hour so that a late run still reaches the last
+//! sample — `radar_transport`'s `FORECAST_STEPS` argues the number — so the
+//! radar's frames usually overhang the series on both sides: the
+//! already-observed ones before the first sample, and the forecasts past the
+//! last.
 //!
 //! Both sides label their moments as viewer-local `HH:MM`, so wall clock is the
 //! only basis the two share — neither carries a date. A difference of more than

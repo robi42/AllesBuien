@@ -22,12 +22,38 @@ use crate::{
 ///
 /// Two of them give the animation about ten minutes of past — enough for a
 /// shower to read as moving rather than as a still that jumps into forecasts —
-/// and the response spans 26 frames, 10 minutes back to 2 hours ahead, which is
-/// the same horizon the raintext rain graph covers.
+/// and with [`FORECAST_STEPS`] the response spans 32 frames, from five minutes
+/// before the run to two and a half hours after it.
 ///
-/// Frames measure 94 KiB, so [`crate::radar::MAX_CACHED_RUNS`] × 26 is about
-/// 7 MiB; the run cap dropped 6 → 3 to stay near the previous window's 5.5 MiB.
+/// Frames measure 94 KiB, so [`crate::radar::MAX_CACHED_RUNS`] × 32 is about
+/// 9 MiB: the run cap dropped 6 → 3 when the window grew to 26 frames, to stay
+/// near the previous window's 5.5 MiB, and the six frames [`FORECAST_STEPS`]
+/// added since cost the other 1.7 MiB.
 const PREFERRED_HISTORY: u8 = 2;
+
+/// Predicted steps requested, at the same cadence: two and a half hours, half an
+/// hour more than the rain graph beside the map covers.
+///
+/// The surplus is what lets the radar reach that graph's last bar, because the
+/// two windows hang from different clocks. Raintext's 24 samples start at a
+/// five-minute slot within a few minutes of the present, usually the nearest
+/// one, and end 115 minutes later. These frames end this many steps after the
+/// run, and the run trails the present: by five to fifteen minutes when healthy,
+/// and by up to [`crate::radar_freshness::STALE_RUN_THRESHOLD_MINUTES`] before it
+/// is refused. At 24 steps the two windows ended together only behind a run
+/// about five minutes old. On 13 October at 10:01 the run was eleven and a half
+/// minutes old, so the radar ended at 11:50 against raintext's 11:55, and no
+/// frame put the graph's cursor on its last bar.
+///
+/// Thirty steps let raintext's first sample fall up to 35 minutes after the run.
+/// That covers a run trailing by up to 25 minutes even when raintext starts a
+/// whole slot ahead of the present and the radar was fetched a whole five-minute
+/// refresh before it: ten minutes past the healthy worst, and five short of the
+/// threshold. The frames past raintext's last sample show no cursor, as
+/// [`crate::rain_cursor`] already arranges for the observed ones before its
+/// first, and every new run downloads six frames more. The vendor serves at most
+/// 36 steps.
+const FORECAST_STEPS: u8 = 30;
 
 /// Observed steps requested after a stale answer, and only then.
 ///
@@ -39,7 +65,7 @@ const CURRENT_RUN_HISTORY: u8 = 0;
 
 fn metadata_path(history: u8) -> String {
     format!(
-        "/2.0/metadata/sprite/RadarMapRainWebmercatorNL?width=1058&height=915&extension=png&renderBackground=false&renderText=false&renderBranding=false&history={history}&forecast=24&skip=0"
+        "/2.0/metadata/sprite/RadarMapRainWebmercatorNL?width=1058&height=915&extension=png&renderBackground=false&renderText=false&renderBranding=false&history={history}&forecast={FORECAST_STEPS}&skip=0"
     )
 }
 
@@ -263,16 +289,16 @@ mod tests {
     }
 
     #[test]
-    fn the_metadata_query_asks_for_the_window_the_rain_graph_covers() {
+    fn the_metadata_query_asks_for_a_window_that_outlasts_the_rain_graph() {
         // Given / When
         let api = ReqwestRadarApi::new(DEFAULT_RADAR_URL).expect("client should build");
 
-        // Then: two observed steps back, two hours ahead, and bare sprites. The
-        // fallback differs in exactly one parameter, so a stale answer costs the
-        // history and nothing else.
+        // Then: two observed steps back, two and a half hours ahead, and bare
+        // sprites. The fallback differs in exactly one parameter, so a stale
+        // answer costs the history and nothing else.
         for parameter in [
             "history=2",
-            "forecast=24",
+            "forecast=30",
             "renderBackground=false",
             "renderText=false",
             "renderBranding=false",

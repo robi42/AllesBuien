@@ -19,8 +19,8 @@ use serde::Deserialize;
 
 use crate::radar_cache::RadarCache;
 
-/// Runs kept on disk. Frames measure 94 KiB and a run holds 26 of them, so this
-/// bounds the cache at roughly 5.5 MiB.
+/// Runs kept on disk. Frames measure 94 KiB and a run holds 32 of them, so this
+/// bounds the cache at roughly 9 MiB.
 pub const MAX_CACHED_RUNS: usize = 3;
 
 pub type RadarFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, RadarError>> + Send + 'a>>;
