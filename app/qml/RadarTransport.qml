@@ -209,7 +209,7 @@ Rectangle {
                 color: radarTransport.theme.sliderTrack
 
                 // Where measurement stops and prediction starts. The window
-                // is 2 observations against 24 predictions, so a lone hairline
+                // is 2 observations against 30 predictions, so a lone hairline
                 // this far left was easy to miss; the travelled part of the
                 // track changes colour at the same x instead, which makes the
                 // boundary an edge rather than something to hunt for.
