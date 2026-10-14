@@ -100,7 +100,18 @@ fn renders_and_advances_provider_frames_when_radar_is_playing() {
             second_source.is_some()
         });
         let second_source = second_source.expect("the wait returned with an advanced URL");
-        booted.process_events();
+        // The same wait for the second frame. One more pass of the event loop
+        // here could fire the 50 ms Timer again and put frame 0 back, so the
+        // second grab would capture the first frame again; nothing runs the
+        // loop between this wait's last check and the grab.
+        pump_until(
+            "the second provider frame reports Image.Ready",
+            SETTLE_BUDGET,
+            || {
+                booted.process_events();
+                source() == second_source && property(overlay, "status").value::<i32>() == Some(1)
+            },
+        );
         let second_image = grab_window(window);
 
         // Then: Qt decoded both provider frames and their rendered pixels differ.
