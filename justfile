@@ -2,15 +2,15 @@
 # already hold, and nothing in the gate runs them: Factory and CI run bin/test directly.
 # This file is protected all the same, because a person runs it, `just install` with sudo.
 
-# List the recipes
+# Lists the recipes
 default:
     @just --list
 
-# The gate, bin/test, as Factory and CI run it: over twenty minutes from cold
+# Runs the gate, bin/test, as CI does: over twenty minutes from cold
 ci:
     bin/test
 
-# The text-only gates the pre-commit hook runs
+# Runs bin/check-fast, the text-only gates of the pre-commit hook
 check:
     bin/check-fast
 
@@ -32,7 +32,7 @@ package:
 # Installs the package built by `just package`
 install:
     @if [ -e "$HOME/.local/bin/allesbuien" ]; then \
-        echo 'error: ~/.local/bin/allesbuien, a Mode B install, would hide the package; remove it as README Uninstall says' >&2; \
+        echo 'error: ~/.local/bin/allesbuien, a Mode B install, would hide the package; remove it as README's Uninstall section says' >&2; \
         exit 1; \
     fi
     sudo pacman -U "$(cd pkgbuild && makepkg --packagelist | grep -v '/allesbuien-debug-')"

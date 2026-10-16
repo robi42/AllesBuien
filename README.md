@@ -115,20 +115,20 @@ just install
 
 `just install` installs the package `just package` built, leaving out the debug package makepkg's default options add. It refuses while a Mode B install is in `~/.local/bin`, which comes first on `PATH` and would hide the package; remove that one first, as [Uninstall](#uninstall) says.
 
-Unattended, use this only when passwordless sudo is already authorized for the exact pacman install and removal commands. `bin/install` builds the release binary and then runs the one canonical package command, `(cd pkgbuild && makepkg -f)`; it never prompts for privilege itself.
+Unattended, use this only when passwordless sudo is already authorised for the exact pacman install and removal commands. `bin/install` builds the release binary and runs the one canonical package command, `(cd pkgbuild && makepkg -f)`. It installs nothing and never prompts for privilege, and the command it prints at the end is [Mode B](#mode-b-user-scope-cargo-install)'s, not a step of this route.
 
 ```bash
 bin/install
 sudo -n /usr/bin/pacman -U --noconfirm "$(pwd)/pkgbuild/allesbuien-0.2.0-1-x86_64.pkg.tar.zst"
 ```
 
-Rollback the package with the matching non-interactive command:
+Remove the package again with the matching non-interactive command:
 
 ```bash
 sudo -n /usr/bin/pacman -Rns --noconfirm allesbuien
 ```
 
-Do not use Mode A if either command requires a password. Never run `makepkg` with `-s` or `-i`.
+Do not use the unattended form if either command would ask for a password. Either way, build with `makepkg -f` alone, as `just package` and `bin/install` do: installing is the separate step above, not `makepkg -i`.
 
 ### Mode B: user-scope Cargo install
 
