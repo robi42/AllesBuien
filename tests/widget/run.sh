@@ -11,11 +11,12 @@ set -euo pipefail
 # The script sees a PATH built from nothing: the fakes, a directory of links to
 # the handful of real tools the script and the fakes use, and an allesbuien
 # stub only where a case wants the app installed. The host's PATH would bring
-# the host's own allesbuien with it - this desktop has one in ~/.local/bin - and
-# turn every "absent" case into an installed one, and a fake left out would
-# fall through to the real sudo or pacman instead of failing. The runner keeps
-# the host PATH for its own work and hands the built one to the script alone,
-# with no BASH_ENV, so no startup file can put the host's back.
+# the host's own allesbuien with it - a Mode B install puts one in
+# ~/.local/bin - and turn every "absent" case into an installed one, and a
+# fake left out would fall through to the real sudo or pacman instead of
+# failing. The runner keeps the host PATH for its own work and hands the built
+# one to the script alone, with no BASH_ENV, so no startup file can put the
+# host's back.
 #
 # The install verb starts the final launch detached, as it must in a real
 # terminal, so the launch can still be on its way when the script exits. Each
@@ -588,6 +589,7 @@ expect_no_call "pacman [-U]"
 expect_no_call "omarchy-launch-or-focus"
 expect_output "pacman records the allesbuien package, version 0.3.0-1, but no allesbuien command is on PATH"
 expect_output "README#install"
+expect_output "README#uninstall"
 finish
 
 # The pin itself. plugin/release.sha256 is what every widget installs from, so

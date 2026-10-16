@@ -24,10 +24,11 @@ BarWidget {
   // there: 0 launch or focus; 10 absent with a release pinned, so a click
   // installs it; 11 absent with nothing it can install, so a click says why
   // and where to read about installing by hand; 12 ours and older than the pin,
-  // so a click updates. Any other code is the script failing, and looks and
-  // clicks like 11: the click opens a terminal where the failure can be read.
-  // It is not taken for absence, though, because it says nothing about whether
-  // the app is there: a probe whose pacman query failed has not found out.
+  // so a click updates. Any other code is the script failing: the icon dims
+  // and the click opens a terminal where the failure can be read, as for 11,
+  // but the tooltip says the check failed. It is not taken for absence, because
+  // it says nothing about whether the app is there: a probe whose pacman query
+  // failed has not found out.
   property bool known: false
   property int probeStatus: 0
   property bool pendingClick: false
@@ -85,10 +86,10 @@ BarWidget {
   // seconds of an install finishing elsewhere and nothing polls forever on a
   // machine that never installs it. A failed probe is not known absence, so it
   // starts no polling either; the next click or load probes again. The other
-  // direction is not polled; the next click catches it. A newer pin arrives through `omarchy plugin update`,
-  // whose rescan recreates this widget, and the load-time probe is what turns
-  // the icon urgent; after an update it stays so until the next click, which
-  // probes, finds the app current, and launches it.
+  // direction is not polled; the next click catches it. A newer pin arrives
+  // through `omarchy plugin update`, whose rescan recreates this widget, and the
+  // load-time probe is what turns the icon urgent; after an update it stays so
+  // until the next click, which probes, finds the app current, and launches it.
   Timer {
     interval: 5000
     repeat: true
@@ -102,15 +103,17 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "󰐷" // U+F0437, Nerd Font md-radar: a dish, never a weather condition -
-              // the Omarchy weather pill beside it already draws the sky.
+    text: "󰐷" // U+F0437, Nerd Font nf-md-radar: a dish, never a weather
+              // condition, because the Omarchy weather pill beside it already
+              // draws the sky.
     dimmed: root.known && !root.installed
     // The bar's urgent colour, as Omarchy's own update indicator uses it.
     active: root.known && root.updateReady
     tooltipText: !root.known || root.probeStatus === 0 ? "AllesBuien"
       : root.updateReady ? "AllesBuien update ready — click to install it"
       : root.installable ? "AllesBuien is not installed — click to install it from the GitHub release"
-      : "AllesBuien is not installed — see github.com/robi42/AllesBuien#install"
+      : root.absent ? "AllesBuien is not installed — see github.com/robi42/AllesBuien#install"
+      : "AllesBuien could not check its installation — click to see why"
     onPressed: function () {
       root.pendingClick = true
       probe.running = true

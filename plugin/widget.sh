@@ -17,13 +17,15 @@ set -euo pipefail
 #                             records with no allesbuien on PATH; a click says
 #                             why, and where to read about installing by hand
 #                         12  ours and older than the pin: a click updates
-#                       Any other code is this script failing; the widget
-#                       treats it as 11, so the next click opens a terminal
-#                       where the failure can be read.
+#                       Any other code is this script failing: the widget
+#                       dims the icon and a click opens the floating terminal,
+#                       as for 11, where the failure can be read, but the
+#                       tooltip says the check failed and no polling starts.
 #   widget.sh launch    focus the open window, or start the app
-#   widget.sh install   what Omarchy's floating terminal runs for 10, 11 and 12:
-#                       decide again, then download, verify, and hand the
-#                       package to pacman, whose own prompt is the consent
+#   widget.sh install   what Omarchy's floating terminal runs for 10, 11, 12
+#                       and a failed probe: decide again, then download,
+#                       verify, and hand the package to pacman, whose own
+#                       prompt is the consent
 #
 # The pin is one line in `sha256sum --check` format: a SHA-256 digest, two
 # spaces, and the release asset's name, allesbuien-<version>-<pkgrel>-x86_64
@@ -36,6 +38,7 @@ set -euo pipefail
 
 readonly repository=https://github.com/robi42/AllesBuien
 readonly readme_install=$repository#install
+readonly readme_uninstall=$repository#uninstall
 
 # Absolute, so the pin can still be named after the verify step changes into
 # the temp dir, and so the detached launch finds this script from anywhere.
@@ -191,7 +194,8 @@ unreadable_message() {
 stray_package_message() {
   printf 'pacman records the allesbuien package, version %s, but no allesbuien command is on PATH,\n' "$stray_package"
   printf 'so this click cannot tell what it would replace and installs nothing.\n'
-  printf 'Reinstall or remove that package by hand, as README#install describes: %s\n' "$readme_install"
+  printf 'Reinstall it as README#install describes: %s\n' "$readme_install"
+  printf 'Or remove it as README#uninstall describes: %s\n' "$readme_uninstall"
 }
 
 # Downloads the pinned asset into a private temp dir. Fails, having said why,
