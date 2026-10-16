@@ -16,6 +16,12 @@
 /.factory/run/
 .beads/interactions.jsonl
 
+# The maintainer's own Factory settings: FACTORY_NAME=value lines that Factory
+# reads from .factory/env, and in the main checkout exempts from its checks for
+# uncommitted and ignored files. Ignored so `git add -A` cannot commit one
+# person's settings as the repository's defaults, which a committed copy is.
+/.factory/env
+
 # mise's and lefthook's config files are protected paths, and a global ignore
 # must not hide a local one, such as mise.local.toml or lefthook-local.yml:
 # mise or lefthook would read it in Factory's worktree, where an ignored file is

@@ -41,7 +41,7 @@ if [[ ! -d $fixtures ]]; then
   exit 1
 fi
 
-# Three fixtures read what the build registered. Missing, they would asssert
+# Three fixtures read what the build registered. Missing, they would assert
 # nothing while still reporting a pass, which is the exact defect this whole
 # file exists to catch - so an unbuilt tree fails here, as it does in
 # bin/check-qml-contract.
@@ -111,7 +111,7 @@ local_env=$(git rev-parse --local-env-vars)
 mapfile -t local_env <<<"$local_env"
 unset -v "${local_env[@]}"
 
-# A throwaway index, because six gates read `git ls-files` and a fixture that
+# A throwaway index, because many gates read `git ls-files` and a fixture that
 # adds or deletes a file has to be visible to them. --all is the correct verb
 # for an index nothing will ever commit to a real branch; signing is off so the
 # suite never queues behind the SSH agent. And the commit runs no hook:

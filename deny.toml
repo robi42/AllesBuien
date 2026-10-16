@@ -1,12 +1,13 @@
 # Advisories only, deliberately.
 #
-# This is a private, non-distributed, single-maintainer desktop app with a small
-# dependency graph, so the other cargo-deny checks would cost attention without
-# buying safety: `licenses` matters when you redistribute, `bans`/duplicate-version
-# noise scales with graph size, and `sources` only earns its keep once something
-# other than crates.io is in play. What does matter is that this app speaks HTTP
-# to the internet through reqwest/rustls, so a published vulnerability in that
-# chain is a real exposure.
+# This is a single-maintainer desktop app with a small dependency graph, so two
+# of the other cargo-deny checks would cost attention without buying safety:
+# `bans`/duplicate-version noise scales with graph size, and `sources` only
+# earns its keep once something other than crates.io is in play. What does
+# matter is that this app speaks HTTP to the internet through reqwest/rustls, so
+# a published vulnerability in that chain is a real exposure. The third,
+# `licenses`, matters when you redistribute, so it is the one to revisit now
+# that release packages are redistributed.
 #
 # Runs on a weekly schedule rather than on push: an advisory landing upstream is
 # not a reason to fail an unrelated commit, and a solo maintainer who sets
