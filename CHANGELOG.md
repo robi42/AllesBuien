@@ -10,7 +10,7 @@ release's section is the text of its annotated tag and of its GitHub release not
 ### Added
 
 - An Omarchy bar launcher. `manifest.json` and `plugin/BarWidget.qml` make this repository an
-  Omarchy plugin: a single radar-dish button (the Nerd Font glyph `md-radar`) that focuses the
+  Omarchy plugin: a single radar-dish button (the Nerd Font glyph `nf-md-radar`) that focuses the
   open AllesBuien window, launches it, or — while the app is not installed — opens Omarchy's
   floating terminal, downloads the release package `plugin/release.sha256` pins, checks it
   against that digest, and installs it with pacman. Once `omarchy plugin update` brings a newer
@@ -51,6 +51,8 @@ release's section is the text of its annotated tag and of its GitHub release not
   staying blank until the condition changes.
 - A missing temperature reads as a dash instead of an `Unavailable` cut short to `Unavaila…`.
 - A rain-soon notification says rain starts about now instead of in zero minutes.
+- The window no longer opens on "Weather unavailable", in the error colour, while its first refresh
+  is still under way; the pulsing current-conditions icon already says it is loading.
 - Every radar legend bucket gets the equal block the key promises, and the station label is
   written in the app's language.
 - The rain graph's cursor reaches the graph's last bar. The radar animation now runs two and a

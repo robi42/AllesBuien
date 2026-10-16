@@ -9,7 +9,7 @@ use allesbuien_core::{
     location::LocationConfig,
     location_settings::LocationSettings,
     rain::RainPoint,
-    status::{RAIN_UNAVAILABLE, WEATHER_UNAVAILABLE},
+    status::RAIN_UNAVAILABLE,
     weather::{FeedApi, ForecastDay},
 };
 use cxx_qt_lib::{QList, QString, QStringList};
@@ -109,7 +109,9 @@ impl Default for WeatherControllerRust {
             rain_axis_labels: QStringList::default(),
             rain_cursor_fraction: 0.0,
             rain_cursor_visible: false,
-            status: WEATHER_UNAVAILABLE.into(),
+            // Empty, not a failure: the refresh construction starts is still
+            // under way, and the pulsing hero above already says so.
+            status: QString::default(),
             refresh_interval_ms: interval_ms(defaults.weather_refresh),
             location_poll_interval_ms: interval_ms(defaults.location_poll),
             forecast: Vec::new(),
@@ -124,5 +126,21 @@ impl Default for WeatherControllerRust {
             runtime: None,
             notifications: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WeatherControllerRust;
+
+    #[test]
+    fn a_new_bridge_claims_no_failure_before_its_first_refresh_answers() {
+        // Given / When: the state the bridge holds before the refresh its
+        // construction starts has answered.
+        let state = WeatherControllerRust::default();
+
+        // Then: no status line, and the hero says it is loading instead.
+        assert!(state.status.is_empty(), "{}", state.status);
+        assert!(state.hero_icon_loading);
     }
 }

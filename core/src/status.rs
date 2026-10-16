@@ -34,21 +34,21 @@ pub const UNAVAILABLE: &str = "Unavailable";
 /// any size this window can reach, and it leaves the sentence under it and the
 /// status line below to say *why* — which the word was never doing either.
 pub const NO_READING: &str = "—";
-/// Inline status lines shown before the first successful refresh.
+/// What a panel says when it has nothing to draw: current conditions a refresh
+/// answered without, and a rain window with no sentence, before the first
+/// refresh or after one that brought none.
 pub const CONDITIONS_UNAVAILABLE: &str = "Current conditions unavailable";
-pub const WEATHER_UNAVAILABLE: &str = "Weather unavailable";
-pub const RAIN_UNAVAILABLE: &str = "Rain forecast unavailable";
+pub const RAIN_UNAVAILABLE: &str = "Rain expectation unavailable";
 /// Shown while a radar run is downloading its frames.
 ///
-/// The radar has no entry in the group above on purpose. Those three stand in
-/// where a panel has nothing to draw and no fetch is under way; the radar
-/// always has one under way, because its bridge refreshes as it is
-/// constructed. Seeding its status line with `Radar unavailable` therefore
-/// announced a failure that had not happened — and this caption, which says
-/// what is actually true, spent that whole window wearing the failure's colour
-/// in the failure's slot. It is carried on its own property for that reason:
-/// a wait and a fault are different claims and cannot share one channel
-/// without the view having to guess which it is holding.
+/// Neither bridge seeds its status line with a failure. Both refresh as they
+/// are constructed, so `Radar unavailable` or `Weather unavailable` there
+/// announced a failure that had not happened, in the failure's colour and the
+/// failure's slot, for the whole first fetch. The weather bridge leaves its
+/// line empty while the hero icon pulses; the radar carries this caption on a
+/// property of its own, because a wait and a fault are different claims and
+/// cannot share one channel without the view having to guess which it is
+/// holding.
 pub const RADAR_LOADING: &str = "Loading radar frames";
 
 const CONNECTION_HINT: &str = "check your connection";
@@ -154,6 +154,7 @@ mod tests {
     #[test]
     fn blames_the_connection_for_transport_faults_and_the_service_for_5xx() {
         // Given / When
+        let offline = radar_message(&RadarError::Request(endpoint_error()), false);
         let service = radar_message(&RadarError::HttpStatus { status: 502 }, false);
         let malformed_metadata_message = radar_message(
             &RadarError::InvalidRunTimestamp {
@@ -163,6 +164,7 @@ mod tests {
         );
 
         // Then
+        assert!(offline.contains("check your connection"), "{offline}");
         assert!(service.contains("not responding"), "{service}");
         assert!(
             malformed_metadata_message.contains("unexpected data"),
