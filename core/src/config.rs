@@ -1,15 +1,18 @@
 //! Everything the process has to settle before it can ask anyone anything.
 //!
 //! One [`Config`] is resolved at startup and injected from there on; nothing
-//! reads the environment again. [`EnvSource`] is the seam that makes that
-//! testable — a test hands it a fixed table instead of mutating the real
+//! in this crate reads the environment again, and the app's one other read, of
+//! `HOME` and `XDG_CACHE_HOME` for the theme and icon-cache roots, happens
+//! beside it at startup. [`EnvSource`] is the seam that makes this crate's
+//! read testable — a test hands it a fixed table instead of mutating the real
 //! environment, which two tests sharing a process could not do safely.
 //!
 //! Overrides exist for the three endpoints and for the notification thresholds
 //! so the app can be pointed at a local stub, and each one falls back to the
 //! shipped value rather than to an empty string: an override that is present but
 //! blank is a mistake, not an instruction. The viewer's location is the single
-//! setting with a precedence rule of its own, and [`crate::location`] owns it.
+//! setting with a precedence rule of its own: [`crate::location`] reads its
+//! sources and [`crate::location_settings`] orders them.
 //!
 //! It is also the single setting that outlives this resolution. Omarchy rewrites
 //! its half of it while the app runs, so `location` holds the re-askable
@@ -33,6 +36,9 @@ pub const DEFAULT_FEED_URL: &str = "https://data.buienradar.nl/2.0/feed/json";
 pub const DEFAULT_RAINTEXT_URL: &str = "https://gpsgadget.buienradar.nl/data/raintext";
 /// The radar host alone; [`crate::radar_transport`] appends the metadata path.
 pub const DEFAULT_RADAR_URL: &str = "https://image.buienradar.nl";
+/// How every request to Buienradar names its client: the app and its version,
+/// which `bin/check-fast`'s release version gate holds equal across the crates.
+pub const USER_AGENT: &str = concat!("allesbuien/", env!("CARGO_PKG_VERSION"));
 const DEFAULT_NOTIFY_THRESHOLD_MINUTES: u32 = 30;
 const DEFAULT_NOTIFY_COOLDOWN_MINUTES: u64 = 60;
 

@@ -18,29 +18,24 @@
 //! reading: a comparison against `Timestamp::now()` inside this module would
 //! pass in Amsterdam and fail in the timezone matrix.
 
-use std::ops::RangeInclusive;
-
 use jiff::Timestamp;
 
-use crate::radar_timeline::instant;
+use crate::radar_timeline::{CIVIL_OFFSET_HOURS, instant};
 
 /// Minutes a run may trail the present before its history is refused.
 ///
 /// A healthy run trails by roughly five to fifteen minutes, and legitimately
 /// leads the clock by a minute or two: the vendor answered `15:35` against a
-/// 15:33 wall clock. A poisoned one trailed by 78 minutes at 15:33 and by 92
-/// seventeen minutes later, the same archived run ageing in place. Thirty
-/// minutes is double the worst healthy reading and under half the mildest
-/// poisoned one, so it separates the two populations with margin on both sides
-/// and six consecutively skipped publications would still keep their history.
+/// 15:33 wall clock. A poisoned one trailed by 78 minutes at 15:33, and another
+/// by 92 at 15:50. Thirty minutes is double the worst healthy reading and under
+/// half the mildest poisoned one, so it separates the two populations with
+/// margin on both sides and six consecutively skipped publications would still
+/// keep their history.
 ///
 /// Erring high is deliberate. Accepting a slightly old run costs a few minutes
 /// of slightly old past; refusing a healthy one costs a second HTTP request on
 /// every single refresh, forever, for nothing.
 pub(crate) const STALE_RUN_THRESHOLD_MINUTES: i64 = 30;
-
-/// Offsets a real civil timezone can declare; anything else is not this schema.
-const CIVIL_OFFSET_HOURS: RangeInclusive<i32> = -14..=14;
 
 /// How a run's own timestamp compares with an instant.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

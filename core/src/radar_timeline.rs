@@ -9,6 +9,8 @@
 //! Radar stamps are UTC, unlike the JSON weather feed's naive Amsterdam
 //! stamps (see [`crate::datetime`]), so the comparison instant is UTC too.
 
+use std::ops::RangeInclusive;
+
 use jiff::{Timestamp, civil::DateTime, tz::TimeZone};
 
 /// Where a radar run stops reporting and starts predicting.
@@ -59,6 +61,15 @@ impl RadarTimeline {
         }
     }
 }
+
+/// Offsets a real civil timezone can declare, in hours.
+///
+/// Radar metadata states its zone's offset as `timeOffset`, and one outside
+/// this range is not a zone the vendor could mean. Public so
+/// [`crate::radar_freshness`] and the app's frame captions refuse the same
+/// values: with two copies of the range, the run's freshness and its captions
+/// could disagree about the same field.
+pub const CIVIL_OFFSET_HOURS: RangeInclusive<i32> = -14..=14;
 
 /// Reads a radar stamp — naive UTC, per this module's doc — as an instant.
 ///

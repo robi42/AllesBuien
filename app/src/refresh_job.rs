@@ -8,6 +8,7 @@
 use std::{future::Future, path::PathBuf, sync::Arc};
 
 use allesbuien_core::{
+    error_chain,
     location::LocationConfig,
     radar::{GenerationId, RadarApi, RadarClient, RadarError},
     retry,
@@ -85,7 +86,10 @@ pub(crate) async fn fetch_weather(
         .notify_rain(data.rain_soon.as_ref(), location.display_label())
         .await;
     if let Err(error) = notified {
-        eprintln!("allesbuien: notification failed: {error}");
+        eprintln!(
+            "allesbuien: notification failed: {}",
+            error_chain::describe(&error)
+        );
     }
     Ok(data)
 }

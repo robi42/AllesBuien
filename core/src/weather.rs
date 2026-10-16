@@ -50,6 +50,7 @@ impl ReqwestFeedApi {
     ) -> Result<Self, WeatherError> {
         let client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
+            .user_agent(crate::config::USER_AGENT)
             .build()
             .map_err(WeatherError::ClientBuild)?;
         Ok(Self {
