@@ -32,7 +32,7 @@ package:
 # Installs the package built by `just package`
 install:
     @if [ -e "$HOME/.local/bin/allesbuien" ]; then \
-        echo 'error: ~/.local/bin/allesbuien, a Mode B install, would hide the package; remove it as README's Uninstall section says' >&2; \
+        echo "error: ~/.local/bin/allesbuien, a Mode B install, would hide the package; remove it as README's Uninstall section says" >&2; \
         exit 1; \
     fi
     sudo pacman -U "$(cd pkgbuild && makepkg --packagelist | grep -v '/allesbuien-debug-')"
