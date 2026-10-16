@@ -36,6 +36,13 @@ tests/gates/uncovered
 # Relaxing an entry here is a suppression wearing a config file's name.
 deny.toml
 
+# The justfile, in any directory and any spelling just reads, and the modules a
+# justfile can load. Nothing in the gate runs its recipes, but a person does,
+# `just install` among them, which runs sudo: a recipe an agent changed would run
+# with that person's password behind it.
+:(icase)*justfile
+*.just
+
 # The files that steer the pre-commit hook every worktree shares: they decide
 # what that hook runs, and whether a commit in a worktree, or `mise install`,
 # rewrites it for every checkout. lefthook.yml's no_auto_install keeps a commit
