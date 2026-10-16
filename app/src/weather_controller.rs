@@ -114,14 +114,14 @@ pub mod ffi {
             column: i32,
             parent: &QModelIndex,
         ) -> QModelIndex;
-        // Bound as an inherited member rather than as a `#[qsignal]`, twice
-        // asked for in review. A Qt signal is a public member function, so
-        // calling this one emits it to every connected binding, which is what
-        // `app/tests/weather_icons.rs` reads back off the rendered delegates;
-        // `#[qsignal]` would only add Rust-side `connect`/`on_` helpers nothing
-        // here calls, and those return connection guards that fail clippy's
-        // `must_use_candidate` under `-D warnings` — with no way to mark them,
-        // since a signal declaration does not accept `#[must_use]`.
+        // Bound as an inherited member rather than as a `#[qsignal]`. A Qt
+        // signal is a public member function, so calling this one emits it to
+        // every connected binding, which is what `app/tests/weather_icons.rs`
+        // reads back off the rendered delegates; `#[qsignal]` would only add
+        // Rust-side `connect`/`on_` helpers nothing here calls, and those
+        // return connection guards that fail clippy's `must_use_candidate`
+        // under `-D warnings` — with no way to mark them, since a signal
+        // declaration does not accept `#[must_use]`.
         #[inherit]
         #[cxx_name = "dataChanged"]
         fn data_changed(

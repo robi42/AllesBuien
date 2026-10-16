@@ -183,8 +183,8 @@ impl ffi::ImageProvider {
             .and_then(|bytes| QImage::from_data(&bytes, Some("PNG")))
             .unwrap_or_default();
         if !size.is_null() {
-            // SAFETY: Category 8 (FFI boundary): Qt's requestImage contract supplies
-            // a writable QSize output pointer when it is non-null for this call.
+            // SAFETY: Qt's requestImage contract supplies a writable QSize output
+            // pointer when it is non-null for this call.
             unsafe { size.write(image.size()) };
         }
         image

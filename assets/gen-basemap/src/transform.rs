@@ -3,6 +3,8 @@ use std::f64::consts::PI;
 use crate::{HEIGHT, WIDTH, geojson::GeoPoint};
 
 const EARTH_RADIUS_METERS: f64 = 6_378_137.0;
+// The raster bounds core/src/radar_projection.rs names for the radar: this
+// generator keeps its own copy, and the two have to move together.
 const MIN_LONGITUDE: f64 = 0.0;
 const MAX_LONGITUDE: f64 = 10.0;
 const MIN_LATITUDE: f64 = 49.5;

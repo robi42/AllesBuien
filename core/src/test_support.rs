@@ -1,8 +1,10 @@
-//! The one piece of scaffolding this crate's unit tests share.
+//! The scaffolding this crate's unit tests share: a polling executor, a fixed
+//! environment, `weather.json` writers, fixed instants and errors, and a radar
+//! fake.
 //!
 //! `allesbuien-core` is pure Rust with no async runtime of its own: reqwest
 //! brings one for the application, and taking tokio as a dev-dependency to drive
-//! futures that are ready on their first poll would buy a thread pool nothing
+//! futures that complete without a reactor would buy a thread pool nothing
 //! here needs. Every future these tests await is hand-written against a fake and
 //! completes synchronously, so polling it to completion is the whole
 //! requirement — and one home for that loop is why the transport's tests did not

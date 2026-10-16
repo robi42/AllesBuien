@@ -18,7 +18,8 @@ use allesbuien_harness::{
 };
 use allesbuien_testkit::{SETTLE_BUDGET, pump_until};
 
-/// A feed that never answers, which is the state the window opens in offline.
+/// A feed whose every request fails at once, as it does when the window opens
+/// offline.
 struct UnreachableFeedApi;
 
 impl FeedApi for UnreachableFeedApi {

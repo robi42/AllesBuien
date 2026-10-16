@@ -29,7 +29,7 @@ const VISIBLE_LEVELS: i32 = 12;
 /// How far left of the hero icon the card is sampled: inside the card's padding.
 const CARD_OFFSET: f64 = 8.0;
 
-/// Omarchy's Nord, the dark theme this app is developed on.
+/// Omarchy's Nord, a dark theme.
 const NORD: &str = "mode = \"dark\"\nbackground = \"#2e3440\"\nforeground = \"#d8dee9\"\n\
     accent = \"#81a1c1\"\nselection = \"#434c5e\"\nlighter_background = \"#3b4252\"\n\
     muted = \"#4c566a\"\n";

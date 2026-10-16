@@ -1,11 +1,13 @@
 //! Timezone-correct interpretation of Buienradar's naive Dutch wall-clock stamps.
 //!
-//! Buienradar publishes every timestamp as naive `Europe/Amsterdam` local time
-//! with no UTC offset (`2026-08-30T17:50:00`), and raintext labels are bare
-//! `HH:MM` readings of that same clock. Rendering those digits verbatim is only
-//! correct while the viewer happens to run in the Dutch zone. This module
-//! resolves the feed values in `Europe/Amsterdam` — honouring the CET/CEST
-//! transition — and re-projects them into the viewer's own timezone.
+//! Buienradar's weather feed publishes every timestamp as naive
+//! `Europe/Amsterdam` local time with no UTC offset (`2026-08-30T17:50:00`), and
+//! raintext labels are bare `HH:MM` readings of that same clock; radar metadata
+//! is UTC instead, and [`crate::radar_timeline`] reads it. Rendering those
+//! digits verbatim is only correct while the viewer happens to run in the
+//! Dutch zone. This module resolves the feed values in `Europe/Amsterdam` —
+//! honouring the CET/CEST transition — and re-projects them into the viewer's
+//! own timezone.
 //!
 //! Every entry point is total: unparsable input degrades to a passthrough of the
 //! original text rather than panicking or yielding an empty label.

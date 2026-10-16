@@ -17,9 +17,10 @@ const GEN_ROOT_IN_OUT_DIR: &str = "cxxqtgen";
 fn main() {
     println!("cargo:rerun-if-env-changed=QMAKE");
     if std::env::var_os("QMAKE").is_none() && Path::new("/usr/bin/qmake6").is_file() {
-        // SAFETY: Category 2 (data races) cannot occur: this build-script main is
+        // SAFETY: no data race can occur: this build-script main is
         // single-threaded and sets QMAKE before CxxQtBuilder can spawn any work.
-        // cxx-qt-build honors QMAKE; this avoids this host's Qt 5 /usr/bin/qmake.
+        // cxx-qt-build honors QMAKE; this avoids the Qt 5 /usr/bin/qmake that
+        // qt5-base installs.
         unsafe { std::env::set_var("QMAKE", "/usr/bin/qmake6") };
     }
 

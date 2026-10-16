@@ -213,10 +213,10 @@ Rectangle {
                 // this far left was easy to miss; the travelled part of the
                 // track changes colour at the same x instead, which makes the
                 // boundary an edge rather than something to hunt for.
-                // Clamping is what handles Rust's degenerate runs: an
-                // all-forecast run reports a fraction below 0 and comes out
-                // fully accent, an all-observed one reports above 1 and comes
-                // out fully muted, and neither draws the divider.
+                // Rust already pins the degenerate runs to the ends: an
+                // all-forecast run reports 0 and comes out fully accent, an
+                // all-observed one reports 1 and comes out fully muted, and
+                // neither draws the divider. The clamp only guards the binding.
                 readonly property real boundaryX: Math.max(0, Math.min(1, radarTransport.radarController.observedFraction)) * sliderGroove.width
                 readonly property real travelledX: frameSlider.visualPosition * sliderGroove.width
                 readonly property real observedX: Math.min(sliderGroove.travelledX, sliderGroove.boundaryX)
