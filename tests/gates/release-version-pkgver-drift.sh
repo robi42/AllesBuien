@@ -3,7 +3,7 @@
 # pkgver= is the one version surface bin/install reads, and the one nothing at
 # tag time compares: release.yml checks three Cargo manifests, so a PKGBUILD
 # left behind builds a package named after the previous release, and the
-# README's download line names a file that was never attached.
+# README's Mode A install line names a file that makepkg never built.
 
 gate="release version"
 script="bin/check-fast"
