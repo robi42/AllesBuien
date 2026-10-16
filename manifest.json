@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "AllesBuien",
-    "description": "Opens or focuses the AllesBuien radar window",
+    "description": "Opens or focuses the AllesBuien window, and installs or updates the release this plugin pins",
     "category": "Info",
     "allowMultiple": false,
     "defaultSection": "center"
