@@ -22,7 +22,7 @@ release's section is the text of its annotated tag and of its GitHub release not
   three sources — environment pin, desktop setting, or Amsterdam-West default — answered. A
   location outside the radar's coverage says so on the map, where 0.1.0 only left the marker off.
 - Keyboard control of the radar. Space and Enter play and pause wherever the focus is, Left and
-  Right step one frame and pause, Home and End jump to the first and the latest frame, and Tab
+  Right step one frame and pause, Home and End jump to the first and the last frame, and Tab
   moves between the play button and the timeline, which show a focus ring. Escape still closes
   the window.
 - Packaging metadata: `pkgdesc`, `url`, and an `optdepends` entry naming libnotify as what the
@@ -55,10 +55,12 @@ release's section is the text of its annotated tag and of its GitHub release not
   is still under way; the pulsing current-conditions icon already says it is loading.
 - Every radar legend bucket gets the equal block the key promises, and the station label is
   written in the app's language.
-- The rain graph's cursor reaches the graph's last bar. The radar animation now runs two and a
-  half hours ahead instead of two: it counts from the latest radar image, usually five to
-  fifteen minutes old, while the rain expectation counts from the present, so two hours of radar
-  often ended a bar or two short of the graph.
+- The radar animation ends where the rain graph below it does, with the graph's cursor on its
+  last bar. The radar counts from its latest image, usually five to fifteen minutes old, while
+  the rain expectation counts from the present, so two hours of radar often ended a bar or two
+  short of the graph. It now fetches two and a half hours, so that a late run still reaches that
+  bar, and plays, steps, and jumps to End only as far as it. Without a rain expectation to
+  follow, the whole run plays.
 
 ### Security
 

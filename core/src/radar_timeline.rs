@@ -128,7 +128,7 @@ mod tests {
     use super::{RadarTimeline, boundary_visible, observed_fraction};
 
     /// A ten-frame run at the endpoint's fixed 5-minute cadence. The split is
-    /// window-agnostic, so this stays smaller than the live 32-frame window.
+    /// window-agnostic, so this stays smaller than the live 32-frame download.
     const RUN: [&str; 10] = [
         "2026-08-31T18:30:00",
         "2026-08-31T18:35:00",
@@ -227,7 +227,8 @@ mod tests {
     }
     #[test]
     fn a_live_run_puts_the_boundary_half_a_step_before_the_first_prediction() {
-        // Given: the shipped window — 2 observations, 30 predictions.
+        // Given: a whole downloaded run — 2 observations, 30 predictions — as
+        // the slider spans it while no rain graph cuts it.
         // When
         let fraction = observed_fraction(2, 32);
 

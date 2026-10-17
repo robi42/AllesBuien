@@ -209,10 +209,11 @@ Rectangle {
                 color: radarTransport.theme.sliderTrack
 
                 // Where measurement stops and prediction starts. The window
-                // is 2 observations against 30 predictions, so a lone hairline
-                // this far left was easy to miss; the travelled part of the
-                // track changes colour at the same x instead, which makes the
-                // boundary an edge rather than something to hunt for.
+                // is a couple of observations against the two dozen or so
+                // predictions up to the rain graph's last bar, so a lone
+                // hairline this far left was easy to miss; the travelled part
+                // of the track changes colour at the same x instead, which
+                // makes the boundary an edge rather than something to hunt for.
                 // Rust already pins the degenerate runs to the ends: an
                 // all-forecast run reports 0 and comes out fully accent, an
                 // all-observed one reports 1 and comes out fully muted, and

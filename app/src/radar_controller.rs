@@ -4,6 +4,9 @@
 //! viewer has moved on is recognised and dropped rather than repainting the
 //! window with frames from a run nobody is watching.
 //!
+//! How far into a run the transport reaches — up to the rain graph's last bar —
+//! is [`crate::radar_reach`]'s, which cuts each run as it is adopted here.
+//!
 //! `#[auto_cxx_name]` on the `extern "RustQt"` block is load-bearing: without
 //! it, each multi-word `#[qproperty]` is exported under its `snake_case` Rust
 //! name and the camelCase binding in QML silently resolves to `undefined`.
@@ -16,7 +19,7 @@ use allesbuien_core::{
     location_notice,
     radar::{GenerationId, RadarError},
     radar_projection::marker_position,
-    radar_timeline::{boundary_visible, observed_fraction},
+    radar_timeline::RadarTimeline,
     retry, status,
 };
 use cxx_qt::{CxxQtType, Threading};
@@ -26,6 +29,7 @@ use crate::{
     image_provider, location_follow,
     qt_values::{interval_ms, or_empty},
     radar_frames::{FrameSet, LoadedRefresh},
+    radar_reach::AdoptedRun,
     radar_state::{RadarControllerConfig, RadarControllerRust},
     refresh_job,
 };
@@ -82,6 +86,8 @@ pub mod ffi {
         fn advance_frame(self: Pin<&mut RadarController>);
         #[qinvokable]
         fn seek(self: Pin<&mut RadarController>, index: i32);
+        #[qinvokable]
+        fn track_rain_end(self: Pin<&mut RadarController>, label: &QString);
     }
 
     impl cxx_qt::Threading for RadarController {}
@@ -162,6 +168,9 @@ impl ffi::RadarController {
         self.as_mut().set_status(QString::default());
         self.as_mut()
             .set_loading_notice(status::RADAR_LOADING.into());
+        // No run to cut until this refresh answers. The rain graph's end stays:
+        // it is the weather's, and an unchanged end is never handed over again.
+        self.rust_mut().adopted = AdoptedRun::default();
     }
 
     pub fn refresh(mut self: Pin<&mut Self>) {
@@ -230,27 +239,17 @@ impl ffi::RadarController {
         self.set_refresh_interval_ms(interval_ms(retry::RETRY_AFTER_FAILURE));
     }
 
+    /// Puts `set` on screen from its first frame, cut where the rain graph ends.
     fn apply_frame_set(mut self: Pin<&mut Self>, generation: u64, set: &FrameSet) {
         image_provider::replace_frames(generation, set.frames.clone());
-        let timeline = set.timeline();
-        let (first, count) = (timeline.first_forecast_index, set.timestamps.len());
-        self.as_mut()
-            .set_first_forecast_index(i32::try_from(first).unwrap_or(i32::MAX));
-        self.as_mut()
-            .set_observed_fraction(observed_fraction(first, count));
-        self.as_mut()
-            .set_forecast_boundary_visible(boundary_visible(first, count));
-        self.as_mut().rust_mut().observed_by_frame = timeline.observed;
-        self.as_mut()
-            .set_frame_count(i32::try_from(set.timestamps.len()).unwrap_or(i32::MAX));
-        self.as_mut().set_current_frame_index(0);
-        self.as_mut().set_playing(set.timestamps.len() > 1);
-        self.as_mut().set_timestamps(
-            set.timestamps
-                .iter()
-                .map(QString::from)
-                .collect::<QStringList>(),
-        );
-        self.as_mut().update_current_frame();
+        let RadarTimeline {
+            first_forecast_index,
+            observed,
+        } = set.timeline();
+        self.as_mut().rust_mut().observed_by_frame = observed;
+        self.adopt_run(AdoptedRun {
+            labels: set.timestamps.clone(),
+            first_forecast_index,
+        });
     }
 }

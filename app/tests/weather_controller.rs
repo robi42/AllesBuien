@@ -108,6 +108,11 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
             .map(ToString::to_string)
             .collect();
         assert_eq!(captions, ["14:00", "", "", "14:15"]);
+        assert_eq!(
+            controller.rain_end_label().to_string(),
+            "14:15",
+            "the radar ends on the last bar"
+        );
 
         let roles = controller.role_names();
         assert_eq!(
@@ -183,5 +188,9 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
     assert!(controller.observed_label().is_empty());
     assert_eq!(controller.rain_levels().len(), 0);
     assert_eq!(controller.rain_axis_labels().len(), 0);
+    assert!(
+        controller.rain_end_label().is_empty(),
+        "no graph, so nothing ends the radar"
+    );
     assert!(!*controller.rain_wet());
 }

@@ -93,7 +93,7 @@ When rain is expected to start within 30 minutes, AllesBuien announces it once t
 
 - **Space** or **Enter** plays and pauses the radar, wherever the focus is.
 - **Left** and **Right** step one frame back or forward and pause.
-- **Home** and **End** jump to the first and the latest frame.
+- **Home** and **End** jump to the first and the last frame; the animation ends where the rain graph below the map does.
 - **Tab** moves between the play button and the timeline, which show a ring while they have keyboard focus.
 - **Escape** closes the window.
 

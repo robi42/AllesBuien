@@ -6,18 +6,23 @@
 //! observed peak only when that peak exceeds the reference. A dry window keeps
 //! every bar at zero, which the panel renders as a flat baseline.
 //!
-//! The bridge methods that publish the plot are here too, cursor included. The
-//! cursor is the graph's own read of which bar the radar is currently over, so
-//! keeping it beside the scale it is positioned against is what stops the two
-//! from being changed apart.
+//! The bridge methods that publish the plot are here too, cursor and end
+//! included. The cursor is the graph's own read of which bar the radar is
+//! currently over, and the end is the moment its last bar stands for, where the
+//! radar's animation stops; keeping both beside the scale they are read against
+//! is what stops the three from being changed apart.
 
 use std::pin::Pin;
 
-use allesbuien_core::{rain::RainPoint, rain_cursor::frame_cursor, status::RAIN_UNAVAILABLE};
+use allesbuien_core::{
+    rain::RainPoint,
+    rain_cursor::{frame_cursor, series_end},
+    status::RAIN_UNAVAILABLE,
+};
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QList, QString, QStringList};
 
-use crate::weather_controller::ffi;
+use crate::{qt_values::or_empty, weather_controller::ffi};
 
 impl ffi::WeatherController {
     /// Points the rain graph's cursor at the radar frame QML is currently showing.
@@ -40,7 +45,10 @@ impl ffi::WeatherController {
                 .collect::<QStringList>(),
         );
         self.as_mut().rust_mut().rain_points = points.to_vec();
-        self.update_rain_cursor();
+        self.as_mut().update_rain_cursor();
+        // Last, once everything it is read against is published: `Main.qml`
+        // hands it straight to the radar bridge, which ends its animation there.
+        self.set_rain_end_label(or_empty(series_end(points)));
     }
 
     fn update_rain_cursor(mut self: Pin<&mut Self>) {

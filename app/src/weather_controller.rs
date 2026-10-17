@@ -88,6 +88,7 @@ pub mod ffi {
         #[qproperty(QStringList, rain_axis_labels)]
         #[qproperty(f64, rain_cursor_fraction)]
         #[qproperty(bool, rain_cursor_visible)]
+        #[qproperty(QString, rain_end_label)]
         #[qproperty(QString, status)]
         #[qproperty(i32, refresh_interval_ms)]
         #[qproperty(i32, location_poll_interval_ms)]
