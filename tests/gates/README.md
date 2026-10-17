@@ -1,9 +1,10 @@
 # Gate violation fixtures
 
-Each file here is one deliberately broken input, aimed at one gate, together
-with the substring the resulting failure has to contain. `bin/check-gates`
-overlays each onto a throwaway copy of the tree and asserts the gate goes red
-for the stated reason, and that the same gate is green on the tree untouched.
+Each file here is one deliberate input aimed at one gate: a broken one, with
+the substrings its failure has to contain, or a legitimate one the gate has to
+tolerate. `bin/check-gates` overlays each onto a throwaway copy of the tree and
+asserts the gate goes red for the stated reason, or stays green, and that the
+same gate is green on the tree untouched.
 `bin/test` runs it last, as `==> gate: gate violations`.
 
 The reason this exists is measured rather than theoretical. `bin/test`'s
@@ -31,16 +32,17 @@ those declarations to work out which gates have a fixture at all, and it reads
 them by shape rather than by search — exactly as the slicer reads a gate header
 — so an indented or reworded copy is prose to both of them.
 
-New fixtures keep the `shell=bash` declaration on their first line, which
-the runner's contract needs, but silence no ShellCheck warning. The runner
-reads `gate`, `script`, `outcome`, and `expect` after sourcing the file, which
-ShellCheck cannot see, so each ends with one line that uses them instead:
-`: "$gate" "$script" "$outcome" "${expect[@]}"`, under a comment saying why.
-The older fixtures keep the SC2034 directive they were written with.
+New fixtures keep the `# shellcheck shell=bash` directive on their first line,
+which ShellCheck needs for a file with no shebang, but silence no ShellCheck
+warning. The runner reads `gate`, `script`, `outcome`, and `expect` after
+sourcing the file, which ShellCheck cannot see, so each ends with one line that
+uses them instead: `: "$gate" "$script" "$outcome" "${expect[@]}"`, under a
+comment saying why. The older fixtures keep the SC2034 directive they were
+written with.
 
-`args` optionally passes arguments to the gate script, which is how the two
-contract fixtures point `bin/check-qml-contract` at a deliberately broken copy
-of `plugin.qmltypes` rather than at the real one.
+`args` optionally passes arguments to the gate script, which is how the three
+contract fixtures point `bin/check-qml-contract` at an altered copy of
+`plugin.qmltypes` rather than at the real one.
 
 `mutate` may append to `expect`, which is how a fixture that picks its target
 out of the tree — the first bridge carrying `#[auto_cxx_name]`, the first member
@@ -54,10 +56,11 @@ reintroduce it here.
 
 The `green` fixtures are not filler. A gate wide enough to refuse a legitimate
 input gets weakened by the first person it blocks, so the colour gate is pinned
-against a controller binding, the size budget against a 751-line file that is
-750 comments and 250 statements, and the name-binding gate against a module doc
-that quotes `extern "RustQt"` verbatim — the false positive a gate that counted
-occurrences instead of reading structure would produce on a clean tree.
+against a controller binding, the size budget against a 751-line file whose 250
+statements sit among 501 comment and blank lines, and the name-binding gate
+against a module doc that quotes `extern "RustQt"` verbatim — the false positive
+a gate that counted occurrences instead of reading structure would produce on a
+clean tree.
 
 ## Isolation
 
@@ -182,8 +185,8 @@ commands would keep passing long after the real gate changed underneath it.
 
 ## Coverage
 
-Twenty-three of the twenty-seven gates are covered. The four that are not all need a
-compiled workspace, and a cold CXX-Qt build on this host is over twenty minutes:
+Twenty-three of the twenty-seven gates are covered. The four that are not all
+need a compiled workspace, and a cold CXX-Qt build takes over twenty minutes:
 
 | gate | why it is out of scope |
 |------|------------------------|
@@ -195,18 +198,19 @@ compiled workspace, and a cold CXX-Qt build on this host is over twenty minutes:
 Two of the covered gates are design checks, and each is a proxy rather than a
 proof. `side-effect seams` names the constructors for processes, environment
 reads, HTTP clients, and the Tokio runtime, plus the ordinary spellings of
-process-global mutable state, and allows each in exactly one home; it reads
-only files under a `src/` directory and skips `#[cfg(test)]` blocks, because
-build scripts must read the environment and test fakes build failing clients on
-purpose. `trait surface` refuses a trait with more than four methods, required
-and default alike, counting only the methods one level inside the trait so a
-helper declared in a default body is not surface. Each constructor row has its
-own red fixture and the static row has two, at column zero and inside an inline
-module, so a broken row cannot hide behind a working one. Nesting depth is bounded by clippy's
-`excessive_nesting`, which rides on the excused `clippy` gate. The open-closed
-and Liskov principles have no fixture and no gate: nothing in the text of a
-Rust file says whether an extension needed an edit or a subtype broke a
-contract, and a gate that guessed would be a decoration.
+process-global mutable state, and allows each only in the files its table names;
+it reads only files under a `src/` directory and skips `#[cfg(test)]` blocks,
+because build scripts must read the environment and test fakes build failing
+clients on purpose. `trait surface` refuses a trait with more than four methods,
+required and default alike, counting only the methods one level inside the trait
+so a helper declared in a default body is not surface. Each constructor row has
+its own red fixture; the static row has two, at column zero and inside an inline
+module; and the `thread_local!` row has one, so a broken row cannot hide behind
+a working one. Nesting depth is bounded by clippy's `excessive_nesting`, which
+rides on the excused `clippy` gate. The open-closed and Liskov principles have
+no fixture and no gate: nothing in the text of a Rust file says whether an
+extension needed an edit or a subtype broke a contract, and a gate that guessed
+would be a decoration.
 
 `cxx family lockstep` reads `Cargo.lock` and refuses a `cxx` and a `cxx-gen`
 whose patch numbers differ, or either crate missing or locked twice. cxx names
@@ -218,8 +222,8 @@ cxx's own manifest pins `cxx-build` and the `cxxbridge-*` crates exactly, so
 cargo already holds them in step.
 
 `release version` holds the nine files that carry the version to
-`app/Cargo.toml`: the other four Cargo manifests, the five workspace entries in
-`Cargo.lock`, `pkgver=` in the PKGBUILD, the top-level `"version"` in
+`app/Cargo.toml`: the other four Cargo manifests, the five versioned workspace
+entries in `Cargo.lock`, `pkgver=` in the PKGBUILD, the top-level `"version"` in
 `manifest.json`, and every package filename in the README. `release.yml`
 compares only three of them, and only at tag time, after the README has already
 shipped a filename nobody can download. A surface that yields no version is
@@ -274,17 +278,18 @@ too, because an allowlist that only grows fills with entries asserting nothing.
 It carries no `.sh` extension on purpose, so `bin/test`'s
 `shellcheck bin/* tests/gates/*.sh` leaves it alone.
 
-That arithmetic deliberately does not live here. This runner reports how many
-gates its own fixtures named, which is silent by construction about a gate no
-fixture named — the summary keeps printing the same totals and nothing goes red.
-It could not live here either way: the selector argument makes this script's
-gate list legitimately partial, and a fixture aimed at a gate inside this file
-would nest the whole suite in itself. `bin/check-fast` is where `lefthook` runs
-it, on the commit that would introduce the unproven gate.
+That arithmetic deliberately does not live in the runner. `bin/check-gates`
+reports how many gates its own fixtures named, which is silent by construction
+about a gate no fixture named — the summary keeps printing the same totals and
+nothing goes red. It could not live there either way: the selector argument
+makes the runner's gate list legitimately partial, and a fixture aimed at a gate
+inside `bin/check-gates` would nest the whole suite in itself. `bin/check-fast`
+is where `lefthook` runs it, on the commit that would introduce the unproven
+gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-sixty-four it runs, each of which fails loudly if its gate stops biting. One
-of those sixty-four aims at the runner rather than at a gate: the slicer
+sixty-five it runs, each of which fails loudly if its gate stops biting. One
+of those sixty-five aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That

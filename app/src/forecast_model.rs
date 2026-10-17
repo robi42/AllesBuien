@@ -32,11 +32,11 @@ impl ffi::WeatherController {
     }
 
     pub(crate) fn replace_forecast(mut self: Pin<&mut Self>, forecast: Vec<ForecastDay>) {
-        // SAFETY: Category 13 — no operation between this paired reset can fail or panic,
+        // SAFETY: no operation between this paired reset can fail or panic,
         // and CxxQtThread guarantees execution on the model's owning Qt thread.
         unsafe { self.as_mut().begin_reset_model() };
         self.as_mut().rust_mut().forecast = forecast;
-        // SAFETY: Category 13 — this closes the immediately preceding model reset.
+        // SAFETY: this closes the immediately preceding model reset.
         unsafe { self.end_reset_model() };
     }
 

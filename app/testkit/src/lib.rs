@@ -20,7 +20,6 @@
 //! fake — the generation-scripted radar in `radar_controller`, the two-frame
 //! animation in `radar_view_grab` — stays beside the single test that reads it,
 //! where its expectations are visible next to the assertions they serve.
-
 //!
 //! Nothing here links Qt. The Qt-bound half — booting the window and reading
 //! its rendered object tree — is `allesbuien-harness`.

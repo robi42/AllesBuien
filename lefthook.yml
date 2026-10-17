@@ -1,7 +1,7 @@
 # The lefthook mise.toml pins, and nothing older. The hook runs the first
 # lefthook on PATH, and a PATH that mise did not set up for this checkout can
-# carry a global install - this machine's is 2.1.6, which predates 2.1.7's
-# fixes for restoring unstaged changes - so an older one refuses to run it
+# carry a global install - a distribution's can predate 2.1.7's fixes for
+# restoring unstaged changes - so an older one refuses to run it
 # instead. lefthook checks this before it runs a job or touches a hook, and
 # bin/check-fast's lefthook pin gate holds it to the pin in mise.toml.
 min_version: "2.1.16"

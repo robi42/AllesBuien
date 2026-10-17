@@ -53,7 +53,7 @@ cargo clippy --all-targets -- -D warnings
 echo "==> gate: workspace tests"
 QT_QPA_PLATFORM=offscreen cargo test --workspace
 
-# Timezone matrix. Two modules read the host clock on purpose, and a test that
+# Timezone matrix. Three modules read the host clock on purpose, and a test that
 # quietly agrees with Amsterdam passes here and fails on a UTC server months
 # later - twice, so far. Grepping for ::now() would only condemn the legitimate
 # readers, so run the real suite in zones that disagree with this machine

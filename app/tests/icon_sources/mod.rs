@@ -1,7 +1,10 @@
-//! The icon transport `weather_icons` scripts: one code held back, one refused
-//! once, and the rest served at once.
+//! The icon transport `weather_icons` and `weather_overtaken_refresh` share:
+//! it holds each `gated` code back until released, refuses each `refuse_once`
+//! code on its first request only, serves the rest at once, and counts every
+//! request. `weather_icons` holds one code back and refuses one;
+//! `weather_overtaken_refresh` scripts neither and reads only the counts.
 //!
-//! This lives beside its one consumer rather than in `allesbuien-testkit`,
+//! It lives under `app/tests` rather than in `allesbuien-testkit`,
 //! because `IconSource` belongs to the app crate and the testkit is Qt-free and
 //! app-free on purpose. The body is a real, decodable 1x1 PNG, so a delivered
 //! icon reaches `Image.Ready` and its skeleton can be watched going away.

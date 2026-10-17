@@ -1,4 +1,4 @@
-//! Minute-resolution rain expectation derived from Buienradar's raintext feed.
+//! Rain expectation in five-minute steps, from Buienradar's raintext feed.
 //!
 //! The endpoint returns twenty-four `value|HH:MM` rows — two hours at five
 //! minute cadence — where `value` is Buienradar's logarithmic intensity code

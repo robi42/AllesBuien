@@ -76,8 +76,9 @@ unbound=$(git ls-files '*.rs' | xargs -r awk '
 # One GUI test per harness. A second one in the same file shares a process with
 # the first, so it meets a QGuiApplication that already exists and the run dies
 # with a SIGSEGV that reads like a product bug rather than a layout mistake.
-# Count only the attribute: five of the seven harnesses reach QGuiApplication
-# through AppBuilder::boot, so grepping for the type scores every file zero.
+# Count only the attribute: every harness reaches QGuiApplication through
+# allesbuien-harness, so the type's name says nothing about how many a file
+# builds.
 echo "==> gate: one GUI test per harness"
 crowded=$(git ls-files 'app/tests/*.rs' | while read -r harness; do
   case "$harness" in app/tests/*/*) continue ;; esac
@@ -233,8 +234,8 @@ min_lefthook=$(sed -n 's/^min_version: "\(.*\)"$/\1/p' lefthook.yml)
     "  lefthook.yml: ${min_lefthook:-none}, mise.toml: ${pinned_lefthook:-none}"
 
 # Release version. Nine files carry the version - five Cargo.toml manifests,
-# the five workspace entries in Cargo.lock, pkgver= in the PKGBUILD, the Omarchy
-# manifest, and the package filename the README tells people to download - and
+# five versioned workspace entries in Cargo.lock, pkgver= in the PKGBUILD, the
+# Omarchy manifest, and every package filename in the README - and
 # release.yml compares three of them against the tag. It does so at tag time,
 # after the README has already shipped a filename that does not exist and the
 # marketplace has already read a manifest that names the previous release. This
@@ -449,12 +450,12 @@ plugin_problems=$(
 
 # Side-effect seams. Dependency inversion in this tree has a concrete shape:
 # processes, environment reads, HTTP clients, and the Tokio runtime are each
-# built in one named home behind FeedApi, RadarApi, Notifier, or a construction
-# seam, and nothing holds process-global mutable state but the image provider's
-# frame store, which Qt's C++ trampoline gives no other way to reach. A second
-# reqwest client in a controller compiles, passes every test that injects a
-# fake, and quietly stops being injectable. This gate names each constructor and
-# the one file allowed to call it.
+# built only in the files named for it, behind FeedApi, RadarApi, IconSource,
+# Notifier, EnvSource, or a construction seam, and nothing holds process-global
+# mutable state but the image provider's frame store, which Qt's C++ trampoline
+# gives no other way to reach. A second reqwest client in a controller compiles,
+# passes every test that injects a fake, and quietly stops being injectable.
+# This gate names each constructor and the files allowed to call it.
 #
 # It is a belt over the spellings this tree uses, not a proof of injection: a
 # plain `static X: T` whose interior mutability hides inside T gets through, as
@@ -514,7 +515,7 @@ AWK
 misplaced_effects=$(for rule in "${seam_rules[@]}"; do
   git ls-files '*/src/*.rs' | xargs -r awk -v pat="${rule%%$'\t'*}" -v allowed="${rule#*$'\t'}" "$seam_scan"
 done)
-[[ -z "$misplaced_effects" ]] || report 'side effects outside their one home (see the table in this gate):' "$misplaced_effects"
+[[ -z "$misplaced_effects" ]] || report 'side effects outside the files named for them (see the table in this gate):' "$misplaced_effects"
 
 # Trait surface. Interface segregation, measured the cheap way: every trait in
 # this tree has one or two methods, because each one is a seam a test fakes,

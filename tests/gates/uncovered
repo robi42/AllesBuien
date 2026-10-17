@@ -6,8 +6,8 @@
 # fixture has since covered, is itself refused: this list has to shrink when a
 # fixture lands. tests/gates/README.md carries the long form of each argument.
 #
-# All four need a compiled workspace, and a cold CXX-Qt build on this host is
-# over twenty minutes. All four are also stock invocations of tools whose
+# All four need a compiled workspace, and a cold CXX-Qt build takes over
+# twenty minutes. All four are also stock invocations of tools whose
 # failure behaviour is not in question, which is the difference between them and
 # the hand-written shell every other gate is made of.
 

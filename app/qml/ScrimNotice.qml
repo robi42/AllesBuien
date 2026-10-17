@@ -9,18 +9,18 @@ import QtQuick.Controls
 //
 // Nothing here is declared that the Label already has. Where a notice sits,
 // which colour it takes, and how many lines it may run to are the parts that
-// differ between the two on the map, and all three are Label's or Item's own
-// properties — so each call site says them in the ordinary way rather than
-// through an alias renaming a property that already had a name. Defaulting
-// `maximumLineCount` here would be the one that hurts: the two call sites
-// disagree about it on purpose, and a shared default is how that disagreement
-// would quietly become a single number.
+// differ between the three on the map, and all three parts are Label's or
+// Item's own properties — so each call site says them in the ordinary way
+// rather than through an alias renaming a property that already had a name.
+// Defaulting `maximumLineCount` here would be the one that hurts: the three
+// call sites disagree about it on purpose, and a shared default is how that
+// disagreement would quietly become a single number.
 Label {
     id: scrimNotice
 
     required property Theme theme
 
-    // Both notices bind a string that is empty in the healthy case, so an empty
+    // Every notice binds a string that is empty in the healthy case, so an empty
     // notice has to disappear entirely rather than leave a lit scrim over
     // nothing.
     visible: scrimNotice.text.length > 0

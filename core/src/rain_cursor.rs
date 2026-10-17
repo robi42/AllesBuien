@@ -116,7 +116,8 @@ mod tests {
 
     #[test]
     fn a_frame_that_outruns_the_last_sample_is_reported_as_outside_it() {
-        // Given: the radar window extends ten minutes past raintext's right edge.
+        // Given: frames past raintext's right edge, which the radar's 32-frame
+        // window usually has.
         let points = window(23, 50);
 
         // When / Then

@@ -3,7 +3,8 @@
 //! Three sources answer the same question with different authority: the
 //! `ALLESBUIEN_LAT`/`ALLESBUIEN_LON` pair a user set for this app, Omarchy's own
 //! `weather.json` when the desktop already knows a place, and Amsterdam-West as
-//! the last resort. Keeping the order in one function is what makes the
+//! the last resort. Keeping the order in one function,
+//! [`crate::location_settings::LocationSettings::resolve`], is what makes the
 //! precedence readable — the alternative is a rule spread across three call
 //! sites that nobody can state without reading all three.
 //!

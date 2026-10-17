@@ -132,11 +132,7 @@ impl ReqwestRadarApi {
     pub fn new(base_url: &str) -> Result<Self, RadarError> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "/",
-                env!("CARGO_PKG_VERSION")
-            ))
+            .user_agent(crate::config::USER_AGENT)
             .build()?;
         Ok(Self {
             client,

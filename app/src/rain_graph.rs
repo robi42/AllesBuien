@@ -144,7 +144,7 @@ mod tests {
         let carried = RainGraph::build(&[], "starts around 14:10");
 
         // Then
-        assert_eq!(blank.summary, "Rain forecast unavailable");
+        assert_eq!(blank.summary, "Rain expectation unavailable");
         assert_eq!(carried.summary, "starts around 14:10");
     }
 
@@ -165,7 +165,7 @@ mod tests {
         reason = "encoded rain value zero must map to the exact zero-height baseline asserted by this regression test"
     )]
     fn light_rain_stays_visible_against_the_fixed_full_scale() {
-        // Given: 0.04 mm/h, three orders of magnitude below the 5 mm/h reference.
+        // Given: 0.04 mm/h, two orders of magnitude below the 5 mm/h reference.
         let points = series("000|12:00\n065|12:05\n");
 
         // When

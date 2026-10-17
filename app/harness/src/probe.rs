@@ -158,8 +158,8 @@ pub unsafe fn map_to_scene(item: NonNull<QObject>, x: f64, y: f64) -> QPointF {
 ///
 /// # Safety
 ///
-/// `object` must come from [`child`] on the still-live booted application, and
-/// the call must be on its GUI thread.
+/// `object` must come from [`child`], [`descendant`], or [`delegate`] on the
+/// still-live booted application, and the call must be on its GUI thread.
 #[must_use]
 pub unsafe fn property(object: NonNull<QObject>, name: &str) -> QVariant {
     let name = property_name(name);

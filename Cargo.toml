@@ -18,10 +18,12 @@ cxx-qt-build = "=0.10.0"
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
-# Five duplicate crates — bitflags, getrandom, syn, windows-sys, winnow — reach
-# us only through reqwest, rustls, jiff, toml, and serde. Nothing in this
-# workspace picks either version, so the only lever here is a version bound on a
-# dependency we do not own; the fix belongs upstream and arrives with their bumps.
+# The duplicate crates `cargo tree --duplicates` lists reach us through
+# dependencies we do not own, thiserror aside: core asks for thiserror 2, and
+# the =0.10.0 CXX-Qt family still asks for 1, so matching it would take core
+# back a major version. For the rest, nothing in this workspace picks either
+# version, and the only lever is a version bound on a dependency we do not
+# own. Either way the fix belongs upstream and arrives with their bumps.
 multiple_crate_versions = "allow"
 # Already warn by default once clippy.toml sets a threshold; named here so the
 # nesting budget is written down beside the other lints rather than found only
@@ -30,8 +32,8 @@ excessive_nesting = "warn"
 
 # Dependencies build without debug info, the C++ that cxx-qt-lib compiles
 # included. Debug info is about 90% of each Qt-linked test binary, 126 of
-# 141 MB, and there are two dozen of them: Blik, on the same stack, ran CI's
-# runner out of disk this way once its gate linked a dozen. The workspace's own
-# crates keep theirs, so a backtrace still names every function.
+# 141 MB, and there are about twenty of them: another project on the same stack
+# ran CI's runner out of disk this way once its gate linked a dozen. The
+# workspace's own crates keep theirs, so a backtrace still names every function.
 [profile.dev.package."*"]
 debug = false

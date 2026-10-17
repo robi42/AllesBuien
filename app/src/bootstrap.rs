@@ -152,8 +152,8 @@ impl AppBuilder {
             let provider =
                 image_provider::ffi::new_image_provider(QQmlImageProviderBaseImageType::Image);
             let qml_engine: core::pin::Pin<&mut QQmlEngine> = engine_pin.as_mut().upcast_pin();
-            // SAFETY: Category 8 (FFI ownership): the C++ trampoline returns a fresh,
-            // non-null allocation and QQmlEngine takes its sole ownership by contract.
+            // SAFETY: the C++ trampoline returns a fresh, non-null allocation, and
+            // QQmlEngine takes its sole ownership by contract.
             unsafe { qml_engine.add_image_provider(&QString::from(name), provider) };
         }
         engine_pin.as_mut().load(&QUrl::from(MAIN_QML_URL));

@@ -3,6 +3,8 @@ name = "allesbuien"
 version = "0.2.0"
 edition = "2024"
 license = "MIT"
+description = "Dutch weather and rain radar for Omarchy"
+repository = "https://github.com/robi42/AllesBuien"
 publish = false
 
 [lints]

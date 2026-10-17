@@ -1,8 +1,10 @@
 //! Buienradar CDN icon URLs for condition codes.
 //!
-//! The feed publishes a 30x30 icon URL per forecast day and nothing at all for
-//! station measurements, so the app builds its own URLs from the condition code
-//! that [`allesbuien_core::condition`] already extracted. The 96x96 set renders
+//! Every station measurement and forecast day carries both a 30x30 `iconurl`
+//! and a 96x96 `fullIconUrl`. Core reads only the first, for the condition
+//! code its file stem names ([`allesbuien_core::condition`]), and this module
+//! builds the 96x96 URL back from that code's [`cache_key`], the one name the
+//! cache, the provider URL, and the CDN URL agree on. The 96x96 set renders
 //! crisply on a scaled display and is published under UPPERCASE stems; the
 //! lowercase stem answers 404 there, while the 30x30 set is lowercase only.
 //!

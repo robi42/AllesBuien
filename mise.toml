@@ -1,7 +1,6 @@
 # The linters are pinned beside the toolchain because both of them police
 # `bin/*` and `.github/workflows/*`, and an unpinned linter changes the gate's
-# verdict without a diff. `actionlint` carries the version the deleted
-# `.actionlint-version` file recorded; that file pinned a tool nothing ran.
+# verdict without a diff.
 # mise provisions every tool here into the user's own prefix, so no gate ever
 # needs sudo. CI installs its own copies from pacman and accepts the version
 # skew: both linters fail loudly, so a newer server-side rule surfaces as a red

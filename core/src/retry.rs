@@ -94,9 +94,18 @@ mod tests {
     use crate::{radar::RadarError, test_support::json_decode_error, weather::WeatherError};
 
     #[test]
-    fn retries_a_transport_fault_because_the_endpoint_stalls_intermittently() {
-        // Given: the shape a timed-out metadata request arrives as.
+    fn retries_a_server_error_because_an_overloaded_endpoint_recovers() {
+        // Given: a 503, as an overloaded endpoint answers.
         let error = RadarError::HttpStatus { status: 503 };
+
+        // When / Then
+        assert!(is_retryable(&error));
+    }
+
+    #[test]
+    fn retries_a_transport_fault_because_the_endpoint_stalls_intermittently() {
+        // Given: the shape a timed-out or refused metadata request arrives as.
+        let error = RadarError::Request(endpoint_error());
 
         // When / Then
         assert!(is_retryable(&error));

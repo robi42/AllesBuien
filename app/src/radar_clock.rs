@@ -18,15 +18,13 @@
 //! it is evaluated at the stamp's own instant so it survives the CET/CEST
 //! transition without a second tzdb in the app layer.
 
-use std::ops::RangeInclusive;
-
-use allesbuien_core::datetime::{LocalTimestamp, clock_shift_minutes_in, shift_clock_label};
+use allesbuien_core::{
+    datetime::{LocalTimestamp, clock_shift_minutes_in, shift_clock_label},
+    radar_timeline::CIVIL_OFFSET_HOURS,
+};
 
 /// IANA name of the zone radar metadata publishes its stamps in.
 const RADAR_TIMEZONE: &str = "UTC";
-
-/// Offsets a real civil timezone can declare; anything else is treated as absent.
-const CIVIL_OFFSET_HOURS: RangeInclusive<i32> = -14..=14;
 
 /// Projects a UTC radar frame stamp onto this machine's `HH:MM` clock.
 ///

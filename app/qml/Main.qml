@@ -32,9 +32,9 @@ ApplicationWindow {
     // The height is measured, not derived: the forecast list clips rather than
     // squashing its rows, so the floor is whatever makes all five of them fit.
     // 640 renders four and slices the fifth, 660 still slices it, 664 lands the
-    // last row's icon on the clip edge, 668 is clean. 672 is that, taken up to
-    // the 4 px scale — the spare step is the margin for a themed font with
-    // taller metrics, since the window follows whichever theme Omarchy has on.
+    // last row's icon on the clip edge, 668 is clean. 672 adds one 4 px step as
+    // the margin for a themed font with taller metrics, since the window
+    // follows whichever theme Omarchy has on.
     minimumWidth: 852
     minimumHeight: 672
     visible: true
@@ -75,7 +75,7 @@ ApplicationWindow {
                 Layout.minimumWidth: 400
             }
 
-            // 380, down from 420. The forecast row carries four short columns
+            // 380, down from 420. The forecast row carries three short columns
             // and nothing else; at 420 they could not be spread without leaving
             // a hole, and the 40 px goes to the radar, which is the one thing
             // here that gets better the larger it is.
@@ -196,8 +196,8 @@ ApplicationWindow {
         onTriggered: root.themeSource.poll()
     }
 
-    // Omarchy's weather.json is a desktop-wide setting the bar widget already
-    // follows live, and this window read it once at construction. Both bridges
+    // Omarchy's weather.json is a desktop-wide setting that Omarchy's own
+    // weather pill follows live, and so does this window. Both bridges
     // re-ask on the same tick and each decides for itself whether the answer
     // moved; neither is told by the other, so the order of these two calls
     // carries no meaning. Polled rather than watched for the reason the theme
@@ -211,11 +211,5 @@ ApplicationWindow {
             root.weatherSource.pollLocation();
             root.radarSource.pollLocation();
         }
-    }
-
-    Timer {
-        interval: 50
-        running: Qt.platform.pluginName === "offscreen"
-        onTriggered: Qt.quit()
     }
 }

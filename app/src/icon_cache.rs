@@ -135,6 +135,7 @@ impl ReqwestIconSource {
     pub fn new() -> Option<Self> {
         reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
+            .user_agent(allesbuien_core::config::USER_AGENT)
             .build()
             .ok()
             .map(Self)
