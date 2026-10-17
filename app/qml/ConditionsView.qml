@@ -203,6 +203,15 @@ ColumnLayout {
     RowLayout {
         objectName: "headerRow"
         Layout.fillWidth: true
+        // The header asks for no width of its own and takes the view's. The
+        // corner's cap below is half the view's width, so a header that asked
+        // for its content's width would size the view from a cap computed off
+        // the view's own size: while the view is still sizing itself from its
+        // contents, at construction, each pass widens the next, and Qt gives up
+        // on the third with "Detected recursive rearrange", the warning
+        // `app/tests/boot_warnings.rs` holds the window to. In the window the
+        // view fills its column either way, so nothing on screen moves.
+        Layout.preferredWidth: 0
         spacing: conditionsView.theme.spaceMd
 
         ColumnLayout {
