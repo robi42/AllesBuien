@@ -16,10 +16,17 @@ ApplicationWindow {
     readonly property var themeSource: themeController // qmllint disable unqualified
 
     // The radar frames and the rain graph are separate feeds whose only shared
-    // basis is the viewer's wall clock. Rust maps one onto the other; this pair
-    // is the single point in the tree where the two controllers meet.
+    // basis is the viewer's wall clock, and Rust maps each onto the other: the
+    // frame on screen places the graph's cursor, and the graph's last bar is
+    // where the radar's animation ends. These two pairs are the only place in
+    // the tree where the two controllers meet. Each bridge keeps the last value
+    // the other handed it, so it does not matter which feed answers first, and
+    // both values start empty and change only once the event loop runs, after
+    // this file has loaded, so each handler below sees every change.
     readonly property string radarFrameLabel: root.radarSource.currentFrameLabel
     onRadarFrameLabelChanged: root.weatherSource.trackRadarFrame(root.radarFrameLabel)
+    readonly property string rainEndLabel: root.weatherSource.rainEndLabel
+    onRainEndLabelChanged: root.radarSource.trackRainEnd(root.rainEndLabel)
 
     objectName: "rootWindow"
     width: 980
@@ -199,10 +206,11 @@ ApplicationWindow {
     // Omarchy's weather.json is a desktop-wide setting that Omarchy's own
     // weather pill follows live, and so does this window. Both bridges
     // re-ask on the same tick and each decides for itself whether the answer
-    // moved; neither is told by the other, so the order of these two calls
-    // carries no meaning. Polled rather than watched for the reason the theme
-    // is: --clear removes the file and a later --set writes a new one, which an
-    // inode-bound watcher stops hearing about after the first removal.
+    // moved; neither is told the location by the other, so the order of these
+    // two calls carries no meaning. Polled rather than watched for the reason
+    // the theme is: --clear removes the file and a later --set writes a new
+    // one, which an inode-bound watcher stops hearing about after the first
+    // removal.
     Timer {
         interval: root.weatherSource.locationPollIntervalMs
         repeat: true

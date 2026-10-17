@@ -88,8 +88,11 @@ ColumnLayout {
 
             // The moment the radar is showing, so the map and the graph read as
             // one timeline. Rust returns no fraction for a frame outside the
-            // series — the observed frames before it starts and the predictions
-            // that outrun it — and the cursor hides rather than lying at an edge.
+            // series, and the cursor hides rather than lying at an edge. Those
+            // are the observed frames before it starts: the radar ends its
+            // animation on this graph's last bar, so a prediction that outruns
+            // it is shown only while there is no graph to end at, or one older
+            // than the radar's run.
             Rectangle {
                 id: radarCursor
                 x: rainView.weatherController.rainCursorFraction * plot.width - radarCursor.width / 2

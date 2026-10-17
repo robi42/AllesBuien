@@ -60,6 +60,11 @@ pub struct WeatherControllerRust {
     pub(crate) rain_axis_labels: QStringList,
     pub(crate) rain_cursor_fraction: f64,
     pub(crate) rain_cursor_visible: bool,
+    /// The moment the rain graph's last bar stands for, which `Main.qml` hands
+    /// the radar so that its animation ends there; empty while no graph has
+    /// one. `apply_rain` writes it with the bars, so a failed refresh keeps it
+    /// exactly as it keeps them.
+    pub(crate) rain_end_label: QString,
     pub(crate) status: QString,
     pub(crate) refresh_interval_ms: i32,
     pub(crate) location_poll_interval_ms: i32,
@@ -109,6 +114,7 @@ impl Default for WeatherControllerRust {
             rain_axis_labels: QStringList::default(),
             rain_cursor_fraction: 0.0,
             rain_cursor_visible: false,
+            rain_end_label: QString::default(),
             // Empty, not a failure: the refresh construction starts is still
             // under way, and the pulsing hero above already says so.
             status: QString::default(),

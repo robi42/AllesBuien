@@ -8,8 +8,10 @@
 //! rendered pixels for the ring, because a ring is only proven by being seen.
 //!
 //! It lives beside its one consumer rather than in `allesbuien-harness`: a
-//! second harness that needs the play button and the slider by name is the
-//! point at which this earns a place there.
+//! second harness that needs the controls' focus, rings, or clicks is the
+//! point at which this earns a place there; `radar_ends_with_rain` reads one
+//! slider property and presses keys through the harness's probes and keys
+//! directly.
 
 use std::ptr::NonNull;
 

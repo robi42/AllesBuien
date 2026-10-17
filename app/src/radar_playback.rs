@@ -4,7 +4,8 @@
 //! surface that answers to the viewer rather than to the network: the transport
 //! buttons and the scrub handle drive these five entry points, and none of them
 //! knows a run can be refetched. Keeping them together is what lets the module
-//! beside this one stay about fetching a run and publishing it.
+//! beside this one stay about fetching a run, and `radar_reach` about how much
+//! of it is shown.
 //!
 //! Every one of them is a no-op on an empty run rather than an error. A window
 //! whose first refresh has not landed still has a Play button, and a viewer

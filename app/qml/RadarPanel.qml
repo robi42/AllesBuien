@@ -108,9 +108,10 @@ Item {
         // The legend lands in the same band (measured: legend 45..362 x
         // 552..634, this caption 239..479 x 594..639), and that is not a
         // collision. The legend binds `frameCount > 0`, and a refresh zeroes
-        // that count in the same call that sets this text, so the map's lower
-        // edge is only ever saying one of the two things: what it is fetching,
-        // or what the frames it fetched mean.
+        // that count in the same call that sets this text, while the rain
+        // graph's end, which can shorten a run, never empties one, so the map's
+        // lower edge is only ever saying one of the two things: what it is
+        // fetching, or what the frames it fetched mean.
         ScrimNotice {
             id: loadingNotice
             objectName: "loadingNotice"

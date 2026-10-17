@@ -6,10 +6,11 @@
 //! to be swapped for a fake — which is precisely why the trait exists.
 //!
 //! Three vendor facts are encoded here and nowhere else. The metadata query
-//! fixes the animation window; the frame URLs it returns answer `302`, so the
-//! redirect-following client is load-bearing rather than incidental; and the run
-//! that query is answered from is not reliably the current one, which is why
-//! asking is only half of getting.
+//! fixes the window of frames the radar downloads, the most the animation can
+//! play, while how far into it the animation goes is [`crate::rain_reach`]'s;
+//! the frame URLs it returns answer `302`, so the redirect-following client is
+//! load-bearing rather than incidental; and the run that query is answered from
+//! is not reliably the current one, which is why asking is only half of getting.
 
 use jiff::Timestamp;
 
@@ -49,10 +50,11 @@ const PREFERRED_HISTORY: u8 = 2;
 /// That covers a run trailing by up to 25 minutes even when raintext starts a
 /// whole slot ahead of the present and the radar was fetched a whole five-minute
 /// refresh before it: ten minutes past the healthy worst, and five short of the
-/// threshold. The frames past raintext's last sample show no cursor, as
-/// [`crate::rain_cursor`] already arranges for the observed ones before its
-/// first, and every new run downloads six frames more. The vendor serves at most
-/// 36 steps.
+/// threshold. The frames past raintext's last sample are downloaded but not
+/// played: [`crate::rain_reach`] ends the animation on the frame at that
+/// sample, and the next raintext refresh, which moves it later, brings them back
+/// from memory. Every new run still downloads six frames more. The vendor serves
+/// at most 36 steps.
 const FORECAST_STEPS: u8 = 30;
 
 /// Observed steps requested after a stale answer, and only then.

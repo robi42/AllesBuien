@@ -1,21 +1,26 @@
-//! Locates an animating radar frame inside the rain expectation series.
+//! Locates an animating radar frame inside the rain expectation series, and
+//! names the moment the series ends.
 //!
 //! The two feeds are independent but their windows overlap: raintext is 24
 //! samples covering two hours forward from about the present, and the radar
-//! window is 32 frames, from five minutes before the vendor's run to two and a
+//! downloads 32 frames, from five minutes before the vendor's run to two and a
 //! half hours after it. The run trails the present by several minutes, and the
 //! radar asks for the extra half hour so that a late run still reaches the last
-//! sample — `radar_transport`'s `FORECAST_STEPS` argues the number — so the
-//! radar's frames usually overhang the series on both sides: the
-//! already-observed ones before the first sample, and the forecasts past the
-//! last.
+//! sample — `radar_transport`'s `FORECAST_STEPS` argues the number — so a fresh
+//! run overhangs the series on both sides. The already-observed frames before
+//! the first sample stay on screen without a cursor; the forecasts past the
+//! last are downloaded but not played, because [`crate::rain_reach`] ends the
+//! animation at [`series_end`].
 //!
 //! Both sides label their moments as viewer-local `HH:MM`, so wall clock is the
 //! only basis the two share — neither carries a date. A difference of more than
 //! twelve hours is therefore read as the series having wrapped past midnight
-//! rather than as a frame half a day away.
+//! rather than as a frame half a day away, by the cursor and the cut alike.
 
-use crate::{datetime::minutes_of_day, rain::RainPoint};
+use crate::{
+    datetime::{minutes_of_day, shift_clock_label},
+    rain::RainPoint,
+};
 
 const MINUTES_PER_DAY: i32 = 24 * 60;
 
@@ -26,17 +31,16 @@ const MINUTES_PER_DAY: i32 = 24 * 60;
 /// beneath it line up.
 ///
 /// Returns `None` when the frame lies outside the series — the early observed
-/// frames that precede the first sample, and the trailing frames that outrun the
-/// last one. Callers must hide the cursor for those rather than clamp it to an
-/// edge, which would claim a moment the graph does not cover.
+/// frames that precede the first sample, and the trailing frames that outrun
+/// the last one, which the radar plays only while the series cannot bound its
+/// run ([`crate::rain_reach`]). Callers must hide the cursor for those rather
+/// than clamp it to an edge, which would claim a moment the graph does not
+/// cover.
 #[must_use]
 pub fn frame_cursor(points: &[RainPoint], frame_label: &str) -> Option<f64> {
+    let (start, span) = extent(points)?;
     let count = u32::try_from(points.len()).ok()?;
-    let steps = count.checked_sub(1).filter(|steps| *steps > 0)?;
-    let span = i32::try_from(points.last()?.minutes_from_start)
-        .ok()
-        .filter(|span| *span > 0)?;
-    let start = minutes_of_day(&points.first()?.time_label)?;
+    let steps = count.checked_sub(1)?;
     let offset = wrapped_difference(start, minutes_of_day(frame_label)?);
     if !(0..=span).contains(&offset) {
         return None;
@@ -45,8 +49,44 @@ pub fn frame_cursor(points: &[RainPoint], frame_label: &str) -> Option<f64> {
     Some((index + 0.5) / f64::from(count))
 }
 
+/// The moment the series' last bar stands for, as `HH:MM`: the latest frame
+/// label [`frame_cursor`] still places, on that bar's centre.
+///
+/// It is read the way the cursor reads the series, the first sample's label
+/// moved on by the last sample's offset, rather than off the last row. The
+/// offsets count the rows `rain` kept, five minutes apiece, so after a
+/// malformed row it skipped, or under a last row without a time, the last row's
+/// own label is somewhere the cursor does not reach. For a well-formed window
+/// the two agree. `None` exactly when [`frame_cursor`] places no frame at all.
+#[must_use]
+pub fn series_end(points: &[RainPoint]) -> Option<String> {
+    let (_, span) = extent(points)?;
+    let first = &points.first()?.time_label;
+    // Reduced to one day first, so that no span can overflow the shift.
+    Some(shift_clock_label(first, span.rem_euclid(MINUTES_PER_DAY)))
+}
+
+/// Where the series starts on the dial, and how many minutes later its last
+/// sample stands; `None` for a series the cursor cannot plot against: fewer
+/// than two samples, a zero span, or a first sample without a clock label.
+///
+/// The one reading of the series' extent the cursor and its end share, so the
+/// two cannot drift apart.
+fn extent(points: &[RainPoint]) -> Option<(i32, i32)> {
+    let [first, .., last] = points else {
+        return None;
+    };
+    let span = i32::try_from(last.minutes_from_start)
+        .ok()
+        .filter(|span| *span > 0)?;
+    Some((minutes_of_day(&first.time_label)?, span))
+}
+
 /// Signed minute distance from `from` to `to` on a 24-hour dial.
-fn wrapped_difference(from: i32, to: i32) -> i32 {
+///
+/// Shared with [`crate::rain_reach`], so that the cursor and the cut read the
+/// dial alike.
+pub(crate) fn wrapped_difference(from: i32, to: i32) -> i32 {
     let forward = (to - from).rem_euclid(MINUTES_PER_DAY);
     if forward > MINUTES_PER_DAY / 2 {
         forward - MINUTES_PER_DAY
@@ -57,9 +97,12 @@ fn wrapped_difference(from: i32, to: i32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use crate::rain::{RainPoint, parse_series};
+    use crate::{
+        datetime::shift_clock_label,
+        rain::{RainPoint, parse_series},
+    };
 
-    use super::frame_cursor;
+    use super::{frame_cursor, series_end};
 
     /// The shipped window: 24 dry samples at the five-minute cadence.
     #[expect(
@@ -116,8 +159,8 @@ mod tests {
 
     #[test]
     fn a_frame_that_outruns_the_last_sample_is_reported_as_outside_it() {
-        // Given: frames past raintext's right edge, which the radar's 32-frame
-        // window usually has.
+        // Given: frames past raintext's right edge, which the radar downloads,
+        // and plays only while the series cannot bound its run.
         let points = window(23, 50);
 
         // When / Then
@@ -186,5 +229,50 @@ mod tests {
         // When / Then
         assert_eq!(points.len(), 3, "the rows themselves still parsed");
         assert_eq!(frame_cursor(&points, "10:15"), None);
+    }
+
+    #[test]
+    fn the_series_ends_where_the_cursor_puts_a_frame_on_the_last_bar() {
+        // Given: 23:50 through 01:45, across midnight.
+        let points = window(23, 50);
+
+        // When
+        let end = series_end(&points).expect("a plottable series has an end");
+
+        // Then: the last sample's own label, on the last bar's centre, and
+        // five minutes later the cursor has gone.
+        assert_eq!(end, "01:45");
+        let cursor = frame_cursor(&points, &end).expect("the end is inside the series");
+        assert!((cursor - 23.5 / 24.0).abs() < 1e-12, "cursor {cursor}");
+        assert_eq!(frame_cursor(&points, &shift_clock_label(&end, 5)), None);
+    }
+
+    #[test]
+    fn the_end_is_measured_from_the_kept_rows_rather_than_read_off_the_last_one() {
+        // Given: a malformed row the parser skipped, and a last row without a
+        // time.
+        let skipped = parse_series("000|10:00\n000|10:05\nbad|10:10\n000|10:15\n", 0).points;
+        let untimed = parse_series("000|10:00\n000|10:05\n000\n", 0).points;
+
+        // When / Then: three kept rows span ten minutes, whatever the last says.
+        assert_eq!(series_end(&skipped).as_deref(), Some("10:10"));
+        assert_eq!(
+            frame_cursor(&skipped, "10:15"),
+            None,
+            "the last row's label"
+        );
+        assert_eq!(series_end(&untimed).as_deref(), Some("10:10"));
+    }
+
+    #[test]
+    fn a_series_the_cursor_cannot_plot_has_no_end() {
+        // Given
+        let single = parse_series("000|10:15\n", 0).points;
+        let unlabelled = parse_series("000|\n010|\n020|\n", 0).points;
+
+        // When / Then
+        assert_eq!(series_end(&[]), None, "no series at all");
+        assert_eq!(series_end(&single), None, "one sample spans zero");
+        assert_eq!(series_end(&unlabelled), None, "no clock to start from");
     }
 }

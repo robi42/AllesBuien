@@ -47,6 +47,7 @@ pub mod radar_clock;
 pub mod radar_controller;
 mod radar_frames;
 mod radar_playback;
+mod radar_reach;
 mod radar_state;
 pub mod rain_graph;
 mod refresh_job;

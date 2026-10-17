@@ -14,7 +14,10 @@ use allesbuien_core::{
 use cxx_qt_lib::{QString, QStringList};
 use tokio::{runtime::Handle, task::JoinHandle};
 
-use crate::{qt_values::interval_ms, radar_frames::FrameSet, services::TimerIntervals};
+use crate::{
+    qt_values::interval_ms, radar_frames::FrameSet, radar_reach::AdoptedRun,
+    services::TimerIntervals,
+};
 
 pub(crate) struct RadarControllerConfig {
     pub(crate) api: Arc<dyn RadarApi>,
@@ -41,6 +44,8 @@ pub struct RadarControllerRust {
     pub(crate) current_frame_index: i32,
     pub(crate) playing: bool,
     pub(crate) generation: u64,
+    /// The shown frames' captions: the run up to the rain graph's last bar, as
+    /// [`crate::radar_reach`] cuts it.
     pub(crate) timestamps: QStringList,
     pub(crate) current_frame_label: QString,
     pub(crate) current_frame_url: QString,
@@ -72,6 +77,13 @@ pub struct RadarControllerRust {
     pub(crate) pending_refresh: Option<JoinHandle<()>>,
     /// Whether each frame of the current run is an observation rather than a forecast.
     pub(crate) observed_by_frame: Vec<bool>,
+    /// The whole run on screen, hidden frames included, so that a new rain end
+    /// can cut it again; empty from a refresh's start until its answer lands.
+    pub(crate) adopted: AdoptedRun,
+    /// The rain graph's last bar as `Main.qml` last handed it over, empty while
+    /// there is none. Kept across refreshes: it is the weather's, and an
+    /// unchanged end is never handed over again.
+    pub(crate) rain_end_label: String,
     pub(crate) last_good: Option<FrameSet>,
 }
 
@@ -115,6 +127,8 @@ impl Default for RadarControllerRust {
             runtime: None,
             pending_refresh: None,
             observed_by_frame: Vec::new(),
+            adopted: AdoptedRun::default(),
+            rain_end_label: String::new(),
             last_good: None,
         }
     }

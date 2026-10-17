@@ -17,6 +17,7 @@ pub mod radar_timeline;
 pub mod radar_transport;
 pub mod rain;
 pub mod rain_cursor;
+pub mod rain_reach;
 pub mod retry;
 pub(crate) mod station;
 pub mod status;
