@@ -5,7 +5,7 @@ All notable changes to AllesBuien are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). From 0.2.0 on, each
 release's section is the text of its annotated tag and of its GitHub release notes.
 
-## [0.2.0] - 2026-10-03
+## [0.2.0] - 2026-10-18
 
 ### Added
 
