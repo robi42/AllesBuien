@@ -66,9 +66,15 @@ release's section is the text of its annotated tag and of its GitHub release not
 
 - rustls 0.23.45 fixes RUSTSEC-2026-0285 (GHSA-2mjx-qc3c-rqvc): a TLS 1.3 handshake message sent
   at the wrong encryption level was accepted, instead of ending the connection, when it shared a
-  record with the message that changed the keys. 0.1.0 used the affected rustls 0.23.43 for every
-  HTTPS request to Buienradar. The handshake transcript stays authenticated, so a network attacker
-  cannot use the flaw to alter or complete a handshake.
+  record with the message that changed the keys. 0.1.0 used the affected rustls 0.23.43 for its
+  HTTPS requests to Buienradar. The handshake transcript stays authenticated, so a network
+  attacker cannot use the flaw to alter or complete a handshake.
+- rustls 0.23.46 fixes four more advisories, RUSTSEC-2026-0346 to RUSTSEC-2026-0349. AllesBuien
+  is not affected by any of them, and neither was 0.1.0: they need a custom session store that
+  formats its entries with `Debug`, Encrypted Client Hello, rustls's optional `brotli` feature, or
+  a post-quantum key exchange to downgrade, while the app keeps rustls's own session cache, sends
+  no ECH, builds rustls without `brotli`, and uses the ring provider, whose key exchanges (X25519,
+  P-256 and P-384) are all classical.
 
 ## [0.1.0] - 2026-09-03
 
