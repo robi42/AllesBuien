@@ -25,9 +25,7 @@ use allesbuien_harness::{
     },
 };
 
-use allesbuien_testkit::{SETTLE_BUDGET, pump_until};
-
-pub(crate) type Rgb = [i32; 3];
+use allesbuien_testkit::{Rgb, SETTLE_BUDGET, pump_until};
 
 /// A key, the playback it should leave behind, and what that proves.
 pub(crate) type Step = (Key, (bool, i32), &'static str);
@@ -45,14 +43,6 @@ pub(crate) fn refresh_to(booted: &mut Harness, frames: i32) {
                 .is_some_and(|controller| *controller.frame_count() == frames)
         },
     );
-}
-
-/// The largest per-channel difference between two colours.
-pub(crate) fn spread(first: Rgb, second: Rgb) -> i32 {
-    (0..3)
-        .map(|channel| (first[channel] - second[channel]).abs())
-        .max()
-        .unwrap_or(0)
 }
 
 /// The three items of the transport a test reads.

@@ -67,7 +67,6 @@ impl AdoptedRun {
         let shown = frames_through(&self.labels, rain_end, first);
         Reach {
             captions: self.labels.iter().take(shown).cloned().collect(),
-            first_forecast_index: first,
             observed_fraction: observed_fraction(first, shown),
             boundary_visible: boundary_visible(first, shown),
         }
@@ -79,8 +78,6 @@ impl AdoptedRun {
 pub(crate) struct Reach {
     /// The shown frames' captions; their count is `frameCount`.
     pub(crate) captions: Vec<String>,
-    /// The run's first prediction, never past the shown frames.
-    pub(crate) first_forecast_index: usize,
     /// The share of the slider's track that is observation, measured against
     /// the shown frames rather than the whole run.
     pub(crate) observed_fraction: f64,
@@ -146,9 +143,7 @@ impl ffi::RadarController {
     /// already put the current index inside `reach`.
     fn publish_reach(mut self: Pin<&mut Self>, reach: &Reach) {
         let shown = i32::try_from(reach.captions.len()).unwrap_or(i32::MAX);
-        let first = i32::try_from(reach.first_forecast_index).unwrap_or(i32::MAX);
         let captions: QStringList = reach.captions.iter().map(QString::from).collect();
-        self.as_mut().set_first_forecast_index(first);
         self.as_mut().set_observed_fraction(reach.observed_fraction);
         self.as_mut()
             .set_forecast_boundary_visible(reach.boundary_visible);
@@ -189,7 +184,6 @@ mod tests {
         // Then: a track of seven frames, not ten.
         assert_eq!(reach.captions.len(), 7);
         assert_eq!(reach.captions.last().map(String::as_str), Some("10:30"));
-        assert_eq!(reach.first_forecast_index, 2);
         let fraction = reach.observed_fraction;
         assert!((fraction - 1.5 / 6.0).abs() < 1e-12, "fraction {fraction}");
         assert!(reach.boundary_visible);

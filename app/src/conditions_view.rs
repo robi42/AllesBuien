@@ -101,7 +101,6 @@ mod tests {
             condition: Some(String::from("Zwaar bewolkt")),
             condition_code: String::from("qq"),
             observed_at: LocalTimestamp::from_feed_in("2026-08-31T17:50:00", "Europe/Amsterdam"),
-            ..CurrentConditions::default()
         };
 
         // When

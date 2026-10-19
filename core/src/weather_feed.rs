@@ -37,8 +37,6 @@ struct StationMeasurement {
     feel_temperature: Option<f64>,
     #[serde(rename = "windspeed", default)]
     wind_speed: Option<f64>,
-    #[serde(rename = "windspeedBft", default)]
-    wind_bft: Option<i64>,
     #[serde(default)]
     humidity: Option<f64>,
     #[serde(rename = "weatherdescription", default)]
@@ -80,26 +78,19 @@ pub(crate) fn parse_feed(
 ) -> Result<WeatherData, WeatherError> {
     let payload: FeedPayload = serde_json::from_str(feed)?;
     let nearest = nearest_station(&payload.actual.stationmeasurements, latitude, longitude);
-    let current = nearest.map(|measurement| {
-        let code = condition::code_from_icon_url(&measurement.icon_url).unwrap_or_default();
-        let dutch = measurement.condition.as_deref().unwrap_or_default();
-        CurrentConditions {
-            station_name: station_place_name(&measurement.station_name),
-            temperature: measurement.temperature,
-            feel_temperature: measurement.feel_temperature,
-            wind_speed: measurement.wind_speed,
-            wind_bft: measurement.wind_bft,
-            humidity: measurement.humidity,
-            condition: measurement.condition.clone(),
-            condition_english: condition::describe(&code, dutch),
-            condition_code: code,
-            observed_at: LocalTimestamp::from_feed(&measurement.timestamp),
-        }
+    let current = nearest.map(|measurement| CurrentConditions {
+        station_name: station_place_name(&measurement.station_name),
+        temperature: measurement.temperature,
+        feel_temperature: measurement.feel_temperature,
+        wind_speed: measurement.wind_speed,
+        humidity: measurement.humidity,
+        condition: measurement.condition.clone(),
+        condition_code: condition::code_from_icon_url(&measurement.icon_url).unwrap_or_default(),
+        observed_at: LocalTimestamp::from_feed(&measurement.timestamp),
     });
     let mut forecast = payload.forecast.fivedayforecast;
     for day in &mut forecast {
         day.condition_code = condition::code_from_icon_url(&day.icon_url).unwrap_or_default();
-        day.condition_english = condition::describe(&day.condition_code, &day.condition);
         day.day_at = LocalTimestamp::from_feed(&day.day);
     }
     Ok(WeatherData {
@@ -140,6 +131,7 @@ fn angular_separation(station: &StationMeasurement, latitude: f64, longitude: f6
 #[cfg(test)]
 mod tests {
     use super::{StationMeasurement, nearest_station, parse_feed};
+    use crate::datetime::LocalTimestamp;
 
     const FEED_FIXTURE: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -200,8 +192,6 @@ mod tests {
 
         // Then
         assert_eq!(weather.forecast[0].min_temperature_min, 14);
-        assert_eq!(weather.forecast[0].min_temperature_max, 16);
-        assert_eq!(weather.forecast[0].max_temperature_min, 20);
         assert_eq!(weather.forecast[0].max_temperature_max, 22);
     }
 
@@ -233,15 +223,14 @@ mod tests {
                 current.temperature,
                 current.feel_temperature,
                 current.wind_speed,
-                current.wind_bft,
                 current.humidity
             ),
-            (None, None, None, None, None)
+            (None, None, None, None)
         );
     }
 
     #[test]
-    fn current_conditions_carry_the_icon_code_and_english_text() {
+    fn current_conditions_carry_the_icon_code_and_the_feeds_own_text_and_time() {
         // Given / When
         let weather = parse_feed(FEED_FIXTURE, 52.07, 5.88).expect("fixture should parse");
 
@@ -251,29 +240,32 @@ mod tests {
         assert_eq!(current.feel_temperature, Some(18.0));
         assert_eq!(current.humidity, Some(94.0));
         assert_eq!(current.condition_code, "qq");
-        assert_eq!(current.condition_english, "Heavily clouded with rain");
         assert_eq!(current.condition.as_deref(), Some("Zwaar bewolkt en regen"));
-        assert_eq!(current.observed_at.source, "2026-08-29T23:10:00");
-        assert_eq!(current.observed_at.date_label.len(), 10);
+        assert_eq!(
+            current.observed_at,
+            LocalTimestamp::from_feed("2026-08-29T23:10:00")
+        );
     }
 
     #[test]
-    fn forecast_days_carry_the_icon_code_and_english_text() {
+    fn forecast_days_carry_the_icon_code_and_the_feeds_own_day() {
         // Given / When
         let weather = parse_feed(FEED_FIXTURE, 52.37, 4.84).expect("fixture should parse");
 
         // Then
         let first = &weather.forecast[0];
         assert_eq!(first.condition_code, "f");
-        assert_eq!(first.condition_english, "Partly cloudy with light rain");
-        assert_eq!(first.day_at.source, "2026-08-30T00:00:00");
+        assert_eq!(
+            first.day_at,
+            LocalTimestamp::from_feed("2026-08-30T00:00:00")
+        );
         for day in &weather.forecast {
-            assert!(!day.condition_english.is_empty());
+            assert!(!day.condition_code.is_empty(), "{}", day.day);
         }
     }
 
     #[test]
-    fn unmapped_icon_code_falls_back_to_the_dutch_description() {
+    fn an_unmapped_icon_code_is_kept_beside_the_dutch_description() {
         // Given
         let feed = r#"{
             "actual":{"stationmeasurements":[{
@@ -291,11 +283,11 @@ mod tests {
         // Then
         let current = weather.current.expect("station expected");
         assert_eq!(current.condition_code, "z");
-        assert_eq!(current.condition_english, "Zwaar bewolkt");
+        assert_eq!(current.condition.as_deref(), Some("Zwaar bewolkt"));
     }
 
     #[test]
-    fn missing_icon_and_description_yield_a_neutral_condition_label() {
+    fn a_station_without_icon_or_description_reports_neither() {
         // Given
         let feed = r#"{
             "actual":{"stationmeasurements":[{"stationname":"Kaal","lat":52.37,"lon":4.84}]},
@@ -308,6 +300,6 @@ mod tests {
         // Then
         let current = weather.current.expect("station expected");
         assert!(current.condition_code.is_empty());
-        assert_eq!(current.condition_english, "Unknown");
+        assert_eq!(current.condition, None);
     }
 }

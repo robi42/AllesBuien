@@ -77,7 +77,11 @@ fn cancels_and_awaits_superseded_refresh_before_starting_its_replacement() {
         "marker y {}",
         *controller.marker_y_fraction() * 915.0
     );
-    assert_eq!(*controller.first_forecast_index(), 2);
+    assert!(
+        (*controller.observed_fraction() - 1.0).abs() < f64::EPSILON
+            && !*controller.forecast_boundary_visible(),
+        "a run stamped wholly in the past is all observation, with no divider"
+    );
     assert!(
         *controller.current_frame_observed(),
         "a run whose every frame is in the past has nothing to forecast"

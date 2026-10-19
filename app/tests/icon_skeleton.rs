@@ -19,12 +19,8 @@ use allesbuien_harness::{
     Harness, HarnessBuilder,
     probe::{child, focused_window, grab_window, map_to_scene, number_of, property},
 };
-use allesbuien_testkit::{SETTLE_BUDGET, pump_until};
+use allesbuien_testkit::{Rgb, SETTLE_BUDGET, VISIBLE_LEVELS, pump_until, spread};
 use cxx_qt_lib::QPointF;
-
-/// The per-channel difference a reader can actually see, as `ForecastView`
-/// measured for its row rules.
-const VISIBLE_LEVELS: i32 = 12;
 
 /// How far left of the hero icon the card is sampled: inside the card's padding.
 const CARD_OFFSET: f64 = 8.0;
@@ -61,16 +57,6 @@ fn write_theme(theme: &Path, colors: &str, modified: u64) {
             FileTimes::new().set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(modified)),
         )
         .expect("the theme's modification time should be set");
-}
-
-type Rgb = [i32; 3];
-
-/// The largest per-channel difference between two colours.
-fn spread(first: Rgb, second: Rgb) -> i32 {
-    (0..3)
-        .map(|channel| (first[channel] - second[channel]).abs())
-        .max()
-        .unwrap_or(0)
 }
 
 /// The rendered pixels at the hero skeleton's centre and at the card beside it,

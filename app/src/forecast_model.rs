@@ -133,8 +133,6 @@ mod tests {
         ForecastDay {
             day: String::from("2026-09-02T00:00:00"),
             min_temperature_min: 12,
-            min_temperature_max: 14,
-            max_temperature_min: 19,
             max_temperature_max: 21,
             rain_chance: 40,
             condition: String::from("Zwaar bewolkt en regen"),

@@ -56,7 +56,6 @@ pub mod ffi {
         #[qproperty(QStringList, timestamps)]
         #[qproperty(QString, current_frame_label)]
         #[qproperty(QString, current_frame_url)]
-        #[qproperty(i32, first_forecast_index)]
         #[qproperty(bool, current_frame_observed)]
         #[qproperty(f64, observed_fraction)]
         #[qproperty(bool, forecast_boundary_visible)]

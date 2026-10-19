@@ -34,12 +34,10 @@ pub fn five_day_weather() -> WeatherData {
             temperature: Some(19.5),
             feel_temperature: Some(18.8),
             wind_speed: Some(3.2),
-            wind_bft: Some(2),
             humidity: Some(71.0),
             condition: Some(String::from("Half bewolkt")),
             condition_code: String::from("qq"),
             observed_at: LocalTimestamp::from_feed_in("2026-08-31T17:50:00", SOURCE_TIMEZONE),
-            ..CurrentConditions::default()
         }),
         forecast: (1..=5).map(forecast_day).collect(),
         rain_line: String::from("starts around 14:10"),
@@ -53,8 +51,6 @@ fn forecast_day(day: i32) -> ForecastDay {
     ForecastDay {
         day: format!("2026-09-0{day}T00:00:00"),
         min_temperature_min: 10 + day,
-        min_temperature_max: 11 + day,
-        max_temperature_min: 18 + day,
         max_temperature_max: 19 + day,
         rain_chance: 20,
         condition: String::from("Bewolkt"),

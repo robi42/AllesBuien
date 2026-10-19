@@ -28,8 +28,6 @@ pub struct RainPoint {
     pub code: i32,
     /// Intensity in millimetres per hour, `10^((code - 109) / 32)`.
     pub mmh: f64,
-    /// `HH:MM` exactly as the feed delivered it, i.e. Dutch wall clock.
-    pub source_time_label: String,
     /// `HH:MM` converted to the viewer's timezone.
     pub time_label: String,
     /// Whole minutes between the first sample and this one.
@@ -41,8 +39,6 @@ pub struct RainPoint {
 pub struct RainSeries {
     /// Ordered samples, oldest first. Empty when the feed returned nothing usable.
     pub points: Vec<RainPoint>,
-    /// Highest intensity across the window, in millimetres per hour.
-    pub peak_mmh: f64,
     /// One-line human summary, e.g. `next 2h: dry`.
     pub line: String,
     /// Present only when at least one sample is wet.
@@ -85,14 +81,13 @@ fn parse_points(raw: &str, clock_shift_minutes: i32) -> Vec<RainPoint> {
         else {
             continue;
         };
-        let source_time_label = parts.next().unwrap_or("?").trim().to_owned();
+        let source_time_label = parts.next().unwrap_or("?").trim();
         let minutes_from_start = u32::try_from(points.len())
             .map_or(u32::MAX, |index| index.saturating_mul(RAIN_STEP_MINUTES));
         points.push(RainPoint {
             code,
             mmh: code_to_mmh(code),
-            time_label: shift_clock_label(&source_time_label, clock_shift_minutes),
-            source_time_label,
+            time_label: shift_clock_label(source_time_label, clock_shift_minutes),
             minutes_from_start,
         });
     }
@@ -107,7 +102,6 @@ fn summarise(points: Vec<RainPoint>) -> RainSeries {
     let Some(peak) = peak.filter(|peak| peak.code > 0) else {
         return RainSeries {
             points,
-            peak_mmh: 0.0,
             line: String::from("next 2h: dry"),
             rain_soon: None,
         };
@@ -127,7 +121,6 @@ fn summarise(points: Vec<RainPoint>) -> RainSeries {
     });
     RainSeries {
         points,
-        peak_mmh,
         line,
         rain_soon,
     }
@@ -148,10 +141,6 @@ mod tests {
     ));
 
     #[test]
-    #[expect(
-        clippy::float_cmp,
-        reason = "the dry path assigns the literal 0.0, and exactly zero is the contract; an epsilon window would pass on a near-zero intensity that is not dry"
-    )]
     fn dry_window_still_exposes_every_sample() {
         // Given
         let raw = "000|12:00\n000|12:05\n";
@@ -163,7 +152,8 @@ mod tests {
         assert_eq!(series.line, "next 2h: dry");
         assert!(series.rain_soon.is_none());
         assert_eq!(series.points.len(), 2);
-        assert_eq!(series.peak_mmh, 0.0);
+        // Exactly zero: the dry path assigns the literal 0.0, and an epsilon
+        // window would pass on a near-zero intensity that is not dry.
         assert!(series.points.iter().all(|point| point.mmh == 0.0));
     }
 
@@ -204,7 +194,6 @@ mod tests {
         let series = parse_series(raw, 0);
 
         // Then
-        assert_eq!(series.peak_mmh, code_to_mmh(80));
         assert!(series.line.contains("at 12:10"));
         let rain = series.rain_soon.expect("expected rain_soon");
         assert_eq!(rain.minutes_until, 5);
@@ -221,7 +210,6 @@ mod tests {
         let series = parse_series(raw, -120);
 
         // Then
-        assert_eq!(series.points[0].source_time_label, "23:50");
         assert_eq!(series.points[0].time_label, "21:50");
         assert_eq!(series.points[1].time_label, "21:55");
         let rain = series.rain_soon.expect("expected rain_soon");
@@ -239,7 +227,7 @@ mod tests {
         // Then
         assert_eq!(series.points.len(), 2);
         assert_eq!(series.points[0].time_label, "12:05");
-        assert_eq!(series.points[1].source_time_label, "?");
+        assert_eq!(series.points[1].time_label, "?");
         assert!(series.line.contains("at ?"));
     }
 
@@ -265,6 +253,6 @@ mod tests {
         assert_eq!(series.points.len(), 24);
         assert_eq!(series.points[0].minutes_from_start, 0);
         assert_eq!(series.points[23].minutes_from_start, 115);
-        assert!(series.peak_mmh > 0.0);
+        assert!(series.rain_soon.is_some_and(|rain| rain.max_mmh > 0.0));
     }
 }

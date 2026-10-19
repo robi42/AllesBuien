@@ -69,7 +69,6 @@ mod tests {
                     .iter()
                     .map(|stamp| RadarFrame {
                         timestamp: (*stamp).to_owned(),
-                        url: String::new(),
                         path: PathBuf::new(),
                     })
                     .collect(),
