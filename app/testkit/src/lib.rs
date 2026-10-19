@@ -1,5 +1,5 @@
-//! The Qt-free test doubles, fixtures, and waiting helpers the GUI harnesses
-//! under `app/tests/` share.
+//! The Qt-free test doubles, fixtures, waiting helpers, and colour arithmetic
+//! the GUI harnesses under `app/tests/` share.
 //!
 //! Every file under `app/tests/` is pinned by `AGENTS.md` to exactly one GUI
 //! test and one `QGuiApplication`, so the harnesses each carried their own
@@ -16,19 +16,22 @@
 //! harness binary and break the one-GUI-test-per-executable rule, whereas this
 //! crate's tests run in a process that never constructs a `QGuiApplication`.
 //!
-//! Only doubles and fixtures that more than one harness needs live here. A scenario's own
-//! fake — the generation-scripted radar in `radar_controller`, the two-frame
-//! animation in `radar_view_grab` — stays beside the single test that reads it,
-//! where its expectations are visible next to the assertions they serve.
+//! Only doubles, fixtures, and helpers that more than one harness needs live
+//! here. A scenario's own fake — the generation-scripted radar in
+//! `radar_controller`, the two-frame animation in `radar_view_grab` — stays
+//! beside the single test that reads it, where its expectations are visible
+//! next to the assertions they serve.
 //!
 //! Nothing here links Qt. The Qt-bound half — booting the window and reading
 //! its rendered object tree — is `allesbuien-harness`.
 
+pub mod colour;
 pub mod doubles;
 pub mod fixtures;
 pub mod pump;
 pub mod weather_setting;
 
+pub use colour::{Rgb, VISIBLE_LEVELS, spread};
 pub use doubles::{StubFeedApi, StubNotifier, StubRadarApi, amsterdam_west};
 pub use pump::{SETTLE_BUDGET, block_on, pump_until};
 pub use weather_setting::{clear_weather, write_weather};

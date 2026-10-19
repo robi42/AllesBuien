@@ -128,14 +128,11 @@ pub struct CurrentConditions {
     pub temperature: Option<f64>,
     pub feel_temperature: Option<f64>,
     pub wind_speed: Option<f64>,
-    pub wind_bft: Option<i64>,
     pub humidity: Option<f64>,
     /// Dutch `weatherdescription` exactly as published.
     pub condition: Option<String>,
     /// Buienradar icon code, e.g. `q` or the night variant `qq`; empty when absent.
     pub condition_code: String,
-    /// English description for [`Self::condition_code`], falling back to Dutch.
-    pub condition_english: String,
     /// Observation time projected into the viewer's timezone.
     pub observed_at: LocalTimestamp,
 }
@@ -143,12 +140,13 @@ pub struct CurrentConditions {
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 pub struct ForecastDay {
     pub day: String,
+    /// The lowest the day's minimum is expected to fall. The feed also bounds
+    /// the minimum from above and the maximum from below, `mintemperatureMax`
+    /// and `maxtemperatureMin`; the forecast shows only the outer bounds, so
+    /// those two are not read.
     #[serde(rename = "mintemperatureMin")]
     pub min_temperature_min: i32,
-    #[serde(rename = "mintemperatureMax")]
-    pub min_temperature_max: i32,
-    #[serde(rename = "maxtemperatureMin")]
-    pub max_temperature_min: i32,
+    /// The highest the day's maximum is expected to rise.
     #[serde(rename = "maxtemperatureMax")]
     pub max_temperature_max: i32,
     #[serde(rename = "rainChance", default)]
@@ -162,9 +160,6 @@ pub struct ForecastDay {
     /// Buienradar icon code, e.g. `f`; empty when absent. Derived, never deserialized.
     #[serde(skip)]
     pub condition_code: String,
-    /// English description for [`Self::condition_code`], falling back to Dutch.
-    #[serde(skip)]
-    pub condition_english: String,
     /// Forecast day projected into the viewer's timezone.
     #[serde(skip)]
     pub day_at: LocalTimestamp,

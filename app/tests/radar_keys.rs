@@ -22,8 +22,8 @@ use std::{
 use allesbuien::TimerIntervals;
 use allesbuien_core::radar::{RadarApi, RadarFuture};
 use allesbuien_harness::{HarnessBuilder, keys::Key, probe::focused_window};
-use allesbuien_testkit::{SETTLE_BUDGET, StubFeedApi, pump_until};
-use radar_transport::{Control, Rgb, Transport, refresh_to, spread};
+use allesbuien_testkit::{Rgb, SETTLE_BUDGET, StubFeedApi, VISIBLE_LEVELS, pump_until, spread};
+use radar_transport::{Control, Transport, refresh_to};
 
 mod radar_transport;
 
@@ -34,10 +34,6 @@ const NORD: &str = "mode = \"dark\"\nbackground = \"#2e3440\"\nforeground = \"#d
 
 /// Nord's foreground, which `Theme.focusRing` resolves to.
 const NORD_FOREGROUND: Rgb = [0xd8, 0xde, 0xe9];
-
-/// The per-channel difference a reader can actually see, as `ForecastView`
-/// measured for its row rules.
-const VISIBLE_LEVELS: i32 = 12;
 
 /// Runs of three frames for the first four fetches, then a run of one.
 #[derive(Default)]

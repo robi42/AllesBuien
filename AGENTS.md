@@ -81,7 +81,7 @@ AllesBuien/
 | Theme bridge | `app/src/theme_controller.rs` | Replacement-aware 2-second polling |
 | Desktop UI | `app/qml/Main.qml` and the views it composes | Layout, attribution, and the bridges' two hand-offs in `Main.qml`; the radar, transport, conditions, forecast, and rain panels in their own files, with the weather bridge's inline status in `ConditionsView.qml` and the radar bridge's in `RadarPanel.qml` |
 | GUI integration tests | `app/tests/` | Exactly one GUI test and one `QGuiApplication` per file/executable |
-| Shared GUI test doubles | `app/testkit/` | Qt-free crate: the inert stubs several harnesses need, plus `pump_until` |
+| Shared GUI test doubles | `app/testkit/` | Qt-free crate: the inert stubs several harnesses need, `pump_until`, and the colour arithmetic the pixel checks share |
 | Shared GUI boot, object-tree probes, and input | `app/harness/` | Qt-linked dev crate: `HarnessBuilder`, the `unsafe` rendered-tree probes, and keys and clicks entered through the window system |
 | Basemap provenance | `assets/BASEMAP-LICENSE` | Pinned Natural Earth source and shipped-image SHA-256 |
 | Packaging | `pkgbuild/PKGBUILD`, `pkgbuild/allesbuien.desktop` | Static package metadata and four installed payloads |

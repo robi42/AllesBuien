@@ -17,22 +17,14 @@ use jiff::{Unit, Zoned, civil::DateTime, fmt::strtime, tz::TimeZone};
 /// Timezone every Buienradar wall-clock value is expressed in.
 pub const SOURCE_TIMEZONE: &str = "Europe/Amsterdam";
 
-/// One Buienradar timestamp resolved into the viewer's local timezone.
-///
-/// `source` always retains the untouched feed text so callers can correlate
-/// back to the payload; the remaining fields are display-ready.
+/// One Buienradar timestamp resolved into the viewer's local timezone, as the
+/// display-ready labels the views read.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalTimestamp {
-    /// Naive `Europe/Amsterdam` text exactly as the feed delivered it.
-    pub source: String,
     /// `HH:MM` in the viewer's timezone.
     pub time_label: String,
-    /// `YYYY-MM-DD` in the viewer's timezone.
-    pub date_label: String,
     /// Abbreviated weekday (`Mon`) in the viewer's timezone; empty when unknown.
     pub weekday_label: String,
-    /// Offset-qualified instant, e.g. `2026-08-30T17:50:00+02:00`.
-    pub rfc3339: String,
 }
 
 impl LocalTimestamp {
@@ -56,24 +48,18 @@ impl LocalTimestamp {
         zoned_in(naive, target).map_or_else(
             || Self::passthrough(naive),
             |zoned| Self {
-                source: naive.trim().to_owned(),
                 time_label: label(&zoned, "%H:%M"),
-                date_label: label(&zoned, "%Y-%m-%d"),
                 weekday_label: label(&zoned, "%a"),
-                rfc3339: label(&zoned, "%Y-%m-%dT%H:%M:%S%:z"),
             },
         )
     }
 
     fn passthrough(naive: &str) -> Self {
         let trimmed = naive.trim();
-        let (date, time) = trimmed.split_once('T').unwrap_or((trimmed, trimmed));
+        let time = trimmed.split_once('T').map_or(trimmed, |(_, time)| time);
         Self {
-            source: trimmed.to_owned(),
             time_label: time.get(..5).unwrap_or(time).to_owned(),
-            date_label: date.to_owned(),
             weekday_label: String::new(),
-            rfc3339: trimmed.to_owned(),
         }
     }
 }
@@ -183,9 +169,7 @@ mod tests {
 
         // Then
         assert_eq!(local.time_label, "15:50");
-        assert_eq!(local.date_label, "2026-08-30");
-        assert_eq!(local.rfc3339, "2026-08-30T15:50:00+00:00");
-        assert_eq!(local.source, naive);
+        assert_eq!(local.weekday_label, "Sun");
     }
 
     #[test]
@@ -198,7 +182,6 @@ mod tests {
 
         // Then
         assert_eq!(local.time_label, "11:00");
-        assert_eq!(local.rfc3339, "2026-01-15T11:00:00+00:00");
     }
 
     #[test]
@@ -209,9 +192,8 @@ mod tests {
         // When
         let local = LocalTimestamp::from_feed_in(naive, "Asia/Tokyo");
 
-        // Then
+        // Then: Sunday the 30th in Amsterdam is already Monday in Tokyo.
         assert_eq!(local.time_label, "00:50");
-        assert_eq!(local.date_label, "2026-08-31");
         assert_eq!(local.weekday_label, "Mon");
     }
 
@@ -222,7 +204,6 @@ mod tests {
 
         // Then
         assert_eq!(local.time_label, "17:50");
-        assert_eq!(local.rfc3339, "2026-08-30T17:50:00+02:00");
     }
 
     #[test]
@@ -231,9 +212,7 @@ mod tests {
         let local = LocalTimestamp::from_feed_in("not-a-timestamp", "UTC");
 
         // Then
-        assert_eq!(local.source, "not-a-timestamp");
         assert_eq!(local.time_label, "not-a");
-        assert_eq!(local.date_label, "not-a-timestamp");
         assert!(local.weekday_label.is_empty());
         assert!(
             !LocalTimestamp::from_feed_in("2026-13-99T99:99:99", "UTC")
@@ -247,9 +226,9 @@ mod tests {
         // Given / When
         let local = LocalTimestamp::from_feed_in("2026-08-30T17:50:00", "Mars/Olympus_Mons");
 
-        // Then
+        // Then: resolved in the system zone, not passed through.
         assert!(!local.time_label.is_empty());
-        assert_eq!(local.date_label.len(), 10);
+        assert!(!local.weekday_label.is_empty());
     }
 
     #[test]

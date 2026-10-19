@@ -27,7 +27,6 @@ pub mod ffi {
     extern "RustQt" {
         #[qobject]
         #[qml_element]
-        #[qproperty(QString, theme_mode)]
         #[qproperty(QString, theme_background)]
         #[qproperty(QString, theme_foreground)]
         #[qproperty(QString, theme_accent)]
@@ -66,7 +65,6 @@ pub(crate) struct ThemeControllerConfig {
 }
 
 pub struct ThemeControllerRust {
-    theme_mode: QString,
     theme_background: QString,
     theme_foreground: QString,
     theme_accent: QString,
@@ -83,7 +81,6 @@ pub struct ThemeControllerRust {
 impl Default for ThemeControllerRust {
     fn default() -> Self {
         Self {
-            theme_mode: QString::default(),
             theme_background: QString::default(),
             theme_foreground: QString::default(),
             theme_accent: QString::default(),
@@ -130,7 +127,6 @@ impl ffi::ThemeController {
     fn apply_theme(mut self: Pin<&mut Self>, theme: Theme) {
         match theme {
             Theme::Available {
-                mode,
                 background,
                 foreground,
                 accent,
@@ -138,7 +134,6 @@ impl ffi::ThemeController {
                 lighter_background,
                 muted,
             } => {
-                self.as_mut().set_theme_mode(or_empty(mode));
                 self.as_mut().set_theme_background(or_empty(background));
                 self.as_mut().set_theme_foreground(or_empty(foreground));
                 self.as_mut().set_theme_accent(or_empty(accent));

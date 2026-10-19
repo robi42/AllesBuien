@@ -252,7 +252,7 @@ mkdir -p /tmp/qmlroot && ln -sfn /usr/share/omarchy/shell /tmp/qmlroot/qs
 /usr/lib/qt6/bin/qmllint -I /tmp/qmlroot /tmp/allesbuien-candidate/plugin/BarWidget.qml
 ```
 
-Two warnings are expected, and Omarchy's own first-party plugins produce both: `bar.run` is not visible on the `QtObject` the bar is declared as, and `QProcess::ExitStatus` has no QML type for `onExited`'s second parameter.
+One warning is expected, and Omarchy's own bar widgets produce it too: `bar.run` is not visible on the `QtObject` the bar is declared as. Omarchy 4.0.4 and earlier add a second, also expected: `QProcess::ExitStatus` has no QML type for `onExited`'s second parameter.
 
 Then install the candidate and try it in a real bar:
 

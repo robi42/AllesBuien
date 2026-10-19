@@ -196,7 +196,11 @@ fn without_a_graph_the_whole_run_plays(scene: &mut Scene) {
     // Then
     assert_eq!(scene.captions(), captions_of(0, 9));
     assert_eq!(scene.playback(), (true, 0), "a run plays from its start");
-    assert_eq!(*scene.radar().first_forecast_index(), 2, "two observations");
+    let fraction = *scene.radar().observed_fraction();
+    assert!(
+        near(Some(fraction), 1.5 / 9.0),
+        "two observations: {fraction}"
+    );
     assert_eq!(scene.vendor.frame_calls(), 10);
 
     // When: the viewer parks on the last frame.
@@ -230,7 +234,6 @@ fn a_graph_ends_the_run_on_its_last_bar(scene: &mut Scene) {
     assert_eq!(radar.current_frame_url().to_string(), "image://radar/1/6");
     assert!(near(scene.cursor(), 4.5 / 5.0), "{:?}", scene.cursor());
     // The divider is measured against the frames shown, not the whole run.
-    assert_eq!(*radar.first_forecast_index(), 2);
     let fraction = *radar.observed_fraction();
     assert!(near(Some(fraction), 1.5 / 6.0), "fraction {fraction}");
     assert!(*radar.forecast_boundary_visible());

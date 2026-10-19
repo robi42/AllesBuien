@@ -11,7 +11,6 @@ use allesbuien_testkit::StubFeedApi;
 
 struct ThemeFixture<'a> {
     name: &'a str,
-    mode: &'a str,
     background: &'a str,
     accent: &'a str,
     modified: Duration,
@@ -23,8 +22,8 @@ fn write_theme(path: &Path, fixture: &ThemeFixture<'_>) {
     fs::write(
         &colors_path,
         format!(
-            "mode = \"{}\"\nbackground = \"{}\"\nforeground = \"#d8dee9\"\naccent = \"{}\"\nselection = \"#434c5e\"\nlighter_background = \"#3b4252\"\nmuted = \"#4c566a\"\n",
-            fixture.mode, fixture.background, fixture.accent
+            "background = \"{}\"\nforeground = \"#d8dee9\"\naccent = \"{}\"\nselection = \"#434c5e\"\nlighter_background = \"#3b4252\"\nmuted = \"#4c566a\"\n",
+            fixture.background, fixture.accent
         ),
     )
     .expect("theme fixture should be written");
@@ -56,7 +55,6 @@ fn exposes_colors_across_replacements_and_unavailability() {
         &current,
         &ThemeFixture {
             name: "theme-a",
-            mode: "dark",
             background: "#2e3440",
             accent: "#81a1c1",
             modified: Duration::from_secs(1),
@@ -74,7 +72,6 @@ fn exposes_colors_across_replacements_and_unavailability() {
         .boot();
     let controller = booted.theme_controller().expect("controller should exist");
     assert!(*controller.theme_available());
-    assert_eq!(controller.theme_mode().to_string(), "dark");
     assert_eq!(controller.theme_background().to_string(), "#2e3440");
     assert_eq!(controller.theme_foreground().to_string(), "#d8dee9");
     assert_eq!(controller.theme_accent().to_string(), "#81a1c1");
@@ -88,7 +85,6 @@ fn exposes_colors_across_replacements_and_unavailability() {
         &current,
         &ThemeFixture {
             name: "theme-b",
-            mode: "dark",
             background: "#111111",
             accent: "#222222",
             modified: Duration::from_secs(2),
@@ -109,7 +105,6 @@ fn exposes_colors_across_replacements_and_unavailability() {
         &current,
         &ThemeFixture {
             name: "theme-c",
-            mode: "dark",
             background: "#333333",
             accent: "#444444",
             modified: Duration::from_secs(3),
@@ -138,7 +133,6 @@ fn exposes_colors_across_replacements_and_unavailability() {
         &current,
         &ThemeFixture {
             name: "theme-d",
-            mode: "light",
             background: "#f0f0f0",
             accent: "#0066cc",
             modified: Duration::from_secs(4),
@@ -149,7 +143,6 @@ fn exposes_colors_across_replacements_and_unavailability() {
     // Then: path re-resolution restores availability and exposes the recreated colors.
     let controller = booted.theme_controller().expect("controller should exist");
     assert!(*controller.theme_available());
-    assert_eq!(controller.theme_mode().to_string(), "light");
     assert_eq!(controller.theme_background().to_string(), "#f0f0f0");
     assert_eq!(controller.theme_accent().to_string(), "#0066cc");
 }

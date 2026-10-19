@@ -45,7 +45,6 @@ impl<'a> RadarCache<'a> {
                     index,
                     RadarFrame {
                         timestamp: time.timestamp,
-                        url: time.url,
                         path,
                     },
                 ))

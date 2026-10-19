@@ -31,7 +31,6 @@ pub struct GenerationId(pub u64);
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RadarFrame {
     pub timestamp: String,
-    pub url: String,
     pub path: PathBuf,
 }
 
@@ -172,12 +171,19 @@ mod tests {
         // Then
         assert_eq!(refreshed.generation, GenerationId(7));
         let expected = [
-            ("2026-08-29T21:15:00", "https://image.example/frame-a"),
-            ("2026-08-29T21:20:00", "https://image.example/frame-b"),
-            ("2026-08-29T21:25:00", "https://image.example/frame-c"),
+            ("2026-08-29T21:15:00", "frame-0.png"),
+            ("2026-08-29T21:20:00", "frame-1.png"),
+            ("2026-08-29T21:25:00", "frame-2.png"),
         ];
-        for (frame, expected) in refreshed.frames.iter().zip(expected) {
-            assert_eq!((frame.timestamp.as_str(), frame.url.as_str()), expected);
+        assert_eq!(refreshed.frames.len(), expected.len());
+        for (frame, (timestamp, file)) in refreshed.frames.iter().zip(expected) {
+            assert_eq!(frame.timestamp, timestamp);
+            assert!(frame.path.ends_with(file), "{}", frame.path.display());
+            assert!(
+                frame.path.is_file(),
+                "{} was never written",
+                frame.path.display()
+            );
         }
     }
 

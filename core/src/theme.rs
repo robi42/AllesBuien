@@ -10,7 +10,6 @@ const COLORS_FILE: &str = "colors.toml";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Theme {
     Available {
-        mode: Option<String>,
         background: Option<String>,
         foreground: Option<String>,
         accent: Option<String>,
@@ -23,7 +22,6 @@ pub enum Theme {
 
 #[derive(Deserialize)]
 struct ThemeFile {
-    mode: Option<String>,
     background: Option<String>,
     foreground: Option<String>,
     accent: Option<String>,
@@ -56,7 +54,6 @@ pub fn read_theme(theme_base: &Path) -> Theme {
 
 fn parse_theme(contents: &str) -> Theme {
     toml::from_str::<ThemeFile>(contents).map_or(Theme::Unavailable, |file| Theme::Available {
-        mode: file.mode,
         background: file.background,
         foreground: file.foreground,
         accent: file.accent,
@@ -86,17 +83,16 @@ mod tests {
         assert!(matches!(
             theme,
             Theme::Available {
-                mode: Some(ref mode),
                 accent: Some(ref accent),
                 ..
-            } if mode == "dark" && accent == "#81a1c1"
+            } if accent == "#81a1c1"
         ));
     }
 
     #[test]
     fn minimal_theme_parses_when_optional_colors_are_absent() {
         // Given
-        let colors = "mode = \"dark\"\nbackground = \"#000000\"\n";
+        let colors = "background = \"#000000\"\n";
 
         // When
         let theme = parse_theme(colors);
@@ -105,7 +101,6 @@ mod tests {
         assert_eq!(
             theme,
             Theme::Available {
-                mode: Some("dark".to_owned()),
                 background: Some("#000000".to_owned()),
                 foreground: None,
                 accent: None,
@@ -163,9 +158,9 @@ mod tests {
         assert!(matches!(
             read_theme(&current_theme),
             Theme::Available {
-                mode: Some(ref mode),
+                background: Some(ref background),
                 ..
-            } if mode == "light"
+            } if background == "#ffffff"
         ));
         fs::create_dir(&next_theme).expect("next theme directory should be created");
         fs::write(
@@ -183,10 +178,9 @@ mod tests {
         assert!(matches!(
             theme,
             Theme::Available {
-                mode: Some(ref mode),
                 background: Some(ref background),
                 ..
-            } if mode == "dark" && background == "#000000"
+            } if background == "#000000"
         ));
     }
 
