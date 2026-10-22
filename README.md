@@ -205,14 +205,9 @@ mise install
 bin/test
 ```
 
-`bin/test` also needs `cargo-llvm-cov` at the version `.llvm-cov-version` names, and the toolchain's `llvm-tools-preview` component, neither of which `mise.toml` provides:
+`mise install` provides Rust 1.98.0 with its rustfmt, clippy, and llvm-tools components, cargo-llvm-cov at the version `.llvm-cov-version` names, actionlint, shellcheck, and lefthook 2.1.16, then, in the main checkout, runs `lefthook install`, which writes the pre-commit hook into `.git/hooks`, where every worktree shares it. In a linked worktree `mise install` leaves the hook alone, but `lefthook install` run by hand in one still rewrites the hook every worktree shares from that worktree's `lefthook.yml`. The hook runs `cargo fmt --all --check` and `bin/check-fast` before each commit. A commit fails when the hook finds no lefthook, or first finds one older than 2.1.16. The hook never reinstalls itself, so after a change to `lefthook.yml` beyond its jobs, such as a new hook, run `mise install` in the main checkout again. Because `mise.toml` sets up that hook, mise reads it only from a trusted checkout: `mise install` trusts the one it runs in, and a linked worktree shares its main checkout's trust.
 
-```bash
-cargo install --locked cargo-llvm-cov --version "$(cat .llvm-cov-version)"
-rustup component add llvm-tools-preview
-```
-
-`mise install` provides Rust 1.98.0, actionlint, shellcheck, and lefthook 2.1.16, then, in the main checkout, runs `lefthook install`, which writes the pre-commit hook into `.git/hooks`, where every worktree shares it. In a linked worktree `mise install` leaves the hook alone, but `lefthook install` run by hand in one still rewrites the hook every worktree shares from that worktree's `lefthook.yml`. The hook runs `cargo fmt --all --check` and `bin/check-fast` before each commit. A commit fails when the hook finds no lefthook, or first finds one older than 2.1.16. The hook never reinstalls itself, so after a change to `lefthook.yml` beyond its jobs, such as a new hook, run `mise install` in the main checkout again. Because `mise.toml` sets up that hook, mise reads it only from a trusted checkout: `mise install` trusts the one it runs in, and a linked worktree shares its main checkout's trust.
+The coverage tools are pinned in `mise.toml` too. mise exports `RUSTUP_TOOLCHAIN` from its Rust pin, which outranks `rust-toolchain.toml` and the components listed there, so a toolchain that mise set up lacks a component until `mise install` adds it. Run it again after a change to `mise.toml`'s tools. CI installs the cargo-llvm-cov that `.llvm-cov-version` names, and `bin/test` holds `mise.toml`'s pin to it.
 
 Build the release application with:
 

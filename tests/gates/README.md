@@ -185,7 +185,7 @@ commands would keep passing long after the real gate changed underneath it.
 
 ## Coverage
 
-Twenty-three of the twenty-seven gates are covered. The four that are not all
+Twenty-four of the twenty-eight gates are covered. The four that are not all
 need a compiled workspace, and a cold CXX-Qt build takes over twenty minutes:
 
 | gate | why it is out of scope |
@@ -235,6 +235,18 @@ surfaces no Cargo command ever rewrites.
 `mise.toml` pins. Lower, and an older lefthook first on PATH runs the hook
 again; higher, and the pinned one refuses every commit. Its fixture moves the
 pin and leaves `min_version` behind.
+
+`cargo-llvm-cov mise pin` holds the cargo-llvm-cov `mise.toml` pins to the one
+`.llvm-cov-version` names, which CI installs. The version pin before it compares
+`.llvm-cov-version` with whichever copy it finds, so on its own it notices the
+two files drifting apart only on a machine mise set up, and never in CI. It
+reads text alone but lives in `bin/test`, because this runner puts
+`bin/check-fast` in front of every `bin/test` gate it slices: there it would
+refuse the `.llvm-cov-version` that the version pin's fixture plants before the
+version pin could. Its fixture moves the mise pin to a version no release will
+carry and leaves `.llvm-cov-version` behind. The gate never runs
+cargo-llvm-cov, so no mise shim in the scratch copy tries to resolve that
+version.
 
 `omarchy plugin` is the part of `omarchy-plugin-validate` that tracked text can
 answer: no symlink anywhere in the tree, a tracked `manifest.json` at

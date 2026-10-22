@@ -97,6 +97,23 @@ if [[ "$installed_llvm_cov" != *"$pinned_llvm_cov"* ]]; then
   exit 1
 fi
 
+# The check above compares .llvm-cov-version with whichever cargo-llvm-cov it
+# finds, which is mise.toml's pin on a machine mise set up and the version file's
+# own in CI, so by itself it notices the two files drifting apart only on such a
+# machine, and never in CI. This one compares the files. It reads text alone, the
+# usual mark of a bin/check-fast gate, and is here instead because
+# bin/check-gates runs bin/check-fast in front of every bin/test gate it slices:
+# there it would refuse the .llvm-cov-version that the version pin's fixture
+# plants before the version pin could, and the version pin would go unproven.
+echo "==> gate: cargo-llvm-cov mise pin"
+ci_llvm_cov=$(cat .llvm-cov-version)
+mise_llvm_cov=$(sed -n 's/^"aqua:taiki-e\/cargo-llvm-cov" = "\(.*\)"$/\1/p' mise.toml)
+if [[ -z $mise_llvm_cov || $mise_llvm_cov != "$ci_llvm_cov" ]]; then
+  printf 'error: mise.toml pins cargo-llvm-cov %s but .llvm-cov-version pins %s\n' \
+    "${mise_llvm_cov:-none}" "$ci_llvm_cov" >&2
+  exit 1
+fi
+
 # The root .qmllint.ini is committed so a Qt upgrade changes this gate's
 # strictness through a reviewable diff rather than through whichever defaults
 # the new release happens to ship. qmllint finds it by walking up from

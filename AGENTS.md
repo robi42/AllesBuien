@@ -48,13 +48,13 @@ AllesBuien/
 ├── .beads/               Tracked beads config; the issues live in the ignored Dolt database, which syncs to origin's refs/dolt/data
 ├── .qmllint.ini          Committed qmllint strictness, so a Qt bump is a reviewable diff
 ├── Cargo.toml            The workspace: its six crates, the =0.10.0 CXX-Qt pins, and the workspace lints; Cargo.lock beside it
-├── rust-toolchain.toml   The 1.98.0 channel; clippy.toml beside it holds the 50-line function and nesting-6 thresholds
+├── rust-toolchain.toml   The 1.98.0 channel and its components; clippy.toml beside it holds the 50-line function and nesting-6 thresholds
 ├── deny.toml             cargo-deny's advisory policy for the weekly audit workflow
 ├── .cargo/config.toml    Links with lld
 ├── .clangd               Editor setup for the thin C++ bridge files under app/src, with .clang-format beside it
-├── .llvm-cov-version     The cargo-llvm-cov version bin/test's coverage gate expects
+├── .llvm-cov-version     The cargo-llvm-cov version CI installs and bin/test's coverage gate expects; mise.toml pins the same
 ├── .gitignore            Ignores, plus the re-includes that keep a global ignore from hiding protected config
-├── mise.toml             Rust 1.98.0, actionlint, shellcheck, and lefthook pins; installs the hook
+├── mise.toml             Rust 1.98.0 and its components, cargo-llvm-cov, actionlint, shellcheck, and lefthook pins; installs the hook
 ├── README.md, LICENSE    The public docs and the MIT licence; AGENTS.md is this file
 ├── CLAUDE.md             A regular file importing AGENTS.md, never a symlink: `omarchy plugin
 │                         add` refuses a plugin folder that holds one anywhere
