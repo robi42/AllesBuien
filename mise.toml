@@ -25,18 +25,24 @@
 # cargo-llvm-cov and the toolchain's llvm-tools component are what bin/test's
 # core coverage gate runs on. CI installs the cargo-llvm-cov .llvm-cov-version
 # names, and this pin is the same version, which bin/test's cargo-llvm-cov
-# mise pin gate holds equal. It comes first because mise puts its tools on PATH
-# in this order and the rust entry brings ~/.cargo/bin with it, so a copy that
-# `cargo install` left there cannot shadow it. The components are listed here
-# as well as in rust-toolchain.toml because mise exports RUSTUP_TOOLCHAIN from
-# the rust pin, which outranks that file, components and all; `mise install`
-# adds any that an installed toolchain lacks.
+# mise pin gate holds equal. The gate reads the line in exactly its present
+# shape, so a table like the rust entry's turns it red. It comes first because
+# mise puts its tools on PATH in this order and the rust entry brings
+# ~/.cargo/bin with it, so a copy that `cargo install` left there cannot shadow
+# it. The components are listed here as well as in rust-toolchain.toml because
+# mise exports RUSTUP_TOOLCHAIN from the rust pin, which outranks that file,
+# components and all; `mise install` adds any that an installed toolchain
+# lacks. mise reads them only from 2026.7.4 on, and older releases install the
+# toolchain without them and say nothing, so min_version makes those refuse
+# this file instead.
 #
 # The [hooks] table is also why mise reads this file only once it is trusted.
 # `mise install` trusts the checkout it runs in, and a linked worktree shares
 # the trust of its main checkout, but a copy anywhere else starts untrusted,
 # and a mise shim run beside an untrusted copy dies before its tool starts.
 # bin/check-gates trusts its scratch copy for that reason.
+min_version = "2026.7.4"
+
 [tools]
 "aqua:taiki-e/cargo-llvm-cov" = "0.9.0"
 rust = { version = "1.98.0", components = ["rustfmt", "clippy", "llvm-tools"] }

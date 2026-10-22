@@ -64,6 +64,13 @@ trap 'rm -rf "$scratch"' EXIT
 # this tree's own file, so trusting it trusts nothing the tree does not.
 export MISE_TRUSTED_CONFIG_PATHS="$scratch${MISE_TRUSTED_CONFIG_PATHS:+:$MISE_TRUSTED_CONFIG_PATHS}"
 
+# Trusted, the copy's mise.toml also pins tool versions, and by default a shim
+# that meets one not yet installed downloads it in the middle of the run. A
+# fixture's baseline that needs a tool the machine lacks should go red instead,
+# as bin/test does; bin/test exports the same when it runs this script, and this
+# covers a run on its own.
+export MISE_AUTO_INSTALL=false
+
 # The working tree as it stands, not HEAD: the suite has to judge the gates you
 # are about to commit, not the ones you last committed. Untracked-but-not-
 # ignored files come along for the same reason, and for a sharper one - a new

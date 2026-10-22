@@ -237,16 +237,18 @@ again; higher, and the pinned one refuses every commit. Its fixture moves the
 pin and leaves `min_version` behind.
 
 `cargo-llvm-cov mise pin` holds the cargo-llvm-cov `mise.toml` pins to the one
-`.llvm-cov-version` names, which CI installs. The version pin before it compares
-`.llvm-cov-version` with whichever copy it finds, so on its own it notices the
-two files drifting apart only on a machine mise set up, and never in CI. It
-reads text alone but lives in `bin/test`, because this runner puts
-`bin/check-fast` in front of every `bin/test` gate it slices: there it would
-refuse the `.llvm-cov-version` that the version pin's fixture plants before the
-version pin could. Its fixture moves the mise pin to a version no release will
-carry and leaves `.llvm-cov-version` behind. The gate never runs
-cargo-llvm-cov, so no mise shim in the scratch copy tries to resolve that
-version.
+`.llvm-cov-version` names, which CI installs. `cargo-llvm-cov version pin`
+compares `.llvm-cov-version` with whichever copy it finds, so on its own it
+notices the two files drifting apart only on a machine mise set up, and never in
+CI. It reads text alone but lives in `bin/test`, straight after
+`bin/check-fast`, because this runner puts `bin/check-fast` in front of every
+`bin/test` gate it slices: there it would refuse the `.llvm-cov-version` that
+the version pin's fixture plants before the version pin could. Its fixture moves
+the mise pin to a version no release will carry and leaves `.llvm-cov-version`
+behind. The gate never runs cargo-llvm-cov, so no mise shim in the scratch copy
+tries to resolve that version, and the runner turns mise's auto-install off, so
+a baseline that needs a pinned tool the machine lacks goes red rather than
+downloading it.
 
 `omarchy plugin` is the part of `omarchy-plugin-validate` that tracked text can
 answer: no symlink anywhere in the tree, a tracked `manifest.json` at
@@ -300,8 +302,8 @@ is where `lefthook` runs it, on the commit that would introduce the unproven
 gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-sixty-five it runs, each of which fails loudly if its gate stops biting. One
-of those sixty-five aims at the runner rather than at a gate: the slicer
+sixty-six it runs, each of which fails loudly if its gate stops biting. One
+of those sixty-six aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That
