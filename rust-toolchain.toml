@@ -1,2 +1,6 @@
+# mise.toml's rust entry lists the same components. On a machine mise set up,
+# its RUSTUP_TOOLCHAIN outranks this file and only that list is installed, so
+# the two move together.
 [toolchain]
 channel = "1.98.0"
+components = ["rustfmt", "clippy", "llvm-tools"]

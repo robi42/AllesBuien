@@ -5,12 +5,18 @@ set -euo pipefail
 # compiler, a built tree, or a tool heavier than a commit should wait for; the
 # millisecond text checks live in bin/check-fast and run first, so a misspelled
 # attribution or an unpinned action costs a quarter of a second to learn about
-# rather than twenty minutes.
+# rather than twenty minutes. The one text check here, the cargo-llvm-cov mise
+# pin, runs straight after bin/check-fast, and its comment says why it is not
+# part of it.
 #
 # Gates fail loudly or not at all. A missing tool, a missing artefact, or an
 # empty result set is a failure, never a skip: this repository has already lost
 # one gate to a silent pass, and both name-binding regressions reached the
-# desktop through suites that stayed green.
+# desktop through suites that stayed green. Nor does a gate quietly install
+# what is missing: by default a mise shim that meets a pinned version not yet
+# installed downloads it mid-run, so auto-install is off, and such a shim fails
+# instead and says to run mise install.
+export MISE_AUTO_INSTALL=false
 
 require_tool() {
   command -v "$1" >/dev/null && return 0
@@ -19,6 +25,28 @@ require_tool() {
 }
 
 ./bin/check-fast
+
+# cargo-llvm-cov mise pin. The cargo-llvm-cov version pin further down compares
+# .llvm-cov-version with whichever cargo-llvm-cov it finds: mise.toml's pin on a
+# machine mise set up, the version file's own in CI. By itself it notices the
+# two files drifting apart only on such a machine, and never in CI, so this gate
+# compares the files. It reads text alone, the usual mark of a bin/check-fast
+# gate, and is here because bin/check-gates runs bin/check-fast in front of
+# every bin/test gate it slices: there it would refuse the .llvm-cov-version
+# that the version pin's fixture plants before the version pin could. Values
+# print with %q, so a stray space or carriage return shows.
+echo "==> gate: cargo-llvm-cov mise pin"
+ci_llvm_cov=$(cat .llvm-cov-version)
+mise_llvm_cov=$(sed -n 's/^"aqua:taiki-e\/cargo-llvm-cov" = "\(.*\)"$/\1/p' mise.toml)
+if [[ -z $mise_llvm_cov ]]; then
+  printf 'error: mise.toml has no column-one line of the shape "aqua:taiki-e/cargo-llvm-cov" = "<version>"\n' >&2
+  exit 1
+fi
+if [[ $mise_llvm_cov != "$ci_llvm_cov" ]]; then
+  printf 'error: mise.toml pins cargo-llvm-cov %q but .llvm-cov-version pins %q\n' \
+    "$mise_llvm_cov" "$ci_llvm_cov" >&2
+  exit 1
+fi
 
 # The guardrails themselves are shell, and bin/test has already shipped a shell
 # bug that disabled a gate while reporting success. Linting them is not hygiene
