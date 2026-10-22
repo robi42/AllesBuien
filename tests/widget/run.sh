@@ -58,10 +58,12 @@ env_vars=()
 app_path=
 output=
 status=
+verb=
 
 begin() {
   name=$1
   problem=
+  verb=
   case_dir=$scratch/$name
   mkdir -p "$case_dir/plugin" "$case_dir/tmp" "$case_dir/state"
   cp -- "$widget" "$case_dir/plugin/widget.sh"
@@ -106,6 +108,7 @@ ours() {
 }
 
 run() {
+  verb=$1
   if output=$(env -u BASH_ENV -u ENV "${env_vars[@]}" "PATH=$fakes:$scratch/bin${app_path:+:$app_path}" \
     bash "$case_dir/plugin/widget.sh" "$1" 2>&1 9>&1); then
     status=0
@@ -206,9 +209,29 @@ temp_dir_removed() {
   fi
 }
 
+# And a click's messages fit the terminal they are read in: Omarchy's floating
+# terminal, a window 875 pixels wide, breaks a longer line wherever its edge
+# falls, mid-word or mid-URL. 72 columns fits that window with room for a
+# larger font. A URL, path or pin quoted on a line of its own, indented by two
+# spaces, is exempt, since breaking it would be worse. The probe and the launch
+# verb print nothing a person reads.
+lines_fit_the_terminal() {
+  local line
+  if [[ $verb != install ]]; then
+    return 0
+  fi
+  while IFS= read -r line; do
+    if [[ $line != "  "* ]] && ((${#line} > 72)); then
+      note "a line of ${#line} columns, wider than the terminal's 72: $line"
+      return 0
+    fi
+  done <<<"$output"
+}
+
 finish() {
   pacman_only_after_a_passing_check
   temp_dir_removed
+  lines_fit_the_terminal
   cases=$((cases + 1))
   if [[ -n $problem ]]; then
     failures=$((failures + 1))
@@ -587,7 +610,8 @@ expect_status 1
 expect_no_call "curl"
 expect_no_call "pacman [-U]"
 expect_no_call "omarchy-launch-or-focus"
-expect_output "pacman records the allesbuien package, version 0.3.0-1, but no allesbuien command is on PATH"
+expect_output "pacman records the allesbuien package, version 0.3.0-1,"
+expect_output "but no allesbuien command is on PATH"
 expect_output "README#install"
 expect_output "README#uninstall"
 finish

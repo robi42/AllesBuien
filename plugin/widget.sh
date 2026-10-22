@@ -82,7 +82,6 @@ read_pin() {
     fi
     pin_problem="$pin_file is not one sha256sum line naming an allesbuien package: ${contents%%$'\n'*}"
   fi
-  printf 'widget.sh: %s\n' "$pin_problem" >&2
   return 1
 }
 
@@ -176,14 +175,25 @@ launch_detached() {
   (bash "$self" launch >/dev/null 2>&1 &)
 }
 
+# The messages below are read in Omarchy's floating terminal, a window 875
+# pixels wide whose terminal breaks a longer line wherever its edge falls,
+# mid-word or mid-URL. So a line of prose stays within 72 columns, and a URL, a
+# path, or a pin quoted back gets a line of its own, indented by two spaces.
+# tests/widget/run.sh holds every click to that.
+
+# Where a click that installs nothing points instead.
+by_hand_message() {
+  printf 'Install AllesBuien by hand as README#install describes:\n  %s\n' "$readme_install"
+}
+
 no_pin_message() {
   if [[ -n $pin_problem ]]; then
     printf 'This copy of the AllesBuien plugin carries a release pin it cannot use:\n  %s\n' "$pin_problem"
-    printf 'That is a defect in the plugin, not on this machine, so nothing was installed.\n'
+    printf 'That is a defect in the plugin, not on this machine,\nso nothing was installed.\n'
   else
-    printf 'This copy of the AllesBuien plugin pins no release yet, so there is nothing to install from here.\n'
+    printf 'This copy of the AllesBuien plugin pins no release yet,\nso there is nothing to install from here.\n'
   fi
-  printf 'Install AllesBuien by hand as README#install describes: %s\n' "$readme_install"
+  by_hand_message
 }
 
 unreadable_message() {
@@ -192,25 +202,29 @@ unreadable_message() {
 }
 
 stray_package_message() {
-  printf 'pacman records the allesbuien package, version %s, but no allesbuien command is on PATH,\n' "$stray_package"
-  printf 'so this click cannot tell what it would replace and installs nothing.\n'
-  printf 'Reinstall it as README#install describes: %s\n' "$readme_install"
-  printf 'Or remove it as README#uninstall describes: %s\n' "$readme_uninstall"
+  printf 'pacman records the allesbuien package, version %s,\n' "$stray_package"
+  printf 'but no allesbuien command is on PATH, so this click cannot tell\n'
+  printf 'what it would replace and installs nothing.\n'
+  printf 'Reinstall it as README#install describes:\n  %s\n' "$readme_install"
+  printf 'Or remove it as README#uninstall describes:\n  %s\n' "$readme_uninstall"
 }
 
 # Downloads the pinned asset into a private temp dir. Fails, having said why,
 # before anything reaches pacman.
+# The terminal names the release's page rather than the asset's own URL, which
+# is too long for one line of it.
 download_pinned() {
-  local url=$repository/releases/download/v${pin_version%-*}/$pin_asset
+  local tag=v${pin_version%-*}
+  local url=$repository/releases/download/$tag/$pin_asset
   if ! tmp=$(mktemp -d); then
     printf 'Could not create a temporary directory, so nothing was installed.\n'
     return 1
   fi
-  printf 'Downloading %s\n' "$url"
+  printf 'Downloading %s from\n  %s\n' "$pin_asset" "$repository/releases/tag/$tag"
   if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
     --tlsv1.2 --output "$tmp/$pin_asset" "$url"; then
-    printf 'Could not download %s from the GitHub release, so nothing was installed.\n' "$pin_asset"
-    printf 'Install AllesBuien by hand as README#install describes: %s\n' "$readme_install"
+    printf 'Could not download %s\nfrom the GitHub release, so nothing was installed.\n' "$pin_asset"
+    by_hand_message
     return 1
   fi
 }
@@ -219,8 +233,8 @@ download_pinned() {
 # reaches pacman.
 verify_download() {
   if ! (cd "$tmp" && sha256sum --check --strict "$pin_file"); then
-    printf 'The download of %s does not match release.sha256, so nothing was installed.\n' "$pin_asset"
-    printf 'Install AllesBuien by hand as README#install describes: %s\n' "$readme_install"
+    printf 'The download of %s\ndoes not match release.sha256, so nothing was installed.\n' "$pin_asset"
+    by_hand_message
     return 1
   fi
 }
@@ -285,7 +299,7 @@ install_verb() {
   fi
   case $decision in
     0)
-      printf 'AllesBuien is already installed and there is nothing for this click to install. Opening it.\n'
+      printf 'AllesBuien is already installed and there is nothing\nfor this click to install. Opening it.\n'
       launch_detached
       return 0
       ;;
@@ -304,7 +318,8 @@ install_verb() {
         return 1
       fi
       if ! sudo pacman -U --needed "$tmp/$pin_asset"; then
-        printf 'Nothing was installed. Install AllesBuien by hand as README#install describes: %s\n' "$readme_install"
+        printf 'Nothing was installed.\n'
+        by_hand_message
         return 1
       fi
       launch_detached
@@ -338,6 +353,9 @@ case ${1-} in
   probe)
     if ! decide; then
       exit 1
+    fi
+    if [[ -n $pin_problem ]]; then
+      printf 'widget.sh: %s\n' "$pin_problem" >&2
     fi
     exit "$decision"
     ;;
