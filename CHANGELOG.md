@@ -5,7 +5,7 @@ All notable changes to AllesBuien are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). From 0.2.0 on, each
 release's section is the text of its annotated tag and of its GitHub release notes.
 
-## [0.2.0] - 2026-10-18
+## [0.2.0] - 2026-10-22
 
 ### Added
 
@@ -75,6 +75,13 @@ release's section is the text of its annotated tag and of its GitHub release not
   a post-quantum key exchange to downgrade, while the app keeps rustls's own session cache, sends
   no ECH, builds rustls without `brotli`, and uses the ring provider, whose key exchanges (X25519,
   P-256 and P-384) are all classical.
+- webpki-roots 1.0.10 and rustls-webpki 0.103.16 fix RUSTSEC-2026-0381 and RUSTSEC-2026-0382
+  (both CVE-2026-111943): certificates issued by distrusted emSign intermediates, whose private
+  keys are now publicly known, were accepted. 0.1.0 used the affected webpki-roots 1.0.9 and
+  rustls-webpki 0.103.15 for its HTTPS requests to Buienradar, so a network attacker holding one
+  of those keys can impersonate Buienradar to it. webpki-roots 1.0.10 no longer bundles the
+  intermediates' root, emSign ECC Root CA - G3, and rustls-webpki 0.103.16 refuses any chain
+  that contains one of their keys.
 
 ## [0.1.0] - 2026-09-03
 
