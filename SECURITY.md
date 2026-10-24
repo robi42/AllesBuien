@@ -12,12 +12,12 @@ Only the release that `plugin/release.sha256` on `main` pins. Fixes are not back
 
 ## What runs as root, and when
 
-Only `plugin/widget.sh`'s install verb, which the widget runs in Omarchy's floating terminal when a click finds the app missing, or older than the release its plugin checkout pins. In this order:
+Only the two `sudo` calls at the end of `plugin/widget.sh`'s install verb: `sudo -v`, which takes the password, and `sudo pacman -U`. The widget runs the verb itself as you, in Omarchy's floating terminal, when a click finds the app missing, or older than the release its plugin checkout pins, and everything before those two calls runs as you too. In this order:
 
 1. It reads `plugin/release.sha256` from that checkout and refuses any content but one line: a SHA-256 digest, two spaces, and an asset name of the form `allesbuien-<version>-<pkgrel>-x86_64.pkg.tar.zst`.
 2. `curl` downloads that asset from this repository's GitHub release over HTTPS only (`--proto =https --proto-redir =https`, TLS 1.2 or newer) into a fresh directory from `mktemp -d`, which is removed when the script ends.
 3. `sha256sum --check --strict` checks the download against the pin. A mismatch stops the click before anything else reads the file.
-4. `bsdtar` reads which Qt the package was built against from its `.BUILDINFO`, and the click stops if the installed `qt6-declarative` is older, or if either version cannot be read.
+4. `bsdtar` reads which Qt the package was built against from its `.BUILDINFO`, and the click stops if the installed `qt6-declarative` is older, or if either version cannot be read or the two cannot be compared.
 5. `sudo -v` asks for the password. The script then decides again whether to install, because another click or another installer can change what is installed while the prompt waits, and stops if the answer or the pin has changed.
 6. Only then does `sudo pacman -U --needed` run on the downloaded file, and pacman's own confirmation prompt is the consent.
 

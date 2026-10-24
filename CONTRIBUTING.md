@@ -22,9 +22,9 @@ You need Arch Linux or Omarchy on x86_64, with `qt6-base` and `qt6-declarative`,
 mise install
 ```
 
-That installs the pinned Rust 1.98.0 with its components, cargo-llvm-cov, actionlint, ShellCheck, and lefthook. It also trusts the checkout's `mise.toml` without asking, and installs the pre-commit hook that runs `cargo fmt --all --check` and `bin/check-fast` before every commit. If you only want to build, rustup alone is enough: `rust-toolchain.toml` selects 1.98.0.
+That installs every tool `mise.toml` pins, from Rust 1.98.0 with its components to lefthook, as README's [Development](README.md#development) section lists them. It also trusts the checkout's `mise.toml` without asking, and installs the pre-commit hook that runs `cargo fmt --all --check` and `bin/check-fast` before every commit. If you only want to build, rustup alone is enough: `rust-toolchain.toml` selects 1.98.0.
 
-Not on Arch? Replay the quality job of [`.github/workflows/ci.yml`](.github/workflows/ci.yml), with its environment, in an `archlinux:base-devel` container: its pacman line, `rustup default 1.98.0` with the llvm-tools component, the cargo-llvm-cov version `.llvm-cov-version` names, and `bin/test`.
+Not on Arch? Replay the quality job of [`.github/workflows/ci.yml`](.github/workflows/ci.yml) in an `archlinux:base-devel` container: its environment, then its steps in order, from the pacman line that installs Qt and rustup to `bin/test`.
 
 ## The fast loop
 

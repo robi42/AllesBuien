@@ -207,7 +207,7 @@ Finally, only if you added the optional Hyprland wiring above, delete those two 
 ## Dependencies
 
 - For the widget: the application itself, either the release package its click installs or a build from this repository.
-- `qt6-base` and `qt6-declarative`, which the package pulls in; a release needs the Qt it was built against or a newer one, which a fully updated Omarchy has.
+- `qt6-base` and `qt6-declarative`, which the package pulls in; a release needs the Qt it was built against or a newer one, as [Install](#install) says.
 - `libnotify`, optional; without it the app runs and simply never notifies.
 - Omarchy itself, which ships `curl`, `sha256sum`, `bsdtar`, and `pacman` for the widget's install and update click, and `hyprctl` plus `jq` for `omarchy-launch-or-focus`. No AUR helper is needed.
 - Network access to Buienradar for observations, forecasts, and radar frames.
