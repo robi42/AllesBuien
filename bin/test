@@ -320,10 +320,10 @@ echo "==> gate: formatting"
 cargo fmt --all --check
 
 echo "==> gate: clippy"
-cargo clippy --all-targets -- -D warnings
+cargo clippy --all-targets --locked -- -D warnings
 
 echo "==> gate: workspace tests"
-QT_QPA_PLATFORM=offscreen cargo test --workspace
+QT_QPA_PLATFORM=offscreen cargo test --workspace --locked
 
 # Timezone matrix. Three modules read the host clock on purpose, and a test that
 # quietly agrees with Amsterdam passes here and fails on a UTC server months
@@ -335,7 +335,7 @@ QT_QPA_PLATFORM=offscreen cargo test --workspace
 echo "==> gate: timezone matrix"
 for zone in UTC Asia/Kolkata Pacific/Auckland America/New_York; do
   printf '    TZ=%s\n' "$zone"
-  TZ="$zone" QT_QPA_PLATFORM=offscreen cargo test --workspace --quiet
+  TZ="$zone" QT_QPA_PLATFORM=offscreen cargo test --workspace --locked --quiet
 done
 
 # Core purity. Piping into `grep -q` cannot express this safely: grep exits at
@@ -343,6 +343,11 @@ done
 # status into 141, and `&& exit 1` never fires while `|| true` swallows it - so
 # the guard reports success precisely when it should fail. It only appeared to
 # work because cargo tree's output fits the pipe buffer. Capture, then match.
+#
+# cargo tree is not --locked, unlike clippy and the tests above. This gate's
+# fixture adds cxx to core/Cargo.toml and leaves Cargo.lock as it was, and a
+# locked cargo tree would refuse the lock rather than name the dependency. In a
+# whole run, the locked calls above have already held the lock to the manifests.
 echo "==> gate: core purity"
 core_tree=$(cargo tree -p allesbuien-core)
 if grep -qi cxx <<<"$core_tree"; then
@@ -352,7 +357,7 @@ if grep -qi cxx <<<"$core_tree"; then
 fi
 
 echo "==> gate: core coverage"
-cargo llvm-cov -p allesbuien-core --fail-under-lines 90
+cargo llvm-cov -p allesbuien-core --locked --fail-under-lines 90
 
 # Capture, then match, for the reason the gate above spells out. The hazard runs
 # the other way here - grep -q exits at the first match, cargo takes SIGPIPE,

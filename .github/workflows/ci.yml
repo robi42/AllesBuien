@@ -12,9 +12,25 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels the run its previous push started, so a
+# pull request has at most one run going, the one for its newest commit. An
+# outside contributor's runs start only once the maintainer approves them, so
+# this and the quality job's timeout bound the runs that do start: approved
+# ones, the owner's, and Dependabot's.
+#
+# Each push to main is a group of its own, keyed by run: in a shared group
+# GitHub keeps at most one run pending and cancels it when a newer one arrives,
+# cancel-in-progress or not, and every commit on main is one somebody may tag.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   quality:
     runs-on: ubuntu-latest
+    # A cold run takes just over twenty minutes; a hung GUI harness would
+    # otherwise hold the runner for GitHub's default of six hours.
+    timeout-minutes: 45
     container: archlinux:base-devel
     env:
       QMAKE: /usr/bin/qmake6
@@ -36,8 +52,14 @@ jobs:
       - name: Install system dependencies and Rust
         run: pacman -Syu --noconfirm git rustup qt6-base qt6-declarative shellcheck actionlint && rustup default 1.98.0 && rustup component add llvm-tools-preview
 
+      # No later step talks to GitHub through git. Persisted, the job's token
+      # would stay in a file under RUNNER_TEMP, included from .git/config, where
+      # every later step could read it, and bin/test runs the pull request's own
+      # code. The token can only read, so this is hygiene rather than a fix.
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # The workspace is bind-mounted from the host and owned by the runner
       # account, while the container is root, so git refuses it as dubious
@@ -47,18 +69,26 @@ jobs:
       - name: Trust the checked-out workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      # Every run restores main's cache, and only a push to main saves one. An
+      # entry is about 1.8 GB, a pull request's could serve only that pull
+      # request's own later runs, and once the repository's caches pass 10 GB,
+      # GitHub evicts the least recently used entries, main's among them.
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Read cargo-llvm-cov version
         id: llvm-cov-version
         shell: bash
         run: echo "version=$(<.llvm-cov-version)" >> "$GITHUB_OUTPUT"
 
+      # fallback: none for the reason the cargo-about steps below give.
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
         with:
           tool: cargo-llvm-cov@${{ steps.llvm-cov-version.outputs.version }}
+          fallback: none
 
       # bin/test's third-party notices gate compares the committed notices with
       # what this cargo-about writes from Cargo.lock, so CI installs the version
