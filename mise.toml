@@ -36,6 +36,16 @@
 # toolchain without them and say nothing, so min_version makes those refuse
 # this file instead.
 #
+# cargo-about writes pkgbuild/THIRD-PARTY-LICENSES, and bin/test's third-party
+# notices gate regenerates that file and compares it byte for byte, so the
+# gate's verdict holds only for the cargo-about CI installs: the version
+# .cargo-about-version names, which this pin matches and bin/test's
+# cargo-about mise pin gate holds equal, reading the line in exactly its
+# present shape. mise's github backend installs the release's prebuilt x86_64
+# archive, the one whose digest install-action's manifest records for CI; that
+# was tried with mise 2026.10.17, not with 2026.7.4, the min_version below. It
+# comes before the rust entry for the reason cargo-llvm-cov does.
+#
 # The [hooks] table is also why mise reads this file only once it is trusted.
 # `mise install` trusts the checkout it runs in, and a linked worktree shares
 # the trust of its main checkout, but a copy anywhere else starts untrusted,
@@ -45,6 +55,7 @@ min_version = "2026.7.4"
 
 [tools]
 "aqua:taiki-e/cargo-llvm-cov" = "0.9.0"
+"github:EmbarkStudios/cargo-about" = "0.9.2"
 rust = { version = "1.98.0", components = ["rustfmt", "clippy", "llvm-tools"] }
 actionlint = "1.7.12"
 shellcheck = "0.11.0"

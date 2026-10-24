@@ -6,8 +6,11 @@
 # earns its keep once something other than crates.io is in play. What does
 # matter is that this app speaks HTTP to the internet through reqwest/rustls, so
 # a published vulnerability in that chain is a real exposure. The third,
-# `licenses`, matters when you redistribute, so it is the one to revisit now
-# that release packages are redistributed.
+# `licenses`, matters when you redistribute, and it was revisited once release
+# packages were: the licence policy is pkgbuild/about.toml's accepted list,
+# which bin/test enforces on every pull request, Dependabot's included, as it
+# regenerates the package's third-party notices. cargo-deny stays
+# advisories-only, so there is no second allowlist to disagree with that one.
 #
 # Runs on a weekly schedule rather than on push: an advisory landing upstream is
 # not a reason to fail an unrelated commit, and a solo maintainer who sets

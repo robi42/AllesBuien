@@ -185,7 +185,7 @@ commands would keep passing long after the real gate changed underneath it.
 
 ## Coverage
 
-Twenty-four of the twenty-eight gates are covered. The four that are not all
+Twenty-nine of the thirty-three gates are covered. The four that are not all
 need a compiled workspace, and a cold CXX-Qt build takes over twenty minutes:
 
 | gate | why it is out of scope |
@@ -250,6 +250,61 @@ tries to resolve that version, and the runner turns mise's auto-install off, so
 a baseline that needs a pinned tool the machine lacks goes red rather than
 downloading it.
 
+`cargo-about mise pin` and `cargo-about version pin` do the same for
+cargo-about, which writes the third-party notices, against
+`.cargo-about-version`, and sit in the same places in `bin/test` for the same
+reasons. The
+version pin compares `cargo about --version` with the whole
+`cargo-about <version>` it expects, so 0.9.20 does not pass for 0.9.2. Their
+fixtures move the mise pin and the version file to versions no release will
+carry.
+
+`third-party notices` regenerates `pkgbuild/THIRD-PARTY-LICENSES` with
+cargo-about from `Cargo.lock`, `pkgbuild/about.toml` and `pkgbuild/about.hbs`,
+and refuses any difference from the committed file, printing the diff; its
+`--fail` makes cargo-about refuse, by name, a crate under a licence
+`about.toml` does not accept. Its fixtures drop the first crate from the
+committed index, which the diff then names, and take the licence of the first
+crate that has no other back out of the accepted list, which cargo-about's own
+message names with the crate; both read their targets out of the files. It is
+the one gate here that runs cargo-about, four times per `bin/test`: the gate
+itself, its baseline in this runner, and its two fixtures, each from a few
+seconds to half a minute depending on cores. Two limits are written down
+rather than gated. cargo-about never collects NOTICE files, which none of the
+crates the notices cover ships today, and no fixture could prove a refusal
+without planting one in the cargo registry. And it reads licence files, never
+the headers of source files, which is what the next gate is for.
+
+`third-party notice coverage` keeps the notices `about.hbs` carries by hand
+complete, without running cargo-about. It asks `cargo tree` which crates the
+binary links and refuses one the committed index does not list. In each of
+them it reads the leading comment of every source file that carries an ISC,
+MIT or two-clause BSD permission notice, tests, benches and examples aside:
+each copyright holder that comment names has to appear on a `Copyright` line
+of the notices, and a BSD-style comment's whole text, whitespace aside, has to
+appear in them, because that licence's second clause asks a binary's
+documentation for its conditions and disclaimer as well as its copyright line.
+Run against the notices without the hand-kept section, it names exactly the
+holders cargo-about misses, four of ring's and two of rustls-webpki's, and
+futures-channel's `src/mpsc/queue.rs`, for Dmitry Vyukov's name and for his
+licence's text, and nothing else. Which files a build compiles takes a build to know, so it reads every
+file, build scripts and other architectures' modules included, and a notice
+outside a file's leading comment is out of its reach. Its fixtures delete
+ring's index entry, the first holder line of the hand-kept section, read out
+of the file with its crate, and the reproduced Vyukov header, which has to
+trip both the holder check and the text check.
+
+`shipped notices` is their belt in `bin/check-fast`. `package()` has to
+install `pkgbuild/THIRD-PARTY-LICENSES` and the toolchain's
+`COPYRIGHT-library.html`, both lines matched whole within `package()`, and
+the committed notices may carry no `<year>`, `<copyright holders>` or
+`<owner>`: the standard MIT text cargo-about writes for a crate with no
+licence file carries the first two as its copyright line. Every gate above
+passes just the same once `package()` stops installing the file, so the
+install lines are held here, on every commit. Its fixtures delete the notices'
+install line and plant a placeholder in the first MIT block, whose crates the
+failure has to name.
+
 `omarchy plugin` is the part of `omarchy-plugin-validate` that tracked text can
 answer: no symlink anywhere in the tree, a tracked `manifest.json` at
 `schemaVersion` 1 with its five required keys, an id in the validator's
@@ -302,8 +357,8 @@ is where `lefthook` runs it, on the commit that would introduce the unproven
 gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-sixty-six it runs, each of which fails loudly if its gate stops biting. One
-of those sixty-six aims at the runner rather than at a gate: the slicer
+seventy-five it runs, each of which fails loudly if its gate stops biting. One
+of those seventy-five aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That

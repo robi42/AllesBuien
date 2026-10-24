@@ -343,6 +343,46 @@ version_drift=$(
 )
 [[ -z "$version_drift" ]] || report 'version surfaces that disagree with app/Cargo.toml (README.md Releasing lists all nine):' "$version_drift"
 
+# Shipped notices. bin/test's third-party notices gate holds
+# pkgbuild/THIRD-PARTY-LICENSES to Cargo.lock, which is worth nothing once the
+# package stops installing it, so package() has to install it beside LICENSE,
+# with the toolchain's notice for the Rust standard library, the one piece of
+# compiled-in code no crate brings along. Both install lines are matched whole,
+# inside package(), so one commented out or moved elsewhere does not count.
+# And for a crate that ships no licence file, cargo-about writes the standard
+# text of its licence without a word, which for MIT carries a literal
+# "<year> <copyright holders>" as its copyright line, a notice that names
+# nobody; clang-format ships that very text as its own MIT file.
+# pkgbuild/about.toml's order keeps all of them under Apache-2.0, whose text
+# needs no holder, and a placeholder that comes back anyway is refused here,
+# with the crates its block covers, on the commit that would ship it.
+echo "==> gate: shipped notices"
+notices=pkgbuild/THIRD-PARTY-LICENSES
+unshipped=$(
+  if [[ -f pkgbuild/PKGBUILD && -r pkgbuild/PKGBUILD ]]; then
+    package_body=$(awk '/^package\(\) \{$/ { inside = 1; next } inside && /^\}$/ { exit } inside { print }' pkgbuild/PKGBUILD)
+    grep -qxF "  install -Dm644 $notices \"\$pkgdir/usr/share/licenses/allesbuien/THIRD-PARTY-LICENSES\"" <<<"$package_body" ||
+      printf '  pkgbuild/PKGBUILD: package() no longer installs %s\n' "$notices"
+    grep -qxF "  install -Dm644 \"\$(rustc --print sysroot)/share/doc/rust/COPYRIGHT-library.html\" \"\$pkgdir/usr/share/licenses/allesbuien/COPYRIGHT-library.html\"" <<<"$package_body" ||
+      printf "  pkgbuild/PKGBUILD: package() no longer installs the Rust standard library's COPYRIGHT-library.html\n"
+  else
+    printf '  pkgbuild/PKGBUILD: not readable in the working tree, so nothing says what package() installs\n'
+  fi
+  if [[ -f $notices && -r $notices ]]; then
+    awk -v file="$notices" '
+      $0 == "Used by:" { users = ""; listing = 1; next }
+      listing && /^  / { users = users (users == "" ? "" : ", ") substr($0, 3); next }
+      { listing = 0 }
+      /<(year|copyright holders|owner)>/ {
+        printf "  %s:%d: a copyright line that names nobody, for %s: %s\n", file, FNR, (users == "" ? "no crate" : users), $0
+      }
+    ' "$notices"
+  else
+    printf '  %s: not readable in the working tree, so the package has no notices to install\n' "$notices"
+  fi
+)
+[[ -z "$unshipped" ]] || report 'the package would not ship complete third-party notices:' "$unshipped"
+
 # Omarchy plugin. omarchy-plugin-validate is what `omarchy plugin add` and the
 # marketplace run, and it needs jq and an Omarchy desktop, neither of which CI's
 # bare Arch container has - so until now nothing in bin/test looked at the

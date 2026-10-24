@@ -60,6 +60,23 @@ jobs:
         with:
           tool: cargo-llvm-cov@${{ steps.llvm-cov-version.outputs.version }}
 
+      # bin/test's third-party notices gate compares the committed notices with
+      # what this cargo-about writes from Cargo.lock, so CI installs the version
+      # .cargo-about-version names, the one bin/test holds mise.toml's pin to.
+      # With fallback: none, a version install-action's manifest does not know
+      # fails this step, instead of falling back to cargo-binstall, which the
+      # action hands the job's token.
+      - name: Read cargo-about version
+        id: cargo-about-version
+        shell: bash
+        run: echo "version=$(<.cargo-about-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install cargo-about
+        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: cargo-about@${{ steps.cargo-about-version.outputs.version }}
+          fallback: none
+
       # One step, one source of truth. Restating the gates here let the server
       # and the working copy disagree: the module-size budget and the pinned
       # cargo-llvm-cov version only ever ran locally, and CI kept its own copy of

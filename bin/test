@@ -5,9 +5,9 @@ set -euo pipefail
 # compiler, a built tree, or a tool heavier than a commit should wait for; the
 # millisecond text checks live in bin/check-fast and run first, so a misspelled
 # attribution or an unpinned action costs a quarter of a second to learn about
-# rather than twenty minutes. The one text check here, the cargo-llvm-cov mise
-# pin, runs straight after bin/check-fast, and its comment says why it is not
-# part of it.
+# rather than twenty minutes. The two text checks here, the cargo-llvm-cov and
+# cargo-about mise pins, run straight after bin/check-fast, and the first one's
+# comment says why they are not part of it.
 #
 # Gates fail loudly or not at all. A missing tool, a missing artefact, or an
 # empty result set is a failure, never a skip: this repository has already lost
@@ -48,6 +48,25 @@ if [[ $mise_llvm_cov != "$ci_llvm_cov" ]]; then
   exit 1
 fi
 
+# cargo-about mise pin, for the same reasons: the cargo-about version pin
+# further down compares .cargo-about-version with whichever cargo-about it
+# finds, so by itself it would notice mise.toml drifting from that file only on
+# a machine mise set up, and here, rather than in bin/check-fast, it leaves the
+# version pin's fixture to the version pin. It never runs cargo-about, so its
+# own fixture's version, one nobody installed, never reaches a mise shim.
+echo "==> gate: cargo-about mise pin"
+ci_cargo_about=$(cat .cargo-about-version)
+mise_cargo_about=$(sed -n 's/^"github:EmbarkStudios\/cargo-about" = "\(.*\)"$/\1/p' mise.toml)
+if [[ -z $mise_cargo_about ]]; then
+  printf 'error: mise.toml has no column-one line of the shape "github:EmbarkStudios/cargo-about" = "<version>"\n' >&2
+  exit 1
+fi
+if [[ $mise_cargo_about != "$ci_cargo_about" ]]; then
+  printf 'error: mise.toml pins cargo-about %q but .cargo-about-version pins %q\n' \
+    "$mise_cargo_about" "$ci_cargo_about" >&2
+  exit 1
+fi
+
 # The guardrails themselves are shell, and bin/test has already shipped a shell
 # bug that disabled a gate while reporting success. Linting them is not hygiene
 # for its own sake; it is the only reader that checks the checkers. The
@@ -71,6 +90,228 @@ actionlint
 # variables. It builds nothing, so it sits with the checks that answer in
 # seconds.
 ./bin/check-worktree-hook
+
+# cargo-about writes pkgbuild/THIRD-PARTY-LICENSES, the third-party notices the
+# package installs, and the third-party notices gate below regenerates that file
+# and compares it byte for byte. Another release of cargo-about can word the
+# same Cargo.lock differently, so the comparison means something only against
+# the version CI installs. Equality rather than a substring, which would take
+# 0.9.20 for 0.9.2, and captured before it is matched, for the reason the core
+# purity gate below spells out.
+echo "==> gate: cargo-about version pin"
+require_tool cargo-about
+pinned_cargo_about=$(cat .cargo-about-version)
+installed_cargo_about=$(cargo about --version)
+if [[ $installed_cargo_about != "cargo-about $pinned_cargo_about" ]]; then
+  printf 'error: cargo-about reports "%s" but .cargo-about-version pins %s\n' \
+    "$installed_cargo_about" "$pinned_cargo_about" >&2
+  exit 1
+fi
+
+# Third-party notices. pkgbuild/THIRD-PARTY-LICENSES carries the notices of the
+# crates the release binary is built from, and the package installs it beside
+# LICENSE, so it has to say what Cargo.lock says. cargo-about writes it from the
+# lock with pkgbuild/about.toml and pkgbuild/about.hbs, and it is committed
+# rather than written by makepkg, so the release container needs no generator
+# and a change to it is read in the pull request that causes it, Dependabot's
+# included. The template prints no versions, so a bump that changes no crate and
+# no licence text, the usual kind, leaves the file as it is. This regenerates
+# it and refuses any difference, printing the diff and the command that fixes
+# it, and --fail makes cargo-about refuse, by name, a crate whose licence
+# about.toml's accepted list does not take. It needs no build, so it runs before
+# the twenty minutes that do. cargo fetch comes first because the metadata
+# cargo-about reads covers every target, and no build here downloads the
+# Windows crates; --frozen then keeps cargo-about to the sources on disk, which
+# is all it reads without workarounds or clarifications in about.toml.
+echo "==> gate: third-party notices"
+require_tool cargo-about
+cargo fetch --locked --quiet
+mkdir -p target
+if ! cargo about generate --frozen --fail --manifest-path app/Cargo.toml \
+  --config pkgbuild/about.toml --output-file target/THIRD-PARTY-LICENSES \
+  pkgbuild/about.hbs 2>target/third-party-notices.log; then
+  cat target/third-party-notices.log >&2
+  printf '%s\n' \
+    'error: cargo-about could not write the third-party notices. If it names a crate whose licence requirements' \
+    'it cannot satisfy, pkgbuild/about.toml does not accept that licence; accepting it there is the decision to ship it.' >&2
+  exit 1
+fi
+if ! notices_diff=$(diff -u pkgbuild/THIRD-PARTY-LICENSES target/THIRD-PARTY-LICENSES 2>&1); then
+  printf '%s\n' "$notices_diff" >&2
+  printf '%s\n' \
+    'error: pkgbuild/THIRD-PARTY-LICENSES does not match Cargo.lock. Regenerate it, read the diff, and commit it:' \
+    '  cargo fetch --locked && cargo about generate --frozen --fail -m app/Cargo.toml -c pkgbuild/about.toml -o pkgbuild/THIRD-PARTY-LICENSES pkgbuild/about.hbs' >&2
+  exit 1
+fi
+
+# Third-party notice coverage. The gate above proves the committed notices are
+# what cargo-about writes, and cargo-about writes what the licence files say of
+# the crates about.toml lets it see. Two things get past that. A crate
+# about.toml leaves out is missing from the file as well. And a notice in a
+# source file's own header is one cargo-about never reads: ring's C and Rust
+# files name ISC copyright holders that its licence files do not, and so do
+# rustls-webpki's, and futures-channel's mpsc queue is under a two-clause BSD
+# licence of its own, whose second clause asks every binary's documentation
+# for its whole text. about.hbs carries those notices by hand, and this gate
+# keeps them complete.
+#
+# It asks cargo tree, not cargo-about, which crates the binary links, and
+# refuses one the file's index does not list. In each of those crates it reads
+# the leading comment of every source file that carries an ISC, MIT or
+# BSD-style permission notice, and refuses a copyright holder that comment
+# names and no Copyright line of the notices does, and a BSD-style comment
+# whose text, whitespace aside, the notices do not reproduce. Which files a
+# build compiles takes a build to know, so it reads them all but tests,
+# benches and examples, build scripts included, and a notice that is not in a
+# file's leading comment is out of its reach. The crates' directories come
+# from cargo metadata, so CARGO_HOME is never guessed. It reads the committed
+# file and never runs cargo-about, so its fixtures cost seconds.
+echo "==> gate: third-party notice coverage"
+notices=pkgbuild/THIRD-PARTY-LICENSES
+if [[ ! -r $notices ]]; then
+  printf 'error: %s is not readable, so there is no notice to compare\n' "$notices" >&2
+  exit 1
+fi
+cargo fetch --locked --quiet
+linked_tree=$(cargo tree --locked --offline -p allesbuien -e normal,no-proc-macro \
+  --target x86_64-unknown-linux-gnu --prefix none --format '{p}')
+# A registry crate prints as its name and version, followed by (*) where it has
+# been printed before. A path crate prints its path too, and the two that
+# allesbuien links are this repository's own, under LICENSE.
+linked_crates=$(awk '$2 ~ /^v/ && (NF == 2 || (NF == 3 && $3 == "(*)")) { print $1, substr($2, 2) }' <<<"$linked_tree" | sort -u)
+if [[ -z $linked_crates ]]; then
+  printf 'error: cargo tree lists no registry crate that allesbuien links\n' >&2
+  exit 1
+fi
+crate_metadata=$(cargo metadata --format-version 1 --locked --offline \
+  --filter-platform x86_64-unknown-linux-gnu)
+declare -A crate_dir=()
+while IFS= read -r manifest; do
+  dir=${manifest%/Cargo.toml}
+  crate_dir[${dir##*/}]=$dir
+done < <(grep -o '"manifest_path":"[^"]*"' <<<"$crate_metadata" | sed 's/^"manifest_path":"//; s/"$//')
+indexed_crates=$(awk '
+  listing && NF == 0 { exit }
+  listing { print $1 }
+  prev == "Crates" && /^-+$/ { listing = 1 }
+  { prev = $0 }
+' "$notices")
+permission_notice='Permission to use, copy, modify, and(/or)? distribute this software for any|Permission is hereby granted, free of charge|Redistribution and use in source and binary forms'
+# The first file is the committed notices; every other one is a source file of
+# crate, whose directory is root. A file's leading comment is one /* */ block,
+# or one run of lines that open with the marker its first line opens with, so
+# a module's //! doc after a // header is not part of it.
+coverage_scan=$(
+  cat <<'AWK'
+function marker(text) {
+  if (text ~ /^[[:space:]]*\/\*/) return "/*"
+  if (text ~ /^[[:space:]]*\/\/!/) return "//!"
+  if (text ~ /^[[:space:]]*\/\/\//) return "///"
+  if (text ~ /^[[:space:]]*\/\//) return "//"
+  if (text ~ /^[[:space:]]*#/) return "#"
+  return ""
+}
+function verdict(   text, name, count, list, i, seen) {
+  if (!flattened) {
+    gsub(/[[:space:]]+/, " ", notices)
+    flattened = 1
+  }
+  text = header
+  gsub(/[[:space:]]+/, " ", text)
+  sub(/^ /, "", text)
+  sub(/ $/, "", text)
+  if (text !~ permission) return
+  name = substr(file, length(root) + 1)
+  count = split(holders, list, "\n")
+  for (i = 1; i <= count; i++) {
+    if (list[i] == "" || (list[i] in seen)) continue
+    seen[list[i]] = 1
+    if (!index(copyrights, list[i])) printf "  %s: %s names %s\n", crate, name, list[i]
+  }
+  if (index(text, "Redistribution and use in source and binary forms") && !index(notices, text)) {
+    printf "  %s: %s has a BSD-style header whose text the notices do not reproduce\n", crate, name
+  }
+}
+NR == FNR {
+  if (index($0, "Copyright")) copyrights = copyrights $0 "\n"
+  notices = notices " " $0
+  next
+}
+FNR == 1 {
+  if (file != "") verdict()
+  file = FILENAME
+  header = ""
+  holders = ""
+  state = "start"
+  if ($0 ~ /^#!/) next
+}
+state == "done" { next }
+state == "start" {
+  if ($0 ~ /^[[:space:]]*$/) next
+  lead = marker($0)
+  if (lead == "") { state = "done"; next }
+  state = lead == "/*" ? "block" : "run"
+}
+state == "run" && marker($0) != lead { state = "done"; next }
+{
+  line = $0
+  closing = state == "block" && index(line, "*/")
+  if (state == "block") {
+    sub(/\*\/.*$/, "", line)
+    sub(/^[[:space:]]*(\/\*+|\*+)/, "", line)
+  } else {
+    sub(/^[[:space:]]*/, "", line)
+    line = substr(line, length(lead) + 1)
+  }
+  header = header " " line
+  if (index(line, "Copyright")) {
+    holder = line
+    sub(/^.*Copyright[[:space:]]*/, "", holder)
+    sub(/^(\([Cc]\)|©)[[:space:]]*/, "", holder)
+    sub(/^[0-9][-0-9, ]*/, "", holder)
+    sub(/[[:space:]]*All [Rr]ights [Rr]eserved[.]?[[:space:]]*$/, "", holder)
+    sub(/[.,[:space:]]+$/, "", holder)
+    if (holder != "") holders = holders holder "\n"
+  }
+  if (closing) state = "done"
+}
+END {
+  if (file != "") verdict()
+}
+AWK
+)
+uncovered=$(
+  while read -r crate version; do
+    grep -qxF -- "$crate" <<<"$indexed_crates" ||
+      printf '  %s lists no entry for %s, which allesbuien links\n' "$notices" "$crate"
+    dir=${crate_dir[$crate-$version]:-}
+    if [[ -z $dir ]]; then
+      printf '  %s %s: cargo metadata names no source directory for it\n' "$crate" "$version"
+      continue
+    fi
+    scan_status=0
+    headed=$(grep -rlE --include='*.rs' --include='*.c' --include='*.h' --include='*.inl' \
+      --include='*.S' --include='*.pl' --exclude-dir=tests --exclude-dir=benches \
+      --exclude-dir=examples "$permission_notice" "$dir") || scan_status=$?
+    if [[ $scan_status -gt 1 ]]; then
+      printf '  %s: grep exited %d reading %s, so this gate did not read every file\n' \
+        "$crate" "$scan_status" "$dir"
+    fi
+    [[ -n $headed ]] || continue
+    mapfile -t headed_files <<<"$headed"
+    awk -v crate="$crate" -v root="$dir/" -v permission="$permission_notice" "$coverage_scan" \
+      "$notices" "${headed_files[@]}" ||
+      printf '  %s: the header scan exited %d, so this gate did not read every file\n' "$crate" "$?"
+  done <<<"$linked_crates"
+)
+if [[ -n $uncovered ]]; then
+  printf '%s\n' "error: $notices leaves out notices that code allesbuien links asks for:" "$uncovered" >&2
+  printf '%s\n' \
+    'A crate missing from the index is one pkgbuild/about.toml leaves out. A copyright holder, or a header whose text' \
+    'the notices have to carry, goes into the hand-kept section of pkgbuild/about.hbs. Then regenerate:' \
+    '  cargo fetch --locked && cargo about generate --frozen --fail -m app/Cargo.toml -c pkgbuild/about.toml -o pkgbuild/THIRD-PARTY-LICENSES pkgbuild/about.hbs' >&2
+  exit 1
+fi
 
 echo "==> gate: formatting"
 cargo fmt --all --check
