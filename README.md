@@ -124,7 +124,7 @@ Without the second line the window tiles like any other, which is fine; the app 
 
 ## Build from source
 
-Building needs Rust 1.98.0, which `mise install` provides, and `qt6-base` and `qt6-declarative`, which on Arch include the development headers. Mode A also needs Arch's `makepkg`, [`just`](https://github.com/casey/just), and a pacman package that provides `rust`, such as `rustup` (`sudo pacman -S just rustup`). makepkg checks the PKGBUILD's build dependencies against pacman's database, which knows nothing of mise's toolchain; the build itself still uses Cargo 1.98.0, the only version `bin/build` accepts. Clone the repository and run every command from its root:
+Building needs Rust 1.98.0, which `mise install` provides, and `qt6-base` and `qt6-declarative`, which on Arch include the development headers. If you only want to build, rustup is enough: `rust-toolchain.toml` selects 1.98.0. `mise install` also trusts the checkout's `mise.toml` and installs the pre-commit hook described under [Development](#development). Mode A also needs Arch's `makepkg`, [`just`](https://github.com/casey/just), and a pacman package that provides `rust`, such as `rustup` (`sudo pacman -S just rustup`). makepkg checks the PKGBUILD's build dependencies against pacman's database, which knows nothing of mise's toolchain; the build itself still uses Cargo 1.98.0, the only version `bin/build` accepts. Clone the repository and run every command from its root:
 
 ```bash
 git clone https://github.com/robi42/AllesBuien.git && cd AllesBuien
@@ -214,7 +214,7 @@ Finally, only if you added the optional Hyprland wiring above, delete those two 
 
 ## Development
 
-Install the pinned tools and the pre-commit hook, then run the repository's complete quality gate:
+`bin/test` is the repository's complete quality gate, and the one CI runs on every pull request. It takes over twenty minutes from cold, because CXX-Qt regenerates C++, and leaves a few gigabytes under `target/`; [CONTRIBUTING.md](CONTRIBUTING.md) describes the faster loop for working on one change. To run it, install the pinned tools and the pre-commit hook first:
 
 ```bash
 mise install

@@ -4,6 +4,10 @@ All notable changes to AllesBuien are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). From 0.2.0 on, each
 release's section is the text of its annotated tag and of its GitHub release notes.
+Changes not yet released collect under Unreleased, and the release that ships them
+renames that section after itself and its date.
+
+## [Unreleased]
 
 ## [0.2.0] - 2026-10-22
 
@@ -113,5 +117,6 @@ release's section is the text of its annotated tag and of its GitHub release not
 Bron: Buienradar.nl — weather data is used non-commercially with the attribution its terms
 require.
 
+[Unreleased]: https://github.com/robi42/AllesBuien/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/robi42/AllesBuien/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/robi42/AllesBuien/releases/tag/v0.1.0
