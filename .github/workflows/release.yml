@@ -17,6 +17,13 @@ jobs:
     container: archlinux:base-devel
     permissions:
       contents: read
+    # The name the build's artifact goes under, which carries the run attempt.
+    # A whole re-run uploads its build under a name of its own instead of
+    # beside the earlier attempt's under the same one, where download-artifact,
+    # which returns the artifact with the highest ID, could pick either; a
+    # re-run of the publish job alone still reads the name its build set.
+    outputs:
+      artifact: release-assets-${{ github.run_attempt }}
     env:
       QMAKE: /usr/bin/qmake6
       # GNU gold cannot resolve the whole-archive initialiser symbols CXX-Qt
@@ -105,7 +112,8 @@ jobs:
       - name: Hand the package to the publish job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: release-assets
+          # The job's artifact output above names the same.
+          name: release-assets-${{ github.run_attempt }}
           if-no-files-found: error
           retention-days: 7
           path: pkgbuild/*.pkg.tar.zst
@@ -139,7 +147,7 @@ jobs:
       - name: Fetch the built package
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: release-assets
+          name: ${{ needs.build.outputs.artifact }}
           path: dist
 
       # Leaves a draft for a person to inspect and publish, as README's
