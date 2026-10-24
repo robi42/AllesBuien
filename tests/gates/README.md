@@ -252,9 +252,10 @@ downloading it.
 
 `cargo-about mise pin` and `cargo-about version pin` do the same for
 cargo-about, which writes the third-party notices, against
-`.cargo-about-version`, and sit in the same places in `bin/test` for the same
-reasons. The
-version pin compares `cargo about --version` with the whole
+`.cargo-about-version`. The mise pin sits beside its cargo-llvm-cov
+counterpart, straight after `bin/check-fast`, for the same reason. The version
+pin sits with the notices gates instead, before the build, since neither it
+nor they need one, and it compares `cargo about --version` with the whole
 `cargo-about <version>` it expects, so 0.9.20 does not pass for 0.9.2. Their
 fixtures move the mise pin and the version file to versions no release will
 carry.
@@ -264,16 +265,17 @@ cargo-about from `Cargo.lock`, `pkgbuild/about.toml` and `pkgbuild/about.hbs`,
 and refuses any difference from the committed file, printing the diff; its
 `--fail` makes cargo-about refuse, by name, a crate under a licence
 `about.toml` does not accept. Its fixtures drop the first crate from the
-committed index, which the diff then names, and take the licence of the first
-crate that has no other back out of the accepted list, which cargo-about's own
-message names with the crate; both read their targets out of the files. It is
-the one gate here that runs cargo-about, four times per `bin/test`: the gate
-itself, its baseline in this runner, and its two fixtures, each from a few
-seconds to half a minute depending on cores. Two limits are written down
-rather than gated. cargo-about never collects NOTICE files, which none of the
-crates the notices cover ships today, and no fixture could prove a refusal
-without planting one in the cargo registry. And it reads licence files, never
-the headers of source files, which is what the next gate is for.
+committed index, which the diff then names, and take out of the accepted list
+the licence of the first crate in the index whose one licence is neither
+Apache-2.0 nor MIT, which cargo-about's own message names with the crate; both
+read their targets out of the files. It is the one gate here that has
+cargo-about write the notices, four times per `bin/test`: the gate itself, its
+baseline in this runner, and its two fixtures, each from a few seconds to half
+a minute depending on cores. Two limits are written down rather than gated.
+cargo-about never collects NOTICE files, which none of the crates the notices
+cover ships today, and no fixture could prove a refusal without planting one
+in the cargo registry. And it reads licence files, never the headers of source
+files, which is what the next gate is for.
 
 `third-party notice coverage` keeps the notices `about.hbs` carries by hand
 complete, without running cargo-about. It asks `cargo tree` which crates the
@@ -289,12 +291,12 @@ as well as its copyright line.
 Run against the notices without the hand-kept section, it names exactly the
 holders cargo-about misses, four of ring's and two of rustls-webpki's, and
 futures-channel's `src/mpsc/queue.rs`, for Dmitry Vyukov's name and for his
-licence's text, and nothing else. Which files a build compiles takes a build to know, so it reads every
-file, build scripts and other architectures' modules included, and a notice
-outside a file's leading comment is out of its reach. Its fixtures delete
-ring's index entry, the first holder line of the hand-kept section, read out
-of the file with its crate, and the reproduced Vyukov header, which has to
-trip both the holder check and the text check.
+licence's text, and nothing else. Which files a build compiles takes a build
+to know, so it reads every such file, build scripts and other architectures'
+modules included, and a notice outside a file's leading comment is out of its
+reach. Its fixtures delete ring's index entry, the first holder line of the
+hand-kept section, read out of the file with its crate, and the reproduced
+Vyukov header, which has to trip both the holder check and the text check.
 
 `shipped notices` is their belt in `bin/check-fast`. `package()` has to
 install `pkgbuild/THIRD-PARTY-LICENSES` and the toolchain's

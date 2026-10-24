@@ -13,11 +13,11 @@
 # decision to redistribute code under it. Apache-2.0 comes first for three
 # reasons. ring and sync_wrapper leave no choice about it, so its text ships
 # anyway. While none of the crates listed ships a NOTICE file, a binary owes
-# Apache-2.0 nothing but that text. And the CXX-Qt crates publish no licence file, for which
-# cargo-about fills in the standard text of the licence each is listed under,
-# and clang-format's licence files are those standard texts: Apache-2.0's names
-# nobody, where MIT's carries a literal "<year> <copyright holders>" line,
-# which bin/check-fast refuses.
+# Apache-2.0 nothing but that text. And the CXX-Qt crates publish no licence
+# file, for which cargo-about fills in the standard text of the licence each is
+# listed under, and clang-format's licence files are those standard texts:
+# Apache-2.0's names nobody, where MIT's carries a literal
+# "<year> <copyright holders>" line, which bin/check-fast refuses.
 accepted = [
   "Apache-2.0",
   "MIT",
