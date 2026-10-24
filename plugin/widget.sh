@@ -34,7 +34,7 @@ set -euo pipefail
 # name, and the digest exists nowhere else. The pin is written after a release's
 # asset exists, so between a version bump and that commit it names the previous
 # release. The widget never asks GitHub which release is the latest: what a
-# click installs is what the reviewed plugin snapshot pins, and
+# click installs is what this plugin checkout pins, and
 # `omarchy plugin update` is the only way a newer pin arrives.
 
 readonly repository=https://github.com/robi42/AllesBuien
