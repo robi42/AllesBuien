@@ -35,8 +35,14 @@ jobs:
           rustup default 1.98.0
           chmod -R a+rX /usr/local/rustup
 
+      # Nothing after this step talks to GitHub through git. Persisted, the
+      # job's token, which can write to this repository, would sit in a
+      # world-readable file under RUNNER_TEMP, included from .git/config, while
+      # the build runs every dependency's build script and proc macro.
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # The workspace is bind-mounted from the host and owned by the runner
       # account while the container is root, so git refuses it as dubious
@@ -87,9 +93,14 @@ jobs:
             cd pkgbuild && makepkg -f
           '
 
-      - name: Publish release assets
+      # Leaves a draft for a person to inspect and publish, as README's
+      # Releasing section describes: with immutable releases on, publishing
+      # locks the tag and the assets for good, while a draft can still be
+      # deleted and built again. With draft set, the action never publishes.
+      - name: Upload release assets to a draft
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
+          draft: true
           fail_on_unmatched_files: true
           files: |
             pkgbuild/*.pkg.tar.zst

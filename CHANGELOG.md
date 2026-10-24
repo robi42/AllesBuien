@@ -30,6 +30,8 @@ release's section is the text of its annotated tag and of its GitHub release not
 
 ### Changed
 
+- Releases no longer carry an `allesbuien-debug` package. 0.1.0's sat beside the one package to
+  install and held only the symbols stripped from the binary, which running the app never needs.
 - Radar transport verbs are drawn as icons rather than words, and the rain-rate key gives its
   widest range room to breathe.
 - Feed refreshes retry transient failures on a bounded ladder instead of surfacing the first
@@ -93,6 +95,11 @@ release's section is the text of its annotated tag and of its GitHub release not
   of those keys can impersonate Buienradar to it. webpki-roots 1.0.10 no longer bundles the
   intermediates' root, emSign ECC Root CA - G3, and rustls-webpki 0.103.16 refuses any chain
   that contains one of their keys.
+- The release build no longer holds a token that can write to this repository. The workflow's
+  checkout left the job's token in the workspace's git configuration while makepkg ran every
+  dependency's build script and proc macro, any of which could have used it to push to `main`,
+  move a tag, or replace a release's assets; 0.1.0 was built that way. The checkout now keeps no
+  credentials.
 
 ## [0.1.0] - 2026-09-03
 

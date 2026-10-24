@@ -10,6 +10,10 @@ depends=('qt6-base' 'qt6-declarative')
 # without it and simply never notifies.
 optdepends=('libnotify: rain-soon desktop notifications')
 makedepends=('rust' 'qt6-base' 'qt6-declarative')
+# makepkg's default options would also build allesbuien-debug, which holds
+# only the symbols stripped from the binary; the release workflow attaches
+# every package makepkg builds, and an immutable release can never drop one.
+options=('!debug')
 source=()
 sha256sums=()
 

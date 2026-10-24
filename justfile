@@ -24,10 +24,10 @@ run:
 package:
     cd pkgbuild && makepkg -f
 
-# The user's step, never an agent's: sudo asks for a password. makepkg's default options
-# also build a debug package, which is left out. A Mode B install in ~/.local/bin comes
-# first on PATH and would hide the package, so this refuses until README's Uninstall has
-# removed it.
+# The user's step, never an agent's: sudo asks for a password. The PKGBUILD turns off the
+# debug package makepkg's default options add, and the grep would still leave one out. A
+# Mode B install in ~/.local/bin comes first on PATH and would hide the package, so this
+# refuses until README's Uninstall has removed it.
 #
 # Installs the package built by `just package`
 install:
