@@ -329,33 +329,19 @@ The first command has to print `true` and then exactly two assets: the package, 
 git tag -l --format='%(contents:body)' "v$version" | gh release edit "v$version" --repo robi42/AllesBuien --notes-file -
 ```
 
-Read the draft's page once more, `gh release view "v$version" --repo robi42/AllesBuien --web`, then publish it. This is the step that cannot be undone: from here on the tag and the assets are locked, and deleting the release would retire the tag's name for good.
-
-```bash
-gh release edit "v$version" --repo robi42/AllesBuien --draft=false
-```
-
-Check that the published release is immutable, and that GitHub attests it:
-
-```bash
-gh api "repos/robi42/AllesBuien/releases/tags/v$version" --jq '{draft, immutable}'
-gh release verify "v$version" --repo robi42/AllesBuien
-```
-
-The first has to print `"draft":false` and `"immutable":true`. A release published while immutable releases were off says `false` there and must not be pinned; `bin/pin-release` refuses it. `gh release verify` checks the attestation GitHub makes for an immutable release, which records its tag, its commit, and its assets. GitHub does not say whether it makes one for a release published while a repository on the Free plan is private, so the command may find none. If it finds none, decide whether to pin the release anyway, and if you do, claim no attestation for it anywhere.
-
-Before pinning, install and start the published package once, since nothing else runs these bytes: the click-through only dry-runs the install, and CI tests a build of its own, not the package makepkg made for the release. At your own terminal, where sudo can ask for your password, from the repository root, download the package, move a Mode B install aside, since `~/.local/bin` comes before `/usr/bin` on `PATH` and whatever starts the app would find that one first, and install the package if it matches the digest GitHub records for it:
+Before publishing, install and start the draft's package once, since nothing else runs these bytes: the click-through only dry-runs the install, and CI tests a build of its own, not the package makepkg made for the release. A draft that fails can still be deleted and released again under the same version, as above; a published release cannot. At your own terminal, where sudo can ask for your password, from the repository root, download the package, move a Mode B install aside, since `~/.local/bin` comes before `/usr/bin` on `PATH` and whatever starts the app would find that one first, and install the package if it matches the digest GitHub records for it:
 
 ```bash
 d=$(mktemp -d)
 package=allesbuien-$version-$(sed -n 's/^pkgrel=//p' pkgbuild/PKGBUILD)-x86_64.pkg.tar.zst
-digest=$(gh api "repos/robi42/AllesBuien/releases/tags/v$version" --jq ".assets[] | select(.name == \"$package\") | .digest")
+digest=$(gh release view "v$version" --repo robi42/AllesBuien --json assets --jq ".assets[] | select(.name == \"$package\") | .digest")
+echo "$digest"
 gh release download "v$version" --repo robi42/AllesBuien --dir "$d" --pattern "$package"
 [ -e ~/.local/bin/allesbuien ] && mv ~/.local/bin/allesbuien ~/.local/bin/allesbuien.mode-b
 printf '%s  %s\n' "${digest#sha256:}" "$d/$package" | sha256sum --check --strict && sudo pacman -U "$d/$package"
 ```
 
-`sha256sum` has to print `OK`, and the `&&` runs pacman only if it does. Then start the package's binary from the same terminal, so anything it reports shows there:
+`echo` shows the digest of the bytes under test; note it, because the pin has to name the same one. `sha256sum` has to print `OK`, and the `&&` runs pacman only if it does. Then start the package's binary from the same terminal, so anything it reports shows there:
 
 ```bash
 /usr/bin/allesbuien
@@ -374,13 +360,28 @@ sudo pacman -Rns allesbuien
 [ -e ~/.local/bin/allesbuien.mode-b ] && mv ~/.local/bin/allesbuien.mode-b ~/.local/bin/allesbuien
 ```
 
-Once the published release has passed all of this, pin it. From the repository root, on an up-to-date `main`:
+If the package fails any of this, do not publish it: delete the draft and its tag as above, put right what was wrong, and release the same version again. Otherwise read the draft's page once more, `gh release view "v$version" --repo robi42/AllesBuien --web`, then publish it. This is the step that cannot be undone: from here on the tag and the assets are locked, and deleting the release would retire the tag's name for good.
+
+```bash
+gh release edit "v$version" --repo robi42/AllesBuien --draft=false
+```
+
+Check that the published release is immutable, and that GitHub attests it:
+
+```bash
+gh api "repos/robi42/AllesBuien/releases/tags/v$version" --jq '{draft, immutable}'
+gh release verify "v$version" --repo robi42/AllesBuien
+```
+
+The first has to print `"draft":false` and `"immutable":true`. A release published while immutable releases were off says `false` there and must not be pinned; `bin/pin-release` refuses it. `gh release verify` checks the attestation GitHub makes for an immutable release, which records its tag, its commit, and its assets. GitHub does not say whether it makes one for a release published while a repository on the Free plan is private, so the command may find none. If it finds none, decide whether to pin the release anyway, and if you do, claim no attestation for it anywhere.
+
+Once the published release has passed these checks, pin it. From the repository root, on an up-to-date `main`:
 
 ```bash
 bin/pin-release
 ```
 
-It refuses a release that is still a draft or is not immutable. It reads the digest GitHub records for this version's package, downloads the package through `gh`, which is authenticated and so works while the repository is private, checks the download with `sha256sum -c`, and only then writes `plugin/release.sha256` and prints the commit to make. Read the line it wrote, commit it as printed, and push. That commit is what the marketplace scans. `omarchy plugin add` and `omarchy plugin update` install whatever `main` holds when they run, so every later commit on `main` reaches users at their next update. Do not re-run the release workflow now: GitHub refuses to replace an immutable release's assets, so the run can only fail.
+It refuses a release that is still a draft or is not immutable. It reads the digest GitHub records for this version's package, downloads the package through `gh`, which is authenticated and so works while the repository is private, checks the download with `sha256sum -c`, and only then writes `plugin/release.sha256` and prints the commit to make. Read the line it wrote: its digest has to be the one the smoke test showed. If it is not, the workflow ran again after the smoke test and the published package is a rebuild nobody has started, so run the smoke test on it before going on. Then commit the line as printed, and push. That commit is what the marketplace scans. `omarchy plugin add` and `omarchy plugin update` install whatever `main` holds when they run, so every later commit on `main` reaches users at their next update. Do not re-run the release workflow now: GitHub refuses to replace an immutable release's assets, so the run can only fail.
 
 Then run the plugin checks again on the pin commit, the click-through's install and update-ready states included. If the repository is still private, make it public now, since the widget's own download is anonymous, and repeat the click-through's dry run so the real download succeeds and verifies.
 
