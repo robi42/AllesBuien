@@ -104,7 +104,9 @@ renames that section after itself and its date.
   checkout left the job's token in the workspace's git configuration while makepkg ran every
   dependency's build script and proc macro, any of which could have used it to push to `main`,
   move a tag, or replace a release's assets; 0.1.0 was built that way. The checkout now keeps no
-  credentials.
+  credentials, and the build runs in a job whose token can only read. A second job, which runs
+  none of the build's code, holds the only token that can write: it makes the source archive from
+  a checkout of its own, out of the build's reach, and uploads it and the package to the release.
 
 ## [0.1.0] - 2026-09-03
 
