@@ -148,12 +148,13 @@ fn imminent_rain_is_never_announced_while_notifications_are_switched_off() {
 
 #[test]
 fn rain_further_out_than_the_threshold_waits_until_it_comes_within_it() {
-    // Given
+    // Given: the same rain ten minutes nearer at each refresh, the last exactly
+    // at the threshold, which already counts as within it.
     let mut viewer = Viewer::with_cooldown(HOURS);
     let forecasts = [
-        rain(45, "12:45", 0.8),
-        rain(35, "12:45", 0.8),
-        rain(25, "12:45", 0.8),
+        rain(50, "12:50", 0.8),
+        rain(40, "12:50", 0.8),
+        rain(30, "12:50", 0.8),
     ];
 
     // When
@@ -162,7 +163,7 @@ fn rain_further_out_than_the_threshold_waits_until_it_comes_within_it() {
     // Then
     assert_eq!(
         viewer.bodies(),
-        ["Starts around 12:45 (25 min), peak ~0.80 mm/h"]
+        ["Starts around 12:50 (30 min), peak ~0.80 mm/h"]
     );
 }
 
