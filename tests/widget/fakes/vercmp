@@ -3,7 +3,9 @@ set -euo pipefail
 
 # Fake vercmp for tests/widget/run.sh: -1, 0 or 1 as the real one prints, by
 # version sort, which orders the plain x.y.z-rel strings the tests use the way
-# pacman's comparison does.
+# pacman's comparison does. FAKE_VERCMP=fail makes it fail, and
+# FAKE_VERCMP=silent makes it succeed with no answer at all, so a case can
+# prove that a comparison the script cannot read never lets it go on.
 
 {
   printf '%s' "${0##*/}"
@@ -15,6 +17,15 @@ if [[ $# -ne 2 ]]; then
   printf 'fake vercmp: expected two versions, got: %s\n' "$*" >&2
   exit 2
 fi
+case ${FAKE_VERCMP-sort} in
+  fail)
+    printf 'fake vercmp: made to fail\n' >&2
+    exit 1
+    ;;
+  silent)
+    exit 0
+    ;;
+esac
 if [[ $1 == "$2" ]]; then
   printf '0\n'
 elif printf '%s\n%s\n' "$1" "$2" | sort -V -C; then

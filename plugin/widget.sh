@@ -251,9 +251,10 @@ verify_download() {
 # newer, by vercmp of the upstream versions alone, since a pkgrel only rebuilds
 # the same Qt release. bsdtar, which comes with the libarchive pacman needs,
 # reads the archive only once it has passed the pin's check. Fails, having
-# said why, before sudo asks for anything: when the installed Qt is older, and
-# when either version cannot be read, because an unknown version must never
-# count as a new enough one.
+# said why, before sudo asks for anything: when the installed Qt is older, when
+# either version cannot be read, and when vercmp fails or answers anything but
+# -1, 0 or 1, because an unknown version or order must never count as a new
+# enough one.
 qt_new_enough() {
   local buildinfo line installed order pattern built=
   pattern='^installed = qt6-declarative-([0-9][^-]*)-[^-]+-[^-]+$'
@@ -277,15 +278,22 @@ qt_new_enough() {
   installed=${line#qt6-declarative }
   installed=${installed%-*}
   if ! order=$(vercmp "$installed" "$built"); then
-    printf 'Could not compare Qt %s with Qt %s,\nso nothing was installed.\n' "$installed" "$built"
-    return 1
+    order=
   fi
-  if [[ $order != 0 && $order != 1 ]]; then
-    printf 'AllesBuien %s needs Qt %s or newer, and this machine\n' "$pin_version" "$built"
-    printf 'has Qt %s, so nothing was installed.\n' "$installed"
-    printf 'Update Omarchy with omarchy-update, then click again.\n'
-    return 1
-  fi
+  case $order in
+    0 | 1)
+      return 0
+      ;;
+    -1)
+      printf 'AllesBuien %s needs Qt %s or newer, and this machine\n' "$pin_version" "$built"
+      printf 'has Qt %s, so nothing was installed.\n' "$installed"
+      printf 'Update Omarchy with omarchy-update, then click again.\n'
+      ;;
+    *)
+      printf 'Could not compare Qt %s with Qt %s,\nso nothing was installed.\n' "$installed" "$built"
+      ;;
+  esac
+  return 1
 }
 
 # Takes sudo's password now, with its -v, rather than when pacman starts. The

@@ -646,6 +646,34 @@ expect_no_call "pacman [-U]"
 expect_output "Could not read which Qt is installed, so nothing was installed"
 finish
 
+# Only vercmp's 0 or 1 lets the click go on. A vercmp that fails, or answers
+# none of its three, leaves the order unknown, and that stops the click as an
+# unreadable version does. Both run on an install, whose decisions ask vercmp
+# nothing, so the Qt check's comparison is the only one the switch reaches.
+
+begin install-qt-compare-fails
+pin 0.2.0-1
+set_env FAKE_VERCMP=fail
+run install
+expect_status 1
+expect_calls "$qt_call" "vercmp [6.12.0] [6.12.0]"
+expect_no_call "sudo"
+expect_no_call "pacman [-U]"
+expect_output "Could not compare Qt 6.12.0 with Qt 6.12.0,"
+finish
+
+begin install-qt-compare-answers-nothing
+pin 0.2.0-1
+set_env FAKE_VERCMP=silent
+run install
+expect_status 1
+expect_calls "$qt_call" "vercmp [6.12.0] [6.12.0]"
+expect_no_call "sudo"
+expect_no_call "pacman [-U]"
+expect_output "Could not compare Qt 6.12.0 with Qt 6.12.0,"
+expect_no_output "needs Qt"
+finish
+
 # The installed version cannot be read. An unknown version is never older than
 # the pin, so nothing is installed. The decision taken again after a download
 # runs where bash suspends set -e, so these hold only because every step of it
