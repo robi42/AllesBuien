@@ -45,7 +45,7 @@ AllesBuien/
 ├── tests/widget/         plugin/widget.sh's test runner, its fakes, and the test-only crate that runs both under cargo test
 ├── pkgbuild/             Arch PKGBUILD, desktop entry, icon, the third-party notices with the cargo-about config and template that write them, and ignored package artifacts
 ├── justfile              Shortcuts for people over bin/ and pkgbuild/; nothing in the gate runs them
-├── .github/              SHA-pinned CI, release automation, and Dependabot configuration
+├── .github/              SHA-pinned CI, release automation, Dependabot configuration, the issue forms, and the pull request template
 ├── .factory/             Software-factory gate and protected-path list; ignored run/ scratch
 ├── .beads/               Tracked beads config; the issues live in the ignored Dolt database, which syncs to origin's refs/dolt/data
 ├── .qmllint.ini          Committed qmllint strictness, so a Qt bump is a reviewable diff
@@ -59,6 +59,8 @@ AllesBuien/
 ├── .gitignore            Ignores, plus the re-includes that keep a global ignore from hiding protected config
 ├── mise.toml             Rust 1.98.0 and its components, cargo-llvm-cov, cargo-about, actionlint, shellcheck, and lefthook pins; installs the hook
 ├── README.md, LICENSE    The public docs and the MIT licence; AGENTS.md is this file
+├── SECURITY.md           What runs as root and when, where trust comes from, and how to report a vulnerability privately
+├── CONTRIBUTING.md       The guide for contributors, and the maintainer's checklist for reviewing an outside pull request
 ├── CLAUDE.md             A regular file importing AGENTS.md, never a symlink: `omarchy plugin
 │                         add` refuses a plugin folder that holds one anywhere
 └── lefthook.yml          Pre-commit rustfmt and the text-only gates
