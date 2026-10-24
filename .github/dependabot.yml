@@ -1,12 +1,22 @@
+# Monthly, on the first of the month, rather than weekly. Every commit on main
+# reaches plugin users at their next `omarchy plugin update`, and marks the
+# marketplace listing unverified until it is verified again, so dependency
+# bumps wait for a release window instead of landing every week. The cooldown
+# holds a new version back for seven days instead of Dependabot's implicit
+# three: each group takes every fresh version at once, into a package
+# strangers install as root, and a week gives crates.io and GitHub time to
+# yank a hijacked release first. Security updates follow neither: they open
+# when an advisory does.
 version: 2
 updates:
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "06:00"
       timezone: "Europe/Berlin"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     labels: ["dependencies", "rust"]
     groups:
@@ -16,10 +26,11 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "06:00"
       timezone: "Europe/Berlin"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     labels: ["dependencies", "ci"]
     groups:
