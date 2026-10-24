@@ -278,12 +278,14 @@ the headers of source files, which is what the next gate is for.
 `third-party notice coverage` keeps the notices `about.hbs` carries by hand
 complete, without running cargo-about. It asks `cargo tree` which crates the
 binary links and refuses one the committed index does not list. In each of
-them it reads the leading comment of every source file that carries an ISC,
-MIT or two-clause BSD permission notice, tests, benches and examples aside:
-each copyright holder that comment names has to appear on a `Copyright` line
-of the notices, and a BSD-style comment's whole text, whitespace aside, has to
-appear in them, because that licence's second clause asks a binary's
-documentation for its conditions and disclaimer as well as its copyright line.
+them it reads the leading comment of every Rust, C, C++, assembly and Perl
+source file that carries an ISC, MIT or two-clause BSD permission notice,
+tests, benches and examples aside, C++ because cxx, cxx-qt and cxx-qt-lib
+compile theirs into the binary: each copyright holder that comment names has
+to appear on a `Copyright` line of the notices, and a BSD-style comment's
+whole text, whitespace aside, has to appear in them, because that licence's
+second clause asks a binary's documentation for its conditions and disclaimer
+as well as its copyright line.
 Run against the notices without the hand-kept section, it names exactly the
 holders cargo-about misses, four of ring's and two of rustls-webpki's, and
 futures-channel's `src/mpsc/queue.rs`, for Dmitry Vyukov's name and for his

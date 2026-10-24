@@ -157,13 +157,15 @@ fi
 #
 # It asks cargo tree, not cargo-about, which crates the binary links, and
 # refuses one the file's index does not list. In each of those crates it reads
-# the leading comment of every source file that carries an ISC, MIT or
-# BSD-style permission notice, and refuses a copyright holder that comment
-# names and no Copyright line of the notices does, and a BSD-style comment
-# whose text, whitespace aside, the notices do not reproduce. Which files a
-# build compiles takes a build to know, so it reads them all but tests,
-# benches and examples, build scripts included, and a notice that is not in a
-# file's leading comment is out of its reach. The crates' directories come
+# the leading comment of every Rust, C, C++, assembly and Perl source file that
+# carries an ISC, MIT or BSD-style permission notice, and refuses a copyright
+# holder that comment names and no Copyright line of the notices does, and a
+# BSD-style comment whose text, whitespace aside, the notices do not
+# reproduce. C++ is among them because cxx, cxx-qt and cxx-qt-lib compile
+# theirs into the binary. Which files a build compiles takes a build to know,
+# so it reads them all but tests, benches and examples, build scripts
+# included, and a notice that is not in a file's leading comment is out of
+# its reach. The crates' directories come
 # from cargo metadata, so CARGO_HOME is never guessed. It reads the committed
 # file and never runs cargo-about, so its fixtures cost seconds.
 echo "==> gate: third-party notice coverage"
@@ -291,8 +293,9 @@ uncovered=$(
     fi
     scan_status=0
     headed=$(grep -rlE --include='*.rs' --include='*.c' --include='*.h' --include='*.inl' \
-      --include='*.S' --include='*.pl' --exclude-dir=tests --exclude-dir=benches \
-      --exclude-dir=examples "$permission_notice" "$dir") || scan_status=$?
+      --include='*.cc' --include='*.cpp' --include='*.cxx' --include='*.hh' --include='*.hpp' \
+      --include='*.hxx' --include='*.S' --include='*.pl' --exclude-dir=tests \
+      --exclude-dir=benches --exclude-dir=examples "$permission_notice" "$dir") || scan_status=$?
     if [[ $scan_status -gt 1 ]]; then
       printf '  %s: grep exited %d reading %s, so this gate did not read every file\n' \
         "$crate" "$scan_status" "$dir"
