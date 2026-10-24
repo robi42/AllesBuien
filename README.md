@@ -83,11 +83,11 @@ And a location outside the radar's coverage says so on the map, rather than leav
 
 ## Notifications
 
-When rain is expected to start within 30 minutes, AllesBuien announces it once through `notify-send`, which `libnotify` provides, and does not repeat that announcement for an hour; rain whose start or strength changes is announced again. Three environment variables, read when the app starts, tune this:
+When rain is expected to start within 30 minutes, AllesBuien announces it through `notify-send`, which `libnotify` provides, once for each spell of rain: later refreshes stay quiet while that rain is on its way or falling, however its expected start or strength changes. The spell is over when a refresh finds the next two hours dry or, from an hour after the announcement on, finds the rain more than 30 minutes away; the next rain within 30 minutes is then announced again, and so is rain at any place the window moves to. Three environment variables, read when the app starts, tune this:
 
 - `ALLESBUIEN_NOTIFY`: notifications are on unless this is set to something other than `1`, `true`, `yes`, or `on`.
 - `ALLESBUIEN_NOTIFY_THRESHOLD_MIN`: how many minutes ahead rain counts as news, 30 by default.
-- `ALLESBUIEN_NOTIFY_COOLDOWN_MIN`: how many minutes the same announcement stays quiet, 60 by default.
+- `ALLESBUIEN_NOTIFY_COOLDOWN_MIN`: the shortest time, in minutes, that an announced spell stays open while rain is still in the forecast, 60 by default.
 
 ## Keys
 

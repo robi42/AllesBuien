@@ -47,6 +47,12 @@ release's section is the text of its annotated tag and of its GitHub release not
 
 ### Fixed
 
+- A rain-soon notification is sent once for each spell of rain. 0.1.0 repeated it at every
+  ten-minute refresh while the rain fell, and before that whenever a new forecast moved the start
+  or changed the peak. A spell ends when a refresh finds the next two hours dry, or finds the rain
+  beyond the threshold once the cooldown has passed since the announcement, so
+  `ALLESBUIEN_NOTIFY_COOLDOWN_MIN` now sets the shortest time an announced spell stays open while
+  rain is still forecast.
 - A current-conditions icon whose download failed comes back on a later refresh instead of
   staying blank until the condition changes.
 - A missing temperature reads as a dash instead of an `Unavailable` cut short to `Unavaila…`.

@@ -100,7 +100,7 @@ fn dispatches_once_when_same_rain_event_refreshes_within_cooldown() {
         shows_refresh(&booted, 3)
     });
 
-    // Then: cooldown dedup suppresses the repeated event and dry data adds no dispatch.
+    // Then: the open spell keeps the repeated rain quiet and dry data adds no dispatch.
     assert_eq!(
         notifier.calls(),
         [(
