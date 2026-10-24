@@ -13,4 +13,8 @@ CFLAGS=${CFLAGS:-}
 CXXFLAGS=${CXXFLAGS:-}
 export CFLAGS="${CFLAGS//-flto=auto/}"
 export CXXFLAGS="${CXXFLAGS//-flto=auto/}"
-cargo build --release
+
+# --locked, because the PKGBUILD's build() runs this for the release package:
+# it builds the dependency versions Cargo.lock records, the ones CI tested,
+# and fails where it would otherwise resolve them afresh.
+cargo build --release --locked
