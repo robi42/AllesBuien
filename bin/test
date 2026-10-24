@@ -165,9 +165,9 @@ fi
 # theirs into the binary. Which files a build compiles takes a build to know,
 # so it reads them all but tests, benches and examples, build scripts
 # included, and a notice that is not in a file's leading comment is out of
-# its reach. The crates' directories come
-# from cargo metadata, so CARGO_HOME is never guessed. It reads the committed
-# file and never runs cargo-about, so its fixtures cost seconds.
+# its reach. The crates' directories come from cargo metadata, so CARGO_HOME
+# is never guessed. It reads the committed file and never runs cargo-about,
+# so its fixtures cost seconds.
 echo "==> gate: third-party notice coverage"
 notices=pkgbuild/THIRD-PARTY-LICENSES
 if [[ ! -r $notices ]]; then
