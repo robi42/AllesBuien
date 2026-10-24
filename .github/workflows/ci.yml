@@ -47,8 +47,14 @@ jobs:
       - name: Trust the checked-out workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      # Every run restores main's cache, and only a push to main saves one. An
+      # entry is about 1.8 GB, a pull request's could serve only that pull
+      # request's own later runs, and once the repository's caches pass 10 GB,
+      # GitHub evicts the least recently used entries, main's among them.
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Read cargo-llvm-cov version
         id: llvm-cov-version
