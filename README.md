@@ -314,7 +314,7 @@ git cat-file -p "v$version" | grep -c 'BEGIN SSH SIGNATURE'   # 1: the tag is si
 git push origin "refs/tags/v$version"
 ```
 
-The push runs `release.yml`, which checks the tag against its three version surfaces, builds the package, and leaves a draft release holding it and the source archive. Nothing about a draft is final yet. Re-running the workflow replaces its assets with a rebuild, and `gh release delete "v$version" --cleanup-tag` deletes it along with the pushed tag, after which `git tag -d "v$version"` and the tag block above start the release again. Once the run is green, inspect the draft. These steps read `version` as the tag block set it and run from the repository root; in a new terminal, set `version` again first:
+The push runs `release.yml`, which checks the tag against its three version surfaces, builds the package, and leaves a draft release holding it and the source archive. Nothing about a draft is final yet. Re-running the workflow replaces its assets with a rebuild, and `gh release delete "v$version" --repo robi42/AllesBuien --cleanup-tag` deletes it along with the pushed tag, after which `git tag -d "v$version"` and the tag block above start the release again. Once the run is green, inspect the draft. These steps read `version` as the tag block set it and run from the repository root; in a new terminal, set `version` again first:
 
 ```bash
 gh release view "v$version" --repo robi42/AllesBuien --json isDraft,assets --jq '.isDraft, .assets[].name'
