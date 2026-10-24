@@ -82,6 +82,11 @@ release's section is the text of its annotated tag and of its GitHub release not
   of those keys can impersonate Buienradar to it. webpki-roots 1.0.10 no longer bundles the
   intermediates' root, emSign ECC Root CA - G3, and rustls-webpki 0.103.16 refuses any chain
   that contains one of their keys.
+- The release build no longer holds a token that can write to this repository. The workflow's
+  checkout left the job's token in the workspace's git configuration while makepkg ran every
+  dependency's build script and proc macro, any of which could have used it to push to `main`,
+  move a tag, or replace a release's assets; 0.1.0 was built that way. The checkout now keeps no
+  credentials.
 
 ## [0.1.0] - 2026-09-03
 
