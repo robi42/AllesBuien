@@ -391,12 +391,12 @@ unshipped=$(
 # to install the release. The marketplace never runs it: it checks manifests in
 # its own JavaScript, scripts/build-catalog.mjs, with rules the validator lacks,
 # such as length limits, a lowercase id, and a root README and licence, and this
-# gate checks none of those. This is the part of the validator that
-# tracked text can answer: no symlink anywhere in the tree, a tracked
-# manifest.json at schemaVersion 1 with the five required top-level keys, an id
-# in the validator's character set, outside the reserved omarchy.* namespace
-# and free of "..", every entry point relative, ".."-free and tracked, an entry
-# point for each kind in the validator's table, a non-empty kinds list, and a
+# gate checks none of those. This is the part of the validator that tracked text
+# can answer: no symlink anywhere in the tree, a tracked manifest.json at
+# schemaVersion 1 with the five required top-level keys, an id in the
+# validator's character set, outside the reserved omarchy.* namespace and free
+# of "..", every entry point relative, ".."-free and tracked, an entry point for
+# each kind in the validator's table, a non-empty kinds list, and a
 # barWidget.defaultSection of left, center, or right when one is given.
 #
 # It is a belt, not the validator. The input contract is a pretty-printed
