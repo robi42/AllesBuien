@@ -83,9 +83,9 @@ jobs:
       # SHELL, and USER and LOGNAME for builder, plus PATH where /etc/default/su
       # or /etc/login.defs sets ALWAYS_SET_PATH to yes, before PAM makes the
       # final changes. So the rest of this step's environment, the job's env
-      # above included, reaches the build, and nothing the build must not see
-      # may ever be in it; the toolchain path and the variables the build reads
-      # are still exported rather than assumed.
+      # above included, reaches builder's shell and the makepkg it runs, and
+      # nothing the build must not see may ever be in it; the toolchain path and
+      # the variables the build reads are still exported rather than assumed.
       - name: Build package
         run: |
           # The single quotes are the point: $PATH has to reach builder's shell
