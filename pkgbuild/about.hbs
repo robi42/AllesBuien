@@ -1,0 +1,143 @@
+{{!--
+  The template cargo-about renders into pkgbuild/THIRD-PARTY-LICENSES, with
+  pkgbuild/about.toml, whose header gives the command that regenerates it;
+  never edit the output instead. Everything above the Licences heading is
+  written here by hand, and nothing in the template prints a version, so a
+  dependency bump that changes no crate and no licence text leaves the output
+  as it was.
+
+  "Notices the licence texts below do not carry" is the part that has to keep
+  up with the crates. cargo-about reads each crate's licence files and never
+  the headers of its source files, so a notice that sits in a header is
+  written down here. bin/test's third-party notice coverage gate reads those
+  headers in every crate allesbuien links, and names each copyright holder no
+  Copyright line of the output names, and each BSD-style header whose text
+  the output does not reproduce; add what it names here. A holder line keeps
+  the shape "<crate>  Copyright ...", two spaces after the crate, which that
+  gate's fixtures read.
+--}}
+Third-party notices for allesbuien
+==================================
+
+allesbuien is MIT-licensed: LICENSE, beside this file, is its licence. The
+binary also contains code and data it does not own, and this file carries the
+notices their licences ask a copy of it to travel with:
+
+- the Rust crates listed below, linked statically, with the C, C++ and
+  assembly that ring, cxx, cxx-qt and cxx-qt-lib compile into it, and the
+  code that the procedural macros among them generate;
+- the C++ that CXX-Qt's build tools write for it, described under CXX-Qt
+  below;
+- the Rust standard library, whose own notices are in COPYRIGHT-library.html
+  beside this file, as the toolchain that built the binary ships them;
+- code from the Qt 6 headers, described under Qt below;
+- the data described under Data below.
+
+A crate that offers a choice of licences is used under the one whose text
+lists it under "Used by" below; the index of crates gives each one's own
+licence expression. The Rust standard library and the crates it is built from
+are used under Apache-2.0 where they offer it, and under MIT where they offer
+MIT but not Apache-2.0. No versions are listed; the Cargo.lock in the
+release's source archive records them.
+
+CXX-Qt
+------
+cxx-qt, cxx-qt-lib, cxx-qt-gen, cxx-qt-macro, cxx-qt-build and qt-build-utils:
+Copyright 2021-2026 Klarälvdalens Datakonsult AB, a KDAB Group company
+<info@kdab.com>. All six are MIT OR Apache-2.0 and are used under Apache-2.0,
+whose text is below. Their published crates carry no licence file, so the
+first four appear below with the standard text of the Apache License 2.0. The
+last two run while the program is built, so the index leaves them out, but
+code they write is compiled into it: cxx-qt-build generates the C++ half of
+each bridge, with cxx-qt-gen and cxx-gen, and qt-build-utils writes the QML
+module's plugin from a template of its own.
+
+Qt
+--
+allesbuien links the Qt 6 libraries of qt6-base and qt6-declarative
+dynamically, and this package does not contain them, but code from the Qt
+headers is compiled into the binary. Qt is used under the GNU Lesser General
+Public License, version 3. qt6-base and qt6-declarative install the texts of
+that licence and of the GNU General Public License, version 3, under
+/usr/share/licenses/qt6-base/ and /usr/share/licenses/qt6-declarative/.
+
+Data
+----
+webpki-roots compiles in Mozilla's list of root certificates, from the Common
+CA Database, under the Community Data License Agreement Permissive 2.0, whose
+text is below. jiff-tzdb compiles in the IANA time zone database, and the
+radar basemap is drawn from Natural Earth; both are in the public domain.
+
+Notices the licence texts below do not carry
+--------------------------------------------
+The licence texts below are the crates' own licence files, or a licence's
+standard text where a crate publishes none. Some of the source files compiled
+into the binary also carry a notice in their header, and what those notices
+ask for that the texts below do not already carry is here.
+
+These copyright holders are named in the ISC headers of such files, which are
+under the ISC License text below:
+
+ring  Copyright (c) 2014, 2015, 2016, 2019 Google Inc.
+ring  Copyright 2016 Simon Sapin.
+ring  Copyright 2016 David Judd.
+ring  Copyright 2018 Trent Clarke.
+rustls-webpki  Copyright 2022 Rafael Fernández López.
+rustls-webpki  Copyright 2023 Daniel McCarney.
+
+futures-channel's src/mpsc/queue.rs is under the licence that follows, and the
+rest of futures-channel is used under Apache-2.0:
+
+Copyright (c) 2010-2011 Dmitry Vyukov. All rights reserved.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+   1. Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+   2. Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY DMITRY VYUKOV "AS IS" AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT
+SHALL DMITRY VYUKOV OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The views and conclusions contained in the software and documentation are
+those of the authors and should not be interpreted as representing official
+policies, either expressed or implied, of Dmitry Vyukov.
+
+zmij is a line-by-line port of Victor Zverovich's implementation in C++,
+https://github.com/vitaut/zmij, which is under the MIT licence as well:
+
+zmij  Copyright (c) 2025 Victor Zverovich
+
+Licences
+--------
+{{#each overview}}
+{{{name}}} ({{{id}}})
+{{/each}}
+
+Crates
+------
+{{#each crates}}
+{{{package.name}}}  {{{license}}}
+{{/each}}
+{{#each licenses}}
+
+================================================================================
+{{{name}}} ({{{id}}})
+Used by:
+{{#each used_by}}
+  {{{crate.name}}}
+{{/each}}
+--------------------------------------------------------------------------------
+{{{text}}}
+{{/each}}

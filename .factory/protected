@@ -36,6 +36,15 @@ tests/gates/uncovered
 # Relaxing an entry here is a suppression wearing a config file's name.
 deny.toml
 
+# cargo-about's configuration and template for pkgbuild/THIRD-PARTY-LICENSES,
+# the third-party notices the package installs. Accepting a licence in
+# about.toml is the decision to redistribute code under it, and about.hbs holds
+# hand-written copyright lines and notices. bin/test's notices gates prove the
+# generated file matches these two and covers what the linked crates' headers
+# ask for, not that the policy or the hand-kept lines are right.
+pkgbuild/about.toml
+pkgbuild/about.hbs
+
 # The justfile, in any directory and any spelling just reads, and the modules a
 # justfile can load. Nothing in the gate runs its recipes, but a person does,
 # `just install` among them, which runs sudo: a recipe an agent changed would run

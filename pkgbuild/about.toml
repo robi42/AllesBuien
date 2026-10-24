@@ -1,0 +1,45 @@
+# cargo-about's configuration for pkgbuild/THIRD-PARTY-LICENSES, the notices the
+# package installs beside LICENSE. That file is generated and committed, never
+# edited by hand: bin/test's third-party notices gate regenerates it from
+# Cargo.lock with this file and about.hbs, and refuses any difference. Change
+# these two instead, and regenerate from the repository root with the
+# cargo-about .cargo-about-version names, the command that gate prints:
+#
+#   cargo fetch --locked && cargo about generate --frozen --fail -m app/Cargo.toml -c pkgbuild/about.toml -o pkgbuild/THIRD-PARTY-LICENSES pkgbuild/about.hbs
+#
+# accepted is a priority list and an allowlist at once. A crate that offers a
+# choice is listed under the first of these it allows, and --fail refuses, by
+# name, a crate whose licence allows none of them: adding a licence here is the
+# decision to redistribute code under it. Apache-2.0 comes first for three
+# reasons. ring and sync_wrapper leave no choice about it, so its text ships
+# anyway. While none of the crates listed ships a NOTICE file, a binary owes
+# Apache-2.0 nothing but that text. And the CXX-Qt crates publish no licence file, for which
+# cargo-about fills in the standard text of the licence each is listed under,
+# and clang-format's licence files are those standard texts: Apache-2.0's names
+# nobody, where MIT's carries a literal "<year> <copyright holders>" line,
+# which bin/check-fast refuses.
+accepted = [
+  "Apache-2.0",
+  "MIT",
+  "Unicode-3.0",
+  "ISC",
+  "BSD-3-Clause",
+  "Zlib",
+  "CDLA-Permissive-2.0",
+]
+# The one target the release builds, so Windows, wasm and UEFI crates drop out.
+targets = ["x86_64-unknown-linux-gnu"]
+# Tests never reach the binary, and of the build dependencies only CXX-Qt's
+# build tools leave code in it, which about.hbs's preamble names instead.
+# Procedural macros cannot be left out, since their output is compiled in, so
+# they and their own dependencies are listed too.
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+# allesbuien and allesbuien-core are this repository's own, under LICENSE.
+private = { ignore = true }
+# Left out on purpose. workarounds = ["ring"] matches ring's LICENSE from
+# before 0.17.10 by checksum, so on the ring this lock holds it does nothing,
+# and ring's own files already name every licence its compiled code is under.
+# clarify entries are checksummed as well, so they break on the next bump, and
+# they are the one thing that would send cargo-about to the network. And
+# max-depth, which only drops the licence files that sit deeper in a crate.

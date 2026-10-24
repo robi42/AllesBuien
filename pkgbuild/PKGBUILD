@@ -24,4 +24,9 @@ package() {
   install -Dm644 pkgbuild/allesbuien.desktop "$pkgdir/usr/share/applications/allesbuien.desktop"
   install -Dm644 pkgbuild/allesbuien.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/allesbuien.svg"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/allesbuien/LICENSE"
+  # The notices of the third-party code compiled into the binary: the crates',
+  # in the file bin/test holds to Cargo.lock, and the Rust standard library's,
+  # from the toolchain that built it.
+  install -Dm644 pkgbuild/THIRD-PARTY-LICENSES "$pkgdir/usr/share/licenses/allesbuien/THIRD-PARTY-LICENSES"
+  install -Dm644 "$(rustc --print sysroot)/share/doc/rust/COPYRIGHT-library.html" "$pkgdir/usr/share/licenses/allesbuien/COPYRIGHT-library.html"
 }

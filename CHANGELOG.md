@@ -61,6 +61,11 @@ release's section is the text of its annotated tag and of its GitHub release not
   short of the graph. It now fetches two and a half hours, so that a late run still reaches that
   bar, and plays, steps, and jumps to End only as far as it. Without a rain expectation to
   follow, the whole run plays.
+- The package carries the licence notices of the code in it that AllesBuien does not own. Beside
+  `LICENSE`, the only licence file 0.1.0's package had, `/usr/share/licenses/allesbuien/` now holds
+  `THIRD-PARTY-LICENSES`, with the licences and copyright lines of the Rust crates compiled into
+  the binary and a note on the Qt header code it uses, and the Rust standard library's
+  `COPYRIGHT-library.html`.
 
 ### Security
 
