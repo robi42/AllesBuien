@@ -8,7 +8,7 @@ AllesBuien is a native weather app for the Omarchy desktop. It combines current 
 
 Weather data and radar imagery: [Buienradar.nl](https://www.buienradar.nl)
 
-> Buienradar's free weather data is available for non-commercial use with attribution. AllesBuien is intended for personal, non-commercial use.
+> AllesBuien is an independent project, not affiliated with or endorsed by Buienradar. It uses Buienradar's free weather data under its [terms](https://www.buienradar.nl/overbuienradar/gratis-weerdata): non-commercial use, with Buienradar.nl named and linked, as above and in the app.
 
 ## Install
 
@@ -88,6 +88,16 @@ When rain is expected to start within 30 minutes, AllesBuien announces it throug
 - `ALLESBUIEN_NOTIFY`: notifications are on unless this is set to something other than `1`, `true`, `yes`, or `on`.
 - `ALLESBUIEN_NOTIFY_THRESHOLD_MIN`: how many minutes ahead rain counts as news, 30 by default.
 - `ALLESBUIEN_NOTIFY_COOLDOWN_MIN`: the shortest time, in minutes, that an announced spell stays open while rain is still in the forecast, 60 by default.
+
+## Privacy
+
+AllesBuien has no account, no telemetry, and no server of its own. While its window is open it asks Buienradar for weather, and sends nothing anywhere else:
+
+- every 10 minutes, and whenever the location changes, the national feed from `data.buienradar.nl` and the two-hour rain expectation for your location from `gpsgadget.buienradar.nl`, which receives your latitude and longitude to four decimal places, about 11 metres;
+- every 5 minutes, the national radar frames from `image.buienradar.nl`, which serves them from `image-cdn.buienradar.nl`;
+- the condition icons from `cdn.buienradar.nl`, each fetched once and then kept under `~/.cache/allesbuien`.
+
+Like any web request, these carry your IP address, and the app names itself in them as `allesbuien/<version>`. The bar widget contacts GitHub only when a click installs or updates the app, to download the pinned package from this repository's releases.
 
 ## Keys
 
@@ -184,6 +194,12 @@ rm -f "$HOME/.local/bin/allesbuien" \
   "$DATA_HOME/applications/allesbuien.desktop" \
   "$DATA_HOME/icons/hicolor/scalable/apps/allesbuien.svg"
 rm -rf "$DATA_HOME/licenses/allesbuien"
+```
+
+However it was installed, AllesBuien keeps radar frames, condition icons, and Qt's shader caches per user, and none of the commands above removes them; this does:
+
+```bash
+rm -rf "${XDG_STATE_HOME:-$HOME/.local/state}/allesbuien" "${XDG_CACHE_HOME:-$HOME/.cache}/allesbuien"
 ```
 
 Finally, only if you added the optional Hyprland wiring above, delete those two lines from `~/.config/hypr/bindings.lua` and run `hyprctl reload`.
@@ -404,6 +420,8 @@ Submit while the pin commit is still the head of `main`. A first listing takes n
 Publishing `allesbuien-bin` to the AUR comes later, as an additional channel, once AUR account registration reopens; the widget does not depend on it.
 
 ## Data and basemap licensing
+
+AllesBuien uses Buienradar's free weather data under its [terms](https://www.buienradar.nl/overbuienradar/gratis-weerdata), which list the JSON feed among the free data but not three of the endpoints the app reads: the two-hour rain expectation from `gpsgadget.buienradar.nl`, the sprite metadata API on `image.buienradar.nl` that names the radar frames, and the condition icons the feed links to on `cdn.buienradar.nl`. The app uses them on the same terms, non-commercially and with the attribution. Condition icons and radar frames are Buienradar's: the app fetches them at run time, and this repository ships none, except in the screenshot `preview.png`, which is shown with the same attribution.
 
 - Weather observations, forecasts, and radar: **Buienradar.nl**. Free-data use requires attribution and is limited to non-commercial use. The required attribution is visible in the app and this README.
 - Basemap: **Natural Earth 1:10m vector data**, public domain. Natural Earth permits use, modification, redistribution, and commercial use without required credit.
