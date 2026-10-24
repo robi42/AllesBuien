@@ -292,7 +292,9 @@ mv ~/.local/bin/allesbuien.mode-b ~/.local/bin/allesbuien
 
 Nine files carry the version and `release.yml` compares only three of them against the tag, so bump all nine; `bin/check-fast`'s `release version` gate refuses a commit that leaves one behind: `app/Cargo.toml`, `core/Cargo.toml`, `app/harness/Cargo.toml`, `app/testkit/Cargo.toml`, `assets/gen-basemap/Cargo.toml`, the five versioned workspace entries in `Cargo.lock` (`cargo update --workspace --offline`), `pkgver=` in `pkgbuild/PKGBUILD`, `"version"` in `manifest.json`, and the package filename in this README.
 
-Then write the release's `CHANGELOG.md` section, dated the day you tag, and land it on `main`. Once CI is green there, run the plugin checks above, which print the commit they checked. Before tagging, enable GitHub's immutable releases for the repository, so a published release's tag and assets can never change under a pin; the release workflow's action creates the release as a draft, uploads the assets, and only then publishes it, which is the order immutable releases require. Tag the checked commit, not whatever happens to be checked out locally, with the section as the message under a first line naming the release, the way `v0.1.0`'s message begins:
+Land everything else first: the pin commit must be the head of `main` when the marketplace scans it, and anything pushed to `main` after the listing shows as an unverified update until it is verified again. Then write the release's `CHANGELOG.md` section, dated the day you tag, and land it on `main`. Once CI is green there, run the plugin checks above, which print the commit they checked. Before tagging, enable GitHub's immutable releases for the repository, so a published release's tag and assets can never change under a pin.
+
+Tag the checked commit, not whatever happens to be checked out locally, with the section as the message under a first line naming the release, the way `v0.1.0`'s message begins, and sign the tag: `git tag -s` signs with the key `user.signingkey` names, here the SSH key registered on GitHub as a signing key, so GitHub shows the tag as verified:
 
 ```bash
 git fetch origin
@@ -301,31 +303,88 @@ version=$(git show "$sha:app/Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' |
 { printf 'AllesBuien %s\n\n' "$version"
   git show "$sha:CHANGELOG.md" | awk -v h="## [$version]" 'index($0, h) == 1 { f = 1; next } /^## \[/ { f = 0 } f'
 } > "/tmp/allesbuien-v$version.md"
-git tag -a "v$version" --cleanup=whitespace -F "/tmp/allesbuien-v$version.md" "$sha" &&
+git tag -s "v$version" --cleanup=whitespace -F "/tmp/allesbuien-v$version.md" "$sha" &&
   git cat-file -p "v$version"
+git cat-file -p "v$version" | grep -c 'BEGIN SSH SIGNATURE'   # 1: the tag is signed
 ```
 
-`--cleanup=whitespace` is what keeps the section's `###` headings: git's default cleanup takes every line starting with `#` for a comment and deletes it. Before pushing, check that `git cat-file -p` printed the section with its headings and, on its `object` line, the commit the plugin checks printed, because the pushed tag is what builds and attaches the release assets. If either is wrong, or `git tag` says the tag already exists because an earlier attempt left it behind, do not push: delete it with `git tag -d "v$version"`, put right what was wrong, and run the block above again. Then, in the same terminal, push it:
+`--cleanup=whitespace` is what keeps the section's `###` headings: git's default cleanup takes every line starting with `#` for a comment and deletes it. Before pushing, check that `git cat-file -p` printed the section with its headings, on its `object` line the commit the plugin checks printed, and at its end an SSH signature, which the last line counts: it has to print `1`. The pushed tag is what builds the release, and once the release is published, the tag can never move. If anything is wrong, or `git tag` says the tag already exists because an earlier attempt left it behind, do not push: delete it with `git tag -d "v$version"`, put right what was wrong, and run the block above again. To have git sign every tag made in this checkout, a `git tag -a` included, set `git config tag.gpgSign true` once. Then, in the same terminal, push the tag:
 
 ```bash
 git push origin "refs/tags/v$version"
 ```
 
-The workflow leaves the release's description empty, and GitHub then shows the tag message as preformatted text, so once its run is green give the release the same notes as Markdown, read back from the tag itself; in a new terminal, set `version` first:
+The push runs `release.yml`, which checks the tag against its three version surfaces, builds the package, and leaves a draft release holding it and the source archive. Nothing about a draft is final yet. Re-running the workflow replaces its assets with a rebuild, and `gh release delete "v$version" --cleanup-tag` deletes it along with the pushed tag, after which `git tag -d "v$version"` and the tag block above start the release again. Once the run is green, inspect the draft. These steps read `version` as the tag block set it and run from the repository root; in a new terminal, set `version` again first:
 
 ```bash
-git tag -l --format='%(contents:body)' "v$version" | gh release edit "v$version" --notes-file -
+gh release view "v$version" --repo robi42/AllesBuien --json isDraft,assets --jq '.isDraft, .assets[].name'
+d=$(mktemp -d)
+gh release download "v$version" --repo robi42/AllesBuien --dir "$d" --pattern "allesbuien-$version-*-x86_64.pkg.tar.zst"
+bsdtar -tf "$d"/allesbuien-"$version"-*-x86_64.pkg.tar.zst
 ```
 
-Once the asset exists, pin it. From the repository root, on an up-to-date `main`:
+The first command has to print `true` and then exactly two assets: the package, `allesbuien-<version>-<pkgrel>-x86_64.pkg.tar.zst`, and the source archive, `allesbuien-v<version>-src.tar.gz`, with no `allesbuien-debug-…` package beside them. The last lists the package's files: `usr/bin/allesbuien`, the desktop entry, the icon, and under `usr/share/licenses/allesbuien/` the licence texts the PKGBUILD installs. The workflow leaves the release's description empty, and GitHub would then show the tag message as preformatted text, so give the draft the same notes as Markdown, read back from the tag itself:
+
+```bash
+git tag -l --format='%(contents:body)' "v$version" | gh release edit "v$version" --repo robi42/AllesBuien --notes-file -
+```
+
+Read the draft's page once more, `gh release view "v$version" --repo robi42/AllesBuien --web`, then publish it. This is the step that cannot be undone: from here on the tag and the assets are locked, and deleting the release would retire the tag's name for good.
+
+```bash
+gh release edit "v$version" --repo robi42/AllesBuien --draft=false
+```
+
+Check that the published release is immutable, and that GitHub attests it:
+
+```bash
+gh api "repos/robi42/AllesBuien/releases/tags/v$version" --jq '{draft, immutable}'
+gh release verify "v$version" --repo robi42/AllesBuien
+```
+
+The first has to print `"draft":false` and `"immutable":true`. A release published while immutable releases were off says `false` there and must not be pinned; `bin/pin-release` refuses it. `gh release verify` checks the attestation GitHub makes for an immutable release, which records its tag, its commit, and its assets. GitHub does not say whether it makes one for a release published while a repository on the Free plan is private, so the command may find none. If it finds none, decide whether to pin the release anyway, and if you do, claim no attestation for it anywhere.
+
+Before pinning, install and start the published package once, since nothing else runs these bytes: the click-through only dry-runs the install, and CI tests a build of its own, not the package makepkg made for the release. At your own terminal, where sudo can ask for your password, from the repository root, download the package, move a Mode B install aside, since `~/.local/bin` comes before `/usr/bin` on `PATH` and whatever starts the app would find that one first, and install the package if it matches the digest GitHub records for it:
+
+```bash
+d=$(mktemp -d)
+package=allesbuien-$version-$(sed -n 's/^pkgrel=//p' pkgbuild/PKGBUILD)-x86_64.pkg.tar.zst
+digest=$(gh api "repos/robi42/AllesBuien/releases/tags/v$version" --jq ".assets[] | select(.name == \"$package\") | .digest")
+gh release download "v$version" --repo robi42/AllesBuien --dir "$d" --pattern "$package"
+[ -e ~/.local/bin/allesbuien ] && mv ~/.local/bin/allesbuien ~/.local/bin/allesbuien.mode-b
+printf '%s  %s\n' "${digest#sha256:}" "$d/$package" | sha256sum --check --strict && sudo pacman -U "$d/$package"
+```
+
+`sha256sum` has to print `OK`, and the `&&` runs pacman only if it does. Then start the package's binary from the same terminal, so anything it reports shows there:
+
+```bash
+/usr/bin/allesbuien
+```
+
+The window has to open and fill in: the current conditions, the forecast, the rain graph, and a radar that plays. Switch to another Omarchy theme and watch the window follow it within about two seconds, then switch back. Note down the private Qt API symbols the binary binds, too: a Qt update that drops one of them stops every installed copy from starting, and only a new release mends that.
+
+```bash
+objdump -T /usr/bin/allesbuien | grep Qt_6_PRIVATE_API
+```
+
+Then close the window, remove the package, and put a Mode B install back:
+
+```bash
+sudo pacman -Rns allesbuien
+[ -e ~/.local/bin/allesbuien.mode-b ] && mv ~/.local/bin/allesbuien.mode-b ~/.local/bin/allesbuien
+```
+
+Once the published release has passed all of this, pin it. From the repository root, on an up-to-date `main`:
 
 ```bash
 bin/pin-release
 ```
 
-It reads the digest GitHub records for this version's package, downloads the package through `gh`, which is authenticated and so works while the repository is private, checks the download with `sha256sum -c`, and only then writes `plugin/release.sha256` and prints the commit to make. Read the line it wrote, commit it as printed, and push. That commit is what `omarchy plugin update` delivers and what the marketplace verifies. Do not re-run the release workflow after that: it would upload a rebuild with different bytes under the same name, and the pin would stop matching; with immutable releases enabled, GitHub refuses that upload outright.
+It refuses a release that is still a draft or is not immutable. It reads the digest GitHub records for this version's package, downloads the package through `gh`, which is authenticated and so works while the repository is private, checks the download with `sha256sum -c`, and only then writes `plugin/release.sha256` and prints the commit to make. Read the line it wrote, commit it as printed, and push. That commit is what the marketplace scans. `omarchy plugin add` and `omarchy plugin update` install whatever `main` holds when they run, so every later commit on `main` reaches users at their next update. Do not re-run the release workflow now: GitHub refuses to replace an immutable release's assets, so the run can only fail.
 
-Then run the plugin checks again on the pin commit, the click-through's install and update-ready states included. If the repository is still private, make it public now, since the widget's own download is anonymous, and repeat the click-through's dry run so the real download succeeds and verifies. Finally submit the pin commit's SHA to the marketplace, or re-verify the listing with it; the listing tracks the commit it was scanned at, not `main`.
+Then run the plugin checks again on the pin commit, the click-through's install and update-ready states included. If the repository is still private, make it public now, since the widget's own download is anonymous, and repeat the click-through's dry run so the real download succeeds and verifies.
+
+Submit while the pin commit is still the head of `main`. A first listing takes no commit: the marketplace scans whatever `main` holds when its issue, filed from the [submission form](https://github.com/omacom/omarchy-plugin-marketplace/issues/new?template=submit-plugin.yml), is opened or edited, scans it again at approval, and refuses to approve if `main` has moved since. So push and merge nothing to `main` until the listing is approved; if something has to land meanwhile, edit the issue, which scans the new head, and ask for a new review. For a later release, file the marketplace's "Verify or update a listed plugin" issue with "Verify and publish a newer upstream commit" and the pin commit's full SHA, while that commit is still the head of `main`; until it is verified, the listing shows "Update unverified". "Verify the currently listed snapshot" accepts only the SHA already listed.
 
 Publishing `allesbuien-bin` to the AUR comes later, as an additional channel, once AUR account registration reopens; the widget does not depend on it.
 

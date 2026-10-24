@@ -93,9 +93,14 @@ jobs:
             cd pkgbuild && makepkg -f
           '
 
+      # Leaves a draft for a person to inspect and publish, as README's
+      # Releasing section describes: with immutable releases on, publishing
+      # locks the tag and the assets for good, while a draft can still be
+      # deleted and built again. With draft set, the action never publishes.
       - name: Publish release assets
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
+          draft: true
           fail_on_unmatched_files: true
           files: |
             pkgbuild/*.pkg.tar.zst
