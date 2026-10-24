@@ -30,6 +30,8 @@ release's section is the text of its annotated tag and of its GitHub release not
 
 ### Changed
 
+- Releases no longer carry an `allesbuien-debug` package. 0.1.0's sat beside the one package to
+  install and held only the symbols stripped from the binary, which running the app never needs.
 - Radar transport verbs are drawn as icons rather than words, and the rain-rate key gives its
   widest range room to breathe.
 - Feed refreshes retry transient failures on a bounded ladder instead of surfacing the first
