@@ -39,7 +39,7 @@ The first build of the `allesbuien` crate takes a while, because CXX-Qt generate
 
 ## The full gate
 
-`bin/test` is the whole gate, and the one CI runs. It takes over twenty minutes from cold and leaves a few gigabytes under `target/`. CI runs it on every pull request, so you can leave the full run to CI and keep to the fast loop locally. A pull request from outside the repository runs CI only once the maintainer has approved the run, so expect a wait before the first result.
+`bin/test` is the whole gate, and the one CI runs. It takes over twenty minutes from cold and leaves a few gigabytes under `target/`. CI runs it on every pull request, so you can leave the full run to CI and keep to the fast loop locally. A new push to a pull request cancels the run still going for the push before it. A pull request from outside the repository runs CI only once the maintainer has approved the run, so expect a wait before the first result.
 
 ## What the gates hold you to
 

@@ -12,9 +12,25 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels the run its previous push started, so a
+# pull request has at most one run going, the one for its newest commit. An
+# outside contributor's runs start only once the maintainer approves them, so
+# this and the quality job's timeout bound the runs that do start: approved
+# ones, the owner's, and Dependabot's.
+#
+# Each push to main is a group of its own, keyed by run: in a shared group
+# GitHub keeps at most one run pending and cancels it when a newer one arrives,
+# cancel-in-progress or not, and every commit on main is one somebody may tag.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   quality:
     runs-on: ubuntu-latest
+    # A cold run takes just over twenty minutes; a hung GUI harness would
+    # otherwise hold the runner for GitHub's default of six hours.
+    timeout-minutes: 45
     container: archlinux:base-devel
     env:
       QMAKE: /usr/bin/qmake6
@@ -36,8 +52,14 @@ jobs:
       - name: Install system dependencies and Rust
         run: pacman -Syu --noconfirm git rustup qt6-base qt6-declarative shellcheck actionlint && rustup default 1.98.0 && rustup component add llvm-tools-preview
 
+      # No later step talks to GitHub through git. Persisted, the job's token
+      # would stay in a file under RUNNER_TEMP, included from .git/config, where
+      # every later step could read it, and bin/test runs the pull request's own
+      # code. The token can only read, so this is hygiene rather than a fix.
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # The workspace is bind-mounted from the host and owned by the runner
       # account, while the container is root, so git refuses it as dubious
