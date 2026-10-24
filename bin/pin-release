@@ -2,21 +2,24 @@
 set -euo pipefail
 
 # Writes plugin/release.sha256, the pin the bar widget installs and updates
-# from, for a release whose asset GitHub already serves. Run it from the
-# repository root once the release run for the tag is green; README.md's
-# Releasing section says where it sits in the order, and AGENTS.md's Release
-# pin convention says why the pin exists at all.
+# from, for a published release whose asset GitHub already serves. Run it from
+# the repository root once the release has passed the checks README.md's
+# Releasing section puts before this step; that section gives the whole order,
+# and AGENTS.md's Release pin convention says why the pin exists at all.
 #
 #   bin/pin-release [version]
 #
 # The version defaults to app/Cargo.toml's and the pkgrel comes from
-# pkgbuild/PKGBUILD, which together name the asset. The digest is the one
-# GitHub records for that asset, and it is written only after a download of
-# the asset has passed `sha256sum --check` against it, so a pin cannot name
-# bytes nobody has seen. The download goes through gh, authenticated, so this
-# works while the repository is private; the widget's own download is
-# anonymous and works only once it is public. Nothing here runs git: the
-# script prints the commit to make, and making it is the releaser's call.
+# pkgbuild/PKGBUILD, which together name the asset. The release has to be
+# published and immutable: a draft's assets can still be replaced, and so can
+# those of a release published while immutable releases were off, and a pin
+# must not name bytes that can change under it. The digest is the one GitHub
+# records for that asset, and it is written only after a download of the
+# asset has passed `sha256sum --check` against it, so a pin cannot name bytes
+# nobody has seen. The download goes through gh, authenticated, so this works
+# while the repository is private; the widget's own download is anonymous and
+# works only once it is public. Nothing here runs git: the script prints the
+# commit to make, and making it is the releaser's call.
 
 readonly repository=robi42/AllesBuien
 readonly pin=plugin/release.sha256
@@ -55,11 +58,30 @@ fi
 readonly asset=allesbuien-$version-$pkgrel-x86_64.pkg.tar.zst
 tag=v$version
 
-# The asset name is built from the two checked parts above, so it can sit in
-# the jq filter as a literal.
-if ! digest=$(gh api "repos/$repository/releases/tags/$tag" \
-  --jq ".assets[] | select(.name == \"$asset\") | .digest"); then
-  fail "could not read the $tag release from GitHub"
+# One read of the release answers three questions, a line each: whether it is
+# a draft, whether it is immutable, and the asset's digest, left blank when the
+# release has no asset of that name. tostring writes each answer out, null
+# included, so no line depends on how gh prints a value. The asset name is
+# built from the two checked parts above, so it can sit in the jq filter as a
+# literal.
+#
+# GitHub serves a release by its tag only once it is published, so a draft
+# normally fails the read itself, as a 404. Its draft field is checked all the
+# same, since that lookup is GitHub's to change.
+if ! answers=$(gh api "repos/$repository/releases/tags/$tag" --jq "
+  (.draft, .immutable | tostring),
+  ([.assets[] | select(.name == \"$asset\") | .digest | tostring] | first // \"\")"); then
+  fail "could not read the $tag release from GitHub, which serves a release by its tag only once it is published"
+fi
+mapfile -t answer <<<"$answers"
+draft=${answer[0]-}
+immutable=${answer[1]-}
+digest=${answer[2]-}
+if [[ $draft != false ]]; then
+  fail "the $tag release is still a draft; publish it, then pin it"
+fi
+if [[ $immutable != true ]]; then
+  fail "the $tag release is not immutable, so its asset could still be replaced under the pin"
 fi
 if [[ -z $digest ]]; then
   fail "the $tag release carries no asset named $asset"
