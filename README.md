@@ -12,7 +12,7 @@ Weather data and radar imagery: [Buienradar.nl](https://www.buienradar.nl)
 
 ## Install
 
-AllesBuien is two pieces: the native application, and an Omarchy bar widget that opens it. You need Omarchy on x86_64, recent enough to have `omarchy plugin`; it also ships the `curl`, `sha256sum`, and `pacman` the widget uses. The package pulls in Qt 6 (`qt6-base` and `qt6-declarative`), and `libnotify` is optional: only rain-soon notifications need it.
+AllesBuien is two pieces: the native application, and an Omarchy bar widget that opens it. You need Omarchy 4 on x86_64, fully updated with `omarchy-update`: each release is built against the Qt that Arch ships at the time, and needs that Qt or a newer one. Omarchy also ships the `curl`, `sha256sum`, `bsdtar`, and `pacman` the widget uses. The package pulls in Qt 6 (`qt6-base` and `qt6-declarative`), and `libnotify` is optional: only rain-soon notifications need it.
 
 Add the plugin, then let it install the app:
 
@@ -20,7 +20,7 @@ Add the plugin, then let it install the app:
 omarchy plugin add https://github.com/robi42/AllesBuien.git --enable
 ```
 
-The widget appears in the bar's center section as a radar-dish icon, the Nerd Font glyph `nf-md-radar`. While the application is missing the icon is dimmed, and one click opens Omarchy's floating terminal, downloads the release package that the plugin's `plugin/release.sha256` pins from this repository's [releases page](https://github.com/robi42/AllesBuien/releases), checks it against the SHA-256 digest in that file, and installs it with `sudo pacman -U` — the password prompt and pacman's own confirmation appear in that terminal — then starts the app. A download that fails or does not match the digest stops before pacman runs, and the terminal says so. Every later click focuses the open window, or launches it if none is open. A copy of the plugin that pins no release yet says so on the click and points here; build from source, below, instead.
+The widget appears in the bar's center section as a radar-dish icon, the Nerd Font glyph `nf-md-radar`. While the application is missing the icon is dimmed, and one click opens Omarchy's floating terminal, downloads the release package that the plugin's `plugin/release.sha256` pins from this repository's [releases page](https://github.com/robi42/AllesBuien/releases), checks it against the SHA-256 digest in that file, and installs it with `sudo pacman -U` — the password prompt and pacman's own confirmation appear in that terminal — then starts the app. A download that fails or does not match the digest stops before pacman runs, and the terminal says so. A package built against a newer Qt than this machine has stops too, before the password prompt, and the terminal asks you to run `omarchy-update` and click again. Every later click focuses the open window, or launches it if none is open. A copy of the plugin that pins no release yet says so on the click and points here; build from source, below, instead.
 
 Or install the application by hand first and add the widget afterwards. Download [`plugin/release.sha256`](plugin/release.sha256) from this repository, and the package it names from the releases page, into an empty directory, check the package against the pin, and install that package:
 
@@ -191,9 +191,9 @@ Finally, only if you added the optional Hyprland wiring above, delete those two 
 ## Dependencies
 
 - For the widget: the application itself, either the release package its click installs or a build from this repository.
-- `qt6-base` and `qt6-declarative`, which the package pulls in.
+- `qt6-base` and `qt6-declarative`, which the package pulls in; a release needs the Qt it was built against or a newer one, which a fully updated Omarchy has.
 - `libnotify`, optional; without it the app runs and simply never notifies.
-- Omarchy itself, which ships `curl`, `sha256sum`, and `pacman` for the widget's install and update click, and `hyprctl` plus `jq` for `omarchy-launch-or-focus`. No AUR helper is needed.
+- Omarchy itself, which ships `curl`, `sha256sum`, `bsdtar`, and `pacman` for the widget's install and update click, and `hyprctl` plus `jq` for `omarchy-launch-or-focus`. No AUR helper is needed.
 - Network access to Buienradar for observations, forecasts, and radar frames.
 
 ## Development

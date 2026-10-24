@@ -4,9 +4,11 @@ set -euo pipefail
 # Fake pacman for tests/widget/run.sh. FAKE_PACKAGE is `absent`, or the
 # version `pacman -Q allesbuien` prints, unless the fake curl has since written
 # another to $FAKE_STATE/package; FAKE_PACKAGE_FILES is what
-# `pacman -Qlq allesbuien` lists; FAKE_PACMAN_U is `ok`, or `declined` for an
-# answered-no prompt. `-U` refuses a path that is not a file, as pacman does.
-# Once $FAKE_STATE/query-fails exists, `-Q` fails while `-Qlq` still answers.
+# `pacman -Qlq allesbuien` lists; FAKE_QT is `absent`, or the version
+# `pacman -Q qt6-declarative` prints; FAKE_PACMAN_U is `ok`, or `declined` for
+# an answered-no prompt. `-U` refuses a path that is not a file, as pacman
+# does. Once $FAKE_STATE/query-fails exists, `-Q allesbuien` fails while
+# `-Qlq` still answers.
 
 {
   printf '%s' "${0##*/}"
@@ -40,6 +42,12 @@ case "${1-} ${2-}" in
       not_found allesbuien
     fi
     printf '/usr/\n/usr/bin/\n%s\n' "$FAKE_PACKAGE_FILES"
+    ;;
+  "-Q qt6-declarative")
+    if [[ $FAKE_QT == absent ]]; then
+      not_found qt6-declarative
+    fi
+    printf 'qt6-declarative %s\n' "$FAKE_QT"
     ;;
   "-U "*)
     if [[ $# -ne 3 || $2 != --needed ]]; then

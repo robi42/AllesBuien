@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fake `bsdtar -xOf <package> .BUILDINFO` for tests/widget/run.sh. It prints
+# the part of a package's .BUILDINFO the widget reads, with FAKE_BUILT_QT as
+# the qt6-declarative the package was built against, beside a qt6-base line
+# the widget must not take for it. FAKE_BUILT_QT=none leaves the
+# qt6-declarative line out, and FAKE_BUILT_QT=unreadable fails as bsdtar does
+# on an archive without a .BUILDINFO. Like the real one, it refuses a package
+# path that is not a file.
+
+{
+  printf '%s' "${0##*/}"
+  printf ' [%s]' "$@"
+  printf '\n'
+} >>"$FAKE_LOG"
+
+if [[ $# -ne 3 || $1 != -xOf || $3 != .BUILDINFO ]]; then
+  printf 'fake bsdtar: expected -xOf <package> .BUILDINFO, got: %s\n' "$*" >&2
+  exit 2
+fi
+if [[ ! -f $2 ]]; then
+  printf 'bsdtar: Error opening archive: Failed to open %s\n' "$2" >&2
+  exit 1
+fi
+if [[ $FAKE_BUILT_QT == unreadable ]]; then
+  printf 'bsdtar: .BUILDINFO: Not found in archive\n' >&2
+  exit 1
+fi
+printf 'format = 2\npkgname = allesbuien\ninstalled = qt6-base-6.12.0-3-x86_64\n'
+if [[ $FAKE_BUILT_QT != none ]]; then
+  printf 'installed = qt6-declarative-%s-x86_64\n' "$FAKE_BUILT_QT"
+fi

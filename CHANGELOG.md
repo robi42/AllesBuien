@@ -13,10 +13,11 @@ release's section is the text of its annotated tag and of its GitHub release not
   Omarchy plugin: a single radar-dish button (the Nerd Font glyph `nf-md-radar`) that focuses the
   open AllesBuien window, launches it, or — while the app is not installed — opens Omarchy's
   floating terminal, downloads the release package `plugin/release.sha256` pins, checks it
-  against that digest, and installs it with pacman. Once `omarchy plugin update` brings a newer
-  pin, the button turns the bar's urgent colour and the same click updates the app; an install
-  the widget does not own is only ever launched. It sits beside the built-in weather pill
-  without replacing it.
+  against that digest, and installs it with pacman. A package built against a newer Qt than the
+  one installed, which the app may not start on, is refused before the password prompt, with a
+  pointer to `omarchy-update`. Once `omarchy plugin update` brings a newer pin, the button turns
+  the bar's urgent colour and the same click updates the app; an install the widget does not own
+  is only ever launched. It sits beside the built-in weather pill without replacing it.
 - Location following. The window adopts `~/.local/state/omarchy/settings/weather.json` within
   about two seconds of `omarchy-weather-location` rewriting or clearing it, and says which of the
   three sources — environment pin, desktop setting, or Amsterdam-West default — answered. A
