@@ -2,18 +2,39 @@
 //!
 //! A weather app that pops a notification on every refresh is a weather app
 //! people mute. Two rules keep this one quiet: rain further out than the
-//! configured threshold is not news yet, and the same rain re-reported minute
-//! after minute is not news again. `last_event_key` is what separates those —
-//! a cooldown on its own would also swallow a genuinely new front that arrives
-//! inside it.
+//! configured threshold is not news yet, and rain already announced is not news
+//! again. A refresh finds rain due when its [`RainSoon`] starts within the
+//! threshold. The first refresh to find it due announces a spell of rain, and
+//! the refreshes after it stay quiet while that spell is open, however far the
+//! forecast moves its start or its peak.
+//!
+//! The forecast cannot tell one spell from the next, because it describes the
+//! same rain differently on every refresh: once the rain has begun, its first
+//! wet sample is the window's first row, whose clock time moves on each time,
+//! and before then the start and the peak are revised as the rain approaches.
+//! An announcement keyed on what the forecast says would go out again at every
+//! refresh while the rain falls, and at every revision before it.
+//!
+//! A spell closes on a refresh that finds no rain due and either a dry window
+//! or the cooldown passed since the announcement. A dry window means the rain
+//! is over, so the next rain is news at once. Rain still in the window keeps
+//! the spell open until the cooldown has passed, which is what stops a forecast
+//! that slips just past the threshold and back from announcing the same rain
+//! twice.
+//!
+//! A spell belongs to the place it was announced for. A refresh for any other
+//! place finds none open, and the spell is dropped rather than kept for a
+//! return: while no refresh is for its place nothing could close it, and it
+//! would silence that place's rain however long the viewer stayed away.
 //!
 //! [`Notifier`] is the process boundary. `notify-send` is a subprocess, so it is
-//! the one thing here a test must not actually do; the tests below record the
-//! calls through a fake instead.
+//! the one thing here a test must not actually do; the tests record the calls
+//! through a fake instead.
 
 use std::process::Command;
 use std::time::{Duration, Instant};
 
+use crate::location::LocationConfig;
 use crate::rain::RainSoon;
 
 #[derive(Debug, thiserror::Error)]
@@ -52,7 +73,9 @@ impl Notifier for NotifySend {
 #[derive(Clone, Copy, Debug)]
 pub struct NotificationInput<'a> {
     pub rain: Option<&'a RainSoon>,
-    pub location_label: &'a str,
+    /// Where the forecast was fetched for: the title names it, and an open
+    /// spell counts only for the place it was announced for.
+    pub location: &'a LocationConfig,
 }
 
 /// The two rules above, as settled values.
@@ -64,62 +87,119 @@ pub struct NotificationInput<'a> {
 pub struct NotifyConfig {
     pub enabled: bool,
     pub threshold_minutes: u32,
+    /// The shortest time an announced spell stays open while rain is still in
+    /// the forecast.
     pub cooldown: Duration,
 }
 
+/// The spell of rain announced and not yet closed, if there is one.
+///
+/// Its fields are private so that only a refresh, through
+/// [`maybe_send_rain_notification`], can open or close a spell.
 #[derive(Debug)]
 pub struct NotifyState {
-    pub config: NotifyConfig,
-    pub last_sent_at: Option<Instant>,
-    pub last_event_key: Option<String>,
+    config: NotifyConfig,
+    open_spell: Option<Spell>,
 }
 
-#[must_use]
-pub(crate) fn should_notify(rain: Option<&RainSoon>, notify_state: &NotifyState) -> Option<String> {
-    if !notify_state.config.enabled {
-        return None;
-    }
-
-    let rain = match rain {
-        Some(rain) if rain.minutes_until <= notify_state.config.threshold_minutes => rain,
-        Some(_) | None => return None,
-    };
-
-    let event_key = format!("{}-{:.0}", rain.time_label, (rain.max_mmh * 100.0).round());
-    if let Some(last_at) = notify_state.last_sent_at {
-        let same_event = notify_state.last_event_key.as_ref() == Some(&event_key);
-        if same_event && last_at.elapsed() < notify_state.config.cooldown {
-            return None;
+impl NotifyState {
+    /// Starts with no spell open, so the first refresh that finds rain due
+    /// announces it.
+    #[must_use]
+    pub const fn new(config: NotifyConfig) -> Self {
+        Self {
+            config,
+            open_spell: None,
         }
     }
-
-    Some(event_key)
 }
 
-/// Announces the coming rain if the rules allow it, and records that it went out.
+/// A spell of rain that has been announced: where, and when.
+#[derive(Debug)]
+struct Spell {
+    place: Place,
+    announced_at: Instant,
+}
+
+/// The coordinates a forecast was fetched for, which are what make two
+/// refreshes the same place.
 ///
-/// Returns `Ok(())` for the withheld cases too — no rain, rain beyond the
-/// threshold, and a repeat inside the cooldown are all normal outcomes rather
-/// than failures, and only a dispatch that actually happened updates the state.
+/// The label is only what the place is called: two places can share one, and
+/// renaming a place changes nothing about the rain falling on it. Both sides of
+/// the comparison are the setting as it was read, never a computed value, so
+/// exact equality is the right test.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Place {
+    latitude: f64,
+    longitude: f64,
+}
+
+impl Place {
+    const fn of(location: &LocationConfig) -> Self {
+        Self {
+            latitude: location.latitude,
+            longitude: location.longitude,
+        }
+    }
+}
+
+/// Announces rain that has come due, unless its spell has been announced
+/// already, and opens or closes the spell as the rules above say.
+///
+/// Returns `Ok(())` for the quiet cases too — no rain, rain beyond the
+/// threshold, and rain already announced are all normal outcomes rather than
+/// failures.
 ///
 /// # Errors
 ///
-/// Propagates the [`Notifier`]'s [`NotifyError`] when a dispatch was due and
-/// the adapter refused it. The cooldown and event key stay untouched in that
-/// case, so the next refresh retries the same announcement.
+/// Propagates the [`Notifier`]'s [`NotifyError`] when an announcement was due
+/// and the adapter refused it. Only a dispatch that happened opens a spell, so
+/// none is open afterwards, and the next refresh that finds rain due retries.
 pub fn maybe_send_rain_notification(
     notifier: &dyn Notifier,
     input: NotificationInput<'_>,
     notify_state: &mut NotifyState,
 ) -> Result<(), NotifyError> {
-    let Some(rain) = input.rain else {
+    let config = notify_state.config;
+    if !config.enabled {
         return Ok(());
+    }
+    let place = Place::of(input.location);
+    // Taken rather than borrowed: a spell announced for another place counts
+    // as none here, and a dispatch that fails returns with none open.
+    let open = notify_state
+        .open_spell
+        .take()
+        .filter(|spell| spell.place == place);
+    let due = input
+        .rain
+        .filter(|rain| rain.minutes_until <= config.threshold_minutes);
+    notify_state.open_spell = match (due, open) {
+        (Some(rain), None) => {
+            let (title, body) = announcement(rain, input.location.display_label());
+            notifier.send(&title, &body)?;
+            Some(Spell {
+                place,
+                announced_at: Instant::now(),
+            })
+        }
+        // Already announced, wherever the forecast has moved its start or peak.
+        (Some(_), Some(spell)) => Some(spell),
+        // Not due any more but still in the window: open until the cooldown passes.
+        (None, Some(spell))
+            if input.rain.is_some() && spell.announced_at.elapsed() < config.cooldown =>
+        {
+            Some(spell)
+        }
+        // A dry window, or rain still out of reach once the cooldown has passed.
+        (None, _) => None,
     };
-    let Some(event_key) = should_notify(Some(rain), notify_state) else {
-        return Ok(());
-    };
+    Ok(())
+}
 
-    let title = format!("Rain soon ({})", input.location_label);
+/// The title and body that announce `rain` at the place shown as `location_label`.
+fn announcement(rain: &RainSoon, location_label: &str) -> (String, String) {
+    let title = format!("Rain soon ({location_label})");
     // Zero minutes means the series' first row is already wet, so this rain has
     // started rather than being due. Both the clock time and the count are
     // dropped there because "about now" already says each of them, and saying
@@ -132,178 +212,8 @@ pub fn maybe_send_rain_notification(
             rain.time_label, rain.minutes_until, rain.max_mmh
         )
     };
-    notifier.send(&title, &body)?;
-    notify_state.last_sent_at = Some(Instant::now());
-    notify_state.last_event_key = Some(event_key);
-    Ok(())
+    (title, body)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        NotificationInput, Notifier, NotifyConfig, NotifyError, NotifyState,
-        maybe_send_rain_notification, should_notify,
-    };
-    use crate::rain::RainSoon;
-    use std::cell::RefCell;
-    use std::time::{Duration, Instant};
-
-    /// Records every dispatch instead of spawning `notify-send`.
-    #[derive(Debug, Default)]
-    struct FakeNotifier {
-        calls: RefCell<Vec<(String, String)>>,
-    }
-
-    impl FakeNotifier {
-        fn calls(&self) -> Vec<(String, String)> {
-            self.calls.borrow().clone()
-        }
-    }
-
-    impl Notifier for FakeNotifier {
-        fn send(&self, title: &str, body: &str) -> Result<(), NotifyError> {
-            self.calls
-                .borrow_mut()
-                .push((title.to_owned(), body.to_owned()));
-            Ok(())
-        }
-    }
-
-    fn base_state() -> NotifyState {
-        NotifyState {
-            config: NotifyConfig {
-                enabled: true,
-                threshold_minutes: 30,
-                cooldown: Duration::from_secs(3600),
-            },
-            last_sent_at: None,
-            last_event_key: None,
-        }
-    }
-
-    fn rain(minutes_until: u32, time_label: &str, max_mmh: f64) -> RainSoon {
-        RainSoon {
-            minutes_until,
-            time_label: time_label.to_owned(),
-            max_mmh,
-        }
-    }
-
-    /// The title and body `rain` produces on a fresh state.
-    ///
-    /// The wording has no accessor of its own — a dispatch is the only place it
-    /// is observable — so every wording test has to arrange one.
-    fn dispatched(rain: &RainSoon) -> (String, String) {
-        let notifier = FakeNotifier::default();
-        let mut state = base_state();
-        let input = NotificationInput {
-            rain: Some(rain),
-            location_label: "Home",
-        };
-
-        maybe_send_rain_notification(&notifier, input, &mut state).expect("fake send succeeds");
-
-        notifier
-            .calls()
-            .first()
-            .cloned()
-            .expect("the announcement went out")
-    }
-
-    #[test]
-    fn imminent_rain_is_still_withheld_when_notifications_are_switched_off() {
-        // Given
-        let mut state = base_state();
-        state.config.enabled = false;
-
-        // When / Then
-        assert!(should_notify(Some(&rain(10, "12:10", 0.8)), &state).is_none());
-    }
-
-    #[test]
-    fn rain_further_out_than_the_threshold_is_not_announced_yet() {
-        // Given
-        let state = base_state();
-
-        // When / Then
-        assert!(should_notify(Some(&rain(45, "12:45", 0.8)), &state).is_none());
-    }
-
-    #[test]
-    fn the_same_event_inside_the_cooldown_is_not_announced_twice() {
-        // Given
-        let mut state = base_state();
-        state.last_event_key = Some(String::from("12:10-80"));
-        state.last_sent_at = Some(Instant::now());
-
-        // When / Then
-        assert!(should_notify(Some(&rain(10, "12:10", 0.8)), &state).is_none());
-    }
-
-    #[test]
-    fn a_different_event_is_announced_even_inside_the_cooldown() {
-        // Given
-        let mut state = base_state();
-        state.last_event_key = Some(String::from("12:10-80"));
-        state.last_sent_at = Some(Instant::now());
-
-        // When / Then
-        assert_eq!(
-            should_notify(Some(&rain(10, "12:15", 0.8)), &state),
-            Some(String::from("12:15-80"))
-        );
-    }
-
-    #[test]
-    fn event_change_dispatches_once_and_same_event_does_not_dispatch_again() {
-        // Given
-        let notifier = FakeNotifier::default();
-        let mut state = base_state();
-        state.last_event_key = Some(String::from("12:10-80"));
-        state.last_sent_at = Some(Instant::now());
-        let changed_rain = rain(10, "12:15", 0.8);
-        let input = NotificationInput {
-            rain: Some(&changed_rain),
-            location_label: "Home",
-        };
-
-        // When
-        maybe_send_rain_notification(&notifier, input, &mut state).expect("fake send succeeds");
-        maybe_send_rain_notification(&notifier, input, &mut state).expect("dedup succeeds");
-
-        // Then
-        assert_eq!(
-            notifier.calls(),
-            [(
-                String::from("Rain soon (Home)"),
-                String::from("Starts around 12:15 (10 min), peak ~0.80 mm/h")
-            )]
-        );
-    }
-
-    #[test]
-    fn rain_that_has_already_started_is_announced_as_starting_now() {
-        // Given
-        let falling = rain(0, "12:05", 1.4);
-
-        // When
-        let (title, body) = dispatched(&falling);
-
-        // Then
-        assert_eq!(title, "Rain soon (Home)");
-        assert_eq!(body, "Starts about now, peak ~1.40 mm/h");
-    }
-
-    #[test]
-    fn rain_still_minutes_away_keeps_its_clock_time_and_its_countdown() {
-        // Given
-        let coming = rain(5, "12:10", 0.35);
-
-        // When
-        let (title, body) = dispatched(&coming);
-
-        // Then
-        assert_eq!(title, "Rain soon (Home)");
-        assert_eq!(body, "Starts around 12:10 (5 min), peak ~0.35 mm/h");
-    }
-}
+mod tests;

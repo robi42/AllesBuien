@@ -10,6 +10,7 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use allesbuien_core::{
+    location::LocationConfig,
     location_settings::LocationSettings,
     notify::{
         NotificationInput, Notifier, NotifyConfig, NotifyError, NotifyState,
@@ -105,29 +106,23 @@ impl NotificationService {
     pub(crate) fn new(notifier: Arc<NotifierService>, config: NotifyConfig) -> Self {
         Self {
             notifier,
-            state: Arc::new(tokio::sync::Mutex::new(NotifyState {
-                config,
-                last_sent_at: None,
-                last_event_key: None,
-            })),
+            state: Arc::new(tokio::sync::Mutex::new(NotifyState::new(config))),
         }
     }
 
     /// The place is an argument rather than stored state because the desktop can
-    /// move it while the app runs, and a title naming where the viewer *was* is
-    /// worse than no title at all.
+    /// move it while the app runs: a title naming where the viewer *was* is worse
+    /// than no title at all, and a spell of rain announced there says nothing
+    /// about the rain here.
     pub(crate) async fn notify_rain(
         &self,
         rain: Option<&RainSoon>,
-        location_label: &str,
+        location: &LocationConfig,
     ) -> Result<(), NotifyError> {
         let mut state = self.state.lock().await;
         maybe_send_rain_notification(
             self.notifier.as_ref(),
-            NotificationInput {
-                rain,
-                location_label,
-            },
+            NotificationInput { rain, location },
             &mut state,
         )
     }

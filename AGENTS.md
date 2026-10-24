@@ -71,7 +71,7 @@ AllesBuien/
 | Buienradar feed and raintext parsing | `core/src/weather.rs`, `core/src/weather_feed.rs`, `core/src/rain.rs` | `FeedApi` boundary and the forecast/current-condition models; the feed's wire shape; raintext |
 | Radar metadata, frames, and cache pruning | `core/src/radar.rs`, `core/src/radar_transport.rs`, `core/src/radar_cache.rs` | `RadarApi` and generation IDs; the HTTP transport and its metadata window; the bounded run cache and its fetch |
 | Where a radar frame meets the rain graph | `core/src/rain_cursor.rs`, `core/src/rain_reach.rs` | The graph's cursor for a frame and the moment its last bar stands for, on one wall-clock dial; how many of a run's frames that end leaves to play |
-| Notification rules and adapter | `core/src/notify.rs` | Cooldown/event dedup behind `Notifier` |
+| Notification rules and adapter | `core/src/notify.rs` | One announcement per spell of rain, and the cooldown that holds a spell open, behind `Notifier` |
 | Omarchy theme parsing | `core/src/theme.rs` | Tolerant, path-resolving reads with `Unavailable` fallback state |
 | Application construction and dependency injection | `app/src/lib.rs`, `app/src/bootstrap.rs`, `app/src/services.rs` | `run`, which assembles the real services; Qt ownership, Tokio runtime, controller seams |
 | Weather bridge | `app/src/weather_controller.rs`, `app/src/forecast_model.rs`, `app/src/rain_graph.rs` | Async feed refresh, the QML list model's roles, and the rain graph with its radar cursor and the end the radar stops at |
@@ -132,7 +132,7 @@ AllesBuien/
 - Do NOT use a file/inode watcher for the Omarchy theme directory or the Omarchy weather settings file, fabricate fallback palette values, hard-fail on missing theme keys, or add custom C++ watcher bindings.
 - Do NOT add IP geolocation, forward or reverse geocoding, or an in-app location picker. The desktop already ships `omarchy-weather-location`, and a second way to set a desktop-wide setting is the thing to avoid; the divergence from Omarchy's IP auto-detection is a recorded decision, not an omission.
 - Do NOT hardcode colours in QML; bind controller theme properties or `SystemPalette` fallback values. `Theme.qml`'s `"red"` error fallback is the one exception.
-- Do NOT add toast/retry frameworks or notification spam; keep one inline error status per view and preserve cooldown/event dedup.
+- Do NOT add toast/retry frameworks or notification spam; keep one inline error status per view and one announcement per spell of rain.
 - Do NOT replace Buienradar with wttr.in/Open-Meteo, expand beyond Dutch radar, or remove the required attribution: the visible `Buienradar.nl` and its link to `https://www.buienradar.nl` both have to stay.
 - Do NOT copy a `map-nl-*` image from another project, any unlicensed basemap, or OSM tile-server imagery. Basemaps come only from the pinned Natural Earth public-domain sources through `assets/gen-basemap`.
 - Do NOT write to another project's checkout beside this one, add AllesBuien to a repository that encloses this directory, or modify `/usr/share/omarchy`.

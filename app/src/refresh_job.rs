@@ -83,7 +83,7 @@ pub(crate) async fn fetch_weather(
     })
     .await?;
     let notified = notifications
-        .notify_rain(data.rain_soon.as_ref(), location.display_label())
+        .notify_rain(data.rain_soon.as_ref(), &location)
         .await;
     if let Err(error) = notified {
         eprintln!(
