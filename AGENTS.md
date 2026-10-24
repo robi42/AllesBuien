@@ -1,5 +1,7 @@
 # AGENTS.md — AllesBuien
 
+> Not running in the maintainer's software factory? Skip the beads and factory notes: file work as GitHub issues, run `bin/check-fast` and the tests nearest your change, and let CI run `bin/test`. [CONTRIBUTING.md](CONTRIBUTING.md) is the guide for that.
+
 ## Overview
 
 AllesBuien is a native Omarchy weather application built as a Rust workspace with a Qt Quick/CXX-Qt desktop shell. It shows Buienradar current conditions, a five-day forecast, the rain expected over the next two hours in five-minute steps, an animated Dutch radar, and best-effort rain-soon notifications while following the active Omarchy theme.
@@ -23,7 +25,7 @@ Do not change `.factory/gate` or any path listed in `.factory/protected` — a b
 
 ## Tasks and memory
 
-- Work is filed as [beads](https://github.com/steveyegge/beads) in `.beads/`: `bd ready` lists what is actionable, `bd show <id>` reads one issue.
+- Work is filed as [beads](https://github.com/gastownhall/beads) in `.beads/`: `bd ready` lists what is actionable, `bd show <id>` reads one issue.
 - The software factory claims and closes beads itself, so do not open, re-assign, or close them by hand during a run.
 - Leave `bd remember "..."` notes only for what the code cannot tell a reader: a decision and its reason. Anything the tree already states belongs in a comment beside it, not in memory.
 
