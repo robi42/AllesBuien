@@ -55,10 +55,12 @@ jobs:
         shell: bash
         run: echo "version=$(<.llvm-cov-version)" >> "$GITHUB_OUTPUT"
 
+      # fallback: none for the reason the cargo-about steps below give.
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
         with:
           tool: cargo-llvm-cov@${{ steps.llvm-cov-version.outputs.version }}
+          fallback: none
 
       # bin/test's third-party notices gate compares the committed notices with
       # what this cargo-about writes from Cargo.lock, so CI installs the version
