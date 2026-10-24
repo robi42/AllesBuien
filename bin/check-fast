@@ -383,11 +383,15 @@ unshipped=$(
 )
 [[ -z "$unshipped" ]] || report 'the package would not ship complete third-party notices:' "$unshipped"
 
-# Omarchy plugin. omarchy-plugin-validate is what `omarchy plugin add` and the
-# marketplace run, and it needs jq and an Omarchy desktop, neither of which CI's
-# bare Arch container has - so until now nothing in bin/test looked at the
-# plugin at all, and a symlink or a renamed entry point would have been found by
-# whoever tried to install the release. This is the part of the validator that
+# Omarchy plugin. omarchy-plugin-validate is what `omarchy plugin add` and
+# `omarchy plugin update` run on what they fetch, refusing a plugin that fails
+# it, and it needs jq and an Omarchy desktop, neither of which CI's bare Arch
+# container has - so until now nothing in bin/test looked at the plugin at all,
+# and a symlink or a renamed entry point would have been found by whoever tried
+# to install the release. The marketplace never runs it: it checks manifests in
+# its own JavaScript, scripts/build-catalog.mjs, with rules the validator lacks,
+# such as length limits, a lowercase id, and a root README and licence, and this
+# gate checks none of those. This is the part of the validator that
 # tracked text can answer: no symlink anywhere in the tree, a tracked
 # manifest.json at schemaVersion 1 with the five required top-level keys, an id
 # in the validator's character set, outside the reserved omarchy.* namespace
