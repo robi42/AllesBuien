@@ -4,6 +4,10 @@ All notable changes to AllesBuien are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). From 0.2.0 on, each
 release's section is the text of its annotated tag and of its GitHub release notes.
+Changes not yet released collect under Unreleased, and the release that ships them
+renames that section after itself and its date.
+
+## [Unreleased]
 
 ## [0.2.0] - 2026-10-22
 
@@ -13,10 +17,11 @@ release's section is the text of its annotated tag and of its GitHub release not
   Omarchy plugin: a single radar-dish button (the Nerd Font glyph `nf-md-radar`) that focuses the
   open AllesBuien window, launches it, or — while the app is not installed — opens Omarchy's
   floating terminal, downloads the release package `plugin/release.sha256` pins, checks it
-  against that digest, and installs it with pacman. Once `omarchy plugin update` brings a newer
-  pin, the button turns the bar's urgent colour and the same click updates the app; an install
-  the widget does not own is only ever launched. It sits beside the built-in weather pill
-  without replacing it.
+  against that digest, and installs it with pacman. A package built against a newer Qt than the
+  one installed, which the app may not start on, is refused before the password prompt, with a
+  pointer to `omarchy-update`. Once `omarchy plugin update` brings a newer pin, the button turns
+  the bar's urgent colour and the same click updates the app; an install the widget does not own
+  is only ever launched. It sits beside the built-in weather pill without replacing it.
 - Location following. The window adopts `~/.local/state/omarchy/settings/weather.json` within
   about two seconds of `omarchy-weather-location` rewriting or clearing it, and says which of the
   three sources — environment pin, desktop setting, or Amsterdam-West default — answered. A
@@ -112,5 +117,6 @@ release's section is the text of its annotated tag and of its GitHub release not
 Bron: Buienradar.nl — weather data is used non-commercially with the attribution its terms
 require.
 
+[Unreleased]: https://github.com/robi42/AllesBuien/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/robi42/AllesBuien/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/robi42/AllesBuien/releases/tag/v0.1.0

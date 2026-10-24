@@ -24,8 +24,9 @@ set -euo pipefail
 #   widget.sh launch    focus the open window, or start the app
 #   widget.sh install   what Omarchy's floating terminal runs for 10, 11, 12
 #                       and a failed probe: decide again, then download,
-#                       verify, and hand the package to pacman, whose own
-#                       prompt is the consent
+#                       verify, check the package's Qt against this machine's,
+#                       and hand the package to pacman, whose own prompt is
+#                       the consent
 #
 # The pin is one line in `sha256sum --check` format: a SHA-256 digest, two
 # spaces, and the release asset's name, allesbuien-<version>-<pkgrel>-x86_64
@@ -33,7 +34,7 @@ set -euo pipefail
 # name, and the digest exists nowhere else. The pin is written after a release's
 # asset exists, so between a version bump and that commit it names the previous
 # release. The widget never asks GitHub which release is the latest: what a
-# click installs is what the reviewed plugin snapshot pins, and
+# click installs is what this plugin checkout pins, and
 # `omarchy plugin update` is the only way a newer pin arrives.
 
 readonly repository=https://github.com/robi42/AllesBuien
@@ -239,6 +240,62 @@ verify_download() {
   fi
 }
 
+# Checks the download against this machine's Qt. The app compiles its QML
+# ahead of time, so its binary calls into Qt's private API, which no Qt release
+# promises to keep: a build against Qt 6.12 needs a function that 6.11 lacks,
+# and cannot start there. The package's depends are unversioned, so pacman
+# would install it anyway, and a versioned one would do harm: with a fresh sync
+# database, pacman -U would satisfy it by upgrading Qt alone, a partial
+# upgrade, underneath the running shell. So the click goes on only if the
+# installed qt6-declarative is the one the package's .BUILDINFO records, or
+# newer, by vercmp of the upstream versions alone, since a pkgrel only rebuilds
+# the same Qt release. bsdtar, which comes with the libarchive pacman needs,
+# reads the archive only once it has passed the pin's check. Fails, having
+# said why, before sudo asks for anything: when the installed Qt is older, when
+# either version cannot be read, and when vercmp fails or answers anything but
+# -1, 0 or 1, because an unknown version or order must never count as a new
+# enough one.
+qt_new_enough() {
+  local buildinfo line installed order pattern built=
+  pattern='^installed = qt6-declarative-([0-9][^-]*)-[^-]+-[^-]+$'
+  if buildinfo=$(bsdtar -xOf "$tmp/$pin_asset" .BUILDINFO); then
+    while IFS= read -r line; do
+      if [[ $line =~ $pattern ]]; then
+        built=${BASH_REMATCH[1]}
+        break
+      fi
+    done <<<"$buildinfo"
+  fi
+  if [[ -z $built ]]; then
+    printf 'Could not read which Qt AllesBuien %s was built against,\nso nothing was installed.\n' "$pin_version"
+    by_hand_message
+    return 1
+  fi
+  if ! line=$(pacman -Q qt6-declarative) || [[ $line != "qt6-declarative "?* ]]; then
+    printf 'Could not read which Qt is installed, so nothing was installed.\n'
+    return 1
+  fi
+  installed=${line#qt6-declarative }
+  installed=${installed%-*}
+  if ! order=$(vercmp "$installed" "$built"); then
+    order=
+  fi
+  case $order in
+    0 | 1)
+      return 0
+      ;;
+    -1)
+      printf 'AllesBuien %s needs Qt %s or newer, and this machine\n' "$pin_version" "$built"
+      printf 'has Qt %s, so nothing was installed.\n' "$installed"
+      printf 'Update Omarchy with omarchy-update, then click again.\n'
+      ;;
+    *)
+      printf 'Could not compare Qt %s with Qt %s,\nso nothing was installed.\n' "$installed" "$built"
+      ;;
+  esac
+  return 1
+}
+
 # Takes sudo's password now, with its -v, rather than when pacman starts. The
 # prompt waits as long as the person does, and the last decision has to come
 # after every such wait; sudo then reuses the credential for pacman a moment
@@ -278,7 +335,7 @@ still_wanted() {
 # --needed on the install skips a package that has become the pinned version
 # in that instant.
 prepare_install() {
-  download_pinned && verify_download && authorise && still_wanted
+  download_pinned && verify_download && qt_new_enough && authorise && still_wanted
 }
 
 # After a click that installed nothing, the app opens if it is installed: as it

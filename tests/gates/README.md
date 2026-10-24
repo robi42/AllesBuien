@@ -320,8 +320,8 @@ pretty-printed manifest line by line and says nothing about JSON validity or
 value types, and CI's bare Arch container has neither `jq` nor an Omarchy
 desktop to run the real thing. README.md's *Plugin checks* run the validator by
 hand on a clean clone before every tag, which is still what proves the plugin
-installs. Its fixtures add a symlink at the root and delete the one entry
-point.
+installs. Its fixtures turn the root's `CONTRIBUTING.md` into a symlink and
+delete the one entry point.
 
 `theme-owned colours` reads `plugin/*.qml` as well as `app/qml/*.qml`, because
 the bar widget has to follow the shell's theme as the window follows Omarchy's,

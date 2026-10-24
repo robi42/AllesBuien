@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in the window, the bar widget, the notifications, or the build does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A security problem goes privately, as [SECURITY.md](https://github.com/robi42/AllesBuien/blob/main/SECURITY.md) describes, never into an issue.
+
+        Issues are public, so do not paste coordinates or your `weather.json`: the place name in the window's header is enough.
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part
+      options:
+        - The window
+        - The bar widget (install, update, or launch)
+        - Notifications
+        - Building from source
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AllesBuien version
+      description: What `pacman -Q allesbuien` prints, or the commit you built.
+    validations:
+      required: true
+  - type: dropdown
+    id: installed-by
+    attributes:
+      label: How it was installed
+      options:
+        - By the bar widget's click
+        - From the release package, by hand
+        - Mode A, a package built from this repository
+        - Mode B, a user-scope Cargo install
+    validations:
+      required: true
+  - type: input
+    id: omarchy-version
+    attributes:
+      label: Omarchy version
+      description: What `omarchy-version` prints.
+  - type: input
+    id: plugin-commit
+    attributes:
+      label: Plugin commit
+      description: If the bar widget is installed, what `git -C ~/.config/omarchy/plugins/io.github.robi42.allesbuien rev-parse --short HEAD` prints.
+  - type: dropdown
+    id: location-source
+    attributes:
+      label: Location source
+      description: The line under the place name in the window's header.
+      options:
+        - "VIA OMARCHY: the desktop's location setting"
+        - "VIA ENV OVERRIDE: ALLESBUIEN_LAT and ALLESBUIEN_LON"
+        - "NO SETTING: the Amsterdam-West default"
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Terminal output
+      description: >-
+        For an install, update, or launch problem, include what
+        `pacman -Q omarchy allesbuien qt6-base qt6-declarative` prints, and the
+        probe's answer, asked the way the widget asks it:
+        `bash -lc 'bash ~/.config/omarchy/plugins/io.github.robi42.allesbuien/plugin/widget.sh probe; echo $?'`
+      render: text

@@ -8,11 +8,11 @@ AllesBuien is a native weather app for the Omarchy desktop. It combines current 
 
 Weather data and radar imagery: [Buienradar.nl](https://www.buienradar.nl)
 
-> Buienradar's free weather data is available for non-commercial use with attribution. AllesBuien is intended for personal, non-commercial use.
+> AllesBuien is an independent project, not affiliated with or endorsed by Buienradar. It uses Buienradar's free weather data under its [terms](https://www.buienradar.nl/overbuienradar/gratis-weerdata): non-commercial use, with Buienradar.nl named and linked, as above and in the app.
 
 ## Install
 
-AllesBuien is two pieces: the native application, and an Omarchy bar widget that opens it. You need Omarchy on x86_64, recent enough to have `omarchy plugin`; it also ships the `curl`, `sha256sum`, and `pacman` the widget uses. The package pulls in Qt 6 (`qt6-base` and `qt6-declarative`), and `libnotify` is optional: only rain-soon notifications need it.
+AllesBuien is two pieces: the native application, and an Omarchy bar widget that opens it. You need Omarchy 4 on x86_64, fully updated with `omarchy-update`: each release is built against the Qt that Arch ships at the time, and needs that Qt or a newer one. Omarchy also ships the `curl`, `sha256sum`, `bsdtar`, and `pacman` the widget uses. The package pulls in Qt 6 (`qt6-base` and `qt6-declarative`), and `libnotify` is optional: only rain-soon notifications need it.
 
 Add the plugin, then let it install the app:
 
@@ -20,7 +20,7 @@ Add the plugin, then let it install the app:
 omarchy plugin add https://github.com/robi42/AllesBuien.git --enable
 ```
 
-The widget appears in the bar's center section as a radar-dish icon, the Nerd Font glyph `nf-md-radar`. While the application is missing the icon is dimmed, and one click opens Omarchy's floating terminal, downloads the release package that the plugin's `plugin/release.sha256` pins from this repository's [releases page](https://github.com/robi42/AllesBuien/releases), checks it against the SHA-256 digest in that file, and installs it with `sudo pacman -U` — the password prompt and pacman's own confirmation appear in that terminal — then starts the app. A download that fails or does not match the digest stops before pacman runs, and the terminal says so. Every later click focuses the open window, or launches it if none is open. A copy of the plugin that pins no release yet says so on the click and points here; build from source, below, instead.
+The widget appears in the bar's center section as a radar-dish icon, the Nerd Font glyph `nf-md-radar`. While the application is missing the icon is dimmed, and one click opens Omarchy's floating terminal, downloads the release package that the plugin's `plugin/release.sha256` pins from this repository's [releases page](https://github.com/robi42/AllesBuien/releases), checks it against the SHA-256 digest in that file, and installs it with `sudo pacman -U` — the password prompt and pacman's own confirmation appear in that terminal — then starts the app. A download that fails or does not match the digest stops before pacman runs, and the terminal says so. A package built against a newer Qt than this machine has stops too, before the password prompt, and the terminal asks you to run `omarchy-update` and click again. Every later click focuses the open window, or launches it if none is open. A copy of the plugin that pins no release yet says so on the click and points here; build from source, below, instead.
 
 Or install the application by hand first and add the widget afterwards. Download [`plugin/release.sha256`](plugin/release.sha256) from this repository, and the package it names from the releases page, into an empty directory, check the package against the pin, and install that package:
 
@@ -52,7 +52,7 @@ The widget installs and updates only the release its own copy pins, and a newer 
 omarchy plugin update io.github.robi42.allesbuien
 ```
 
-That shows the change as a diff and asks before applying it. Once the updated plugin pins a newer release than the installed `allesbuien` package, the icon turns the bar's urgent colour, with an "update ready" tooltip. Click it, and the same floating terminal shows the installed and the new version, downloads and checks the package, and lets pacman ask before replacing it. Updated or not, the click ends with AllesBuien open or focused. An AllesBuien that was already running keeps the old version until you restart it; the terminal says so, and nothing is closed for you.
+That shows the change as a diff and asks before applying it. Before confirming, read what the diff changes in `plugin/release.sha256` and `plugin/widget.sh`: they decide what a click installs with sudo, as [SECURITY.md](SECURITY.md) describes. Once the updated plugin pins a newer release than the installed `allesbuien` package, the icon turns the bar's urgent colour, with an "update ready" tooltip. Click it, and the same floating terminal shows the installed and the new version, downloads and checks the package, and lets pacman ask before replacing it. Updated or not, the click ends with AllesBuien open or focused. An AllesBuien that was already running keeps the old version until you restart it; the terminal says so, and nothing is closed for you.
 
 The widget never asks GitHub for the latest release. It leaves alone any installation it does not own — an `allesbuien` binary another package provides, or a user-scope install in `~/.local/bin` ([Mode B](#mode-b-user-scope-cargo-install)) — and any `allesbuien` package already at or past the pin: those it only opens or focuses.
 
@@ -89,6 +89,16 @@ When rain is expected to start within 30 minutes, AllesBuien announces it throug
 - `ALLESBUIEN_NOTIFY_THRESHOLD_MIN`: how many minutes ahead rain counts as news, 30 by default.
 - `ALLESBUIEN_NOTIFY_COOLDOWN_MIN`: the shortest time, in minutes, that an announced spell stays open while rain is still in the forecast, 60 by default.
 
+## Privacy
+
+AllesBuien has no account, no telemetry, and no server of its own. While its window is open it asks Buienradar for weather, and sends nothing anywhere else:
+
+- every 10 minutes, and whenever the location changes, the national feed from `data.buienradar.nl` and the two-hour rain expectation for your location from `gpsgadget.buienradar.nl`, which receives your latitude and longitude to four decimal places, about 11 metres;
+- every 5 minutes, the national radar frames from `image.buienradar.nl`, which serves them from `image-cdn.buienradar.nl`;
+- the condition icons from `cdn.buienradar.nl`, each fetched once and then kept under `~/.cache/allesbuien`.
+
+Like any web request, these carry your IP address, and the app names itself in them as `allesbuien/<version>`. The bar widget contacts GitHub only when a click installs or updates the app, to download the pinned package from this repository's releases.
+
 ## Keys
 
 - **Space** or **Enter** plays and pauses the radar, wherever the focus is.
@@ -114,7 +124,7 @@ Without the second line the window tiles like any other, which is fine; the app 
 
 ## Build from source
 
-Building needs Rust 1.98.0, which `mise install` provides, and `qt6-base` and `qt6-declarative`, which on Arch include the development headers. Mode A also needs Arch's `makepkg`, [`just`](https://github.com/casey/just), and a pacman package that provides `rust`, such as `rustup` (`sudo pacman -S just rustup`). makepkg checks the PKGBUILD's build dependencies against pacman's database, which knows nothing of mise's toolchain; the build itself still uses Cargo 1.98.0, the only version `bin/build` accepts. Clone the repository and run every command from its root:
+Building needs Rust 1.98.0, which `mise install` provides, and `qt6-base` and `qt6-declarative`, which on Arch include the development headers. If you only want to build, rustup is enough: `rust-toolchain.toml` selects 1.98.0. `mise install` also trusts the checkout's `mise.toml` and installs the pre-commit hook described under [Development](#development). Mode A also needs Arch's `makepkg`, [`just`](https://github.com/casey/just), and a pacman package that provides `rust`, such as `rustup` (`sudo pacman -S just rustup`). makepkg checks the PKGBUILD's build dependencies against pacman's database, which knows nothing of mise's toolchain; the build itself still uses Cargo 1.98.0, the only version `bin/build` accepts. Clone the repository and run every command from its root:
 
 ```bash
 git clone https://github.com/robi42/AllesBuien.git && cd AllesBuien
@@ -186,19 +196,25 @@ rm -f "$HOME/.local/bin/allesbuien" \
 rm -rf "$DATA_HOME/licenses/allesbuien"
 ```
 
+However it was installed, AllesBuien keeps radar frames, condition icons, and Qt's shader caches per user, and none of the commands above removes them; this does:
+
+```bash
+rm -rf "${XDG_STATE_HOME:-$HOME/.local/state}/allesbuien" "${XDG_CACHE_HOME:-$HOME/.cache}/allesbuien"
+```
+
 Finally, only if you added the optional Hyprland wiring above, delete those two lines from `~/.config/hypr/bindings.lua` and run `hyprctl reload`.
 
 ## Dependencies
 
 - For the widget: the application itself, either the release package its click installs or a build from this repository.
-- `qt6-base` and `qt6-declarative`, which the package pulls in.
+- `qt6-base` and `qt6-declarative`, which the package pulls in; a release needs the Qt it was built against or a newer one, as [Install](#install) says.
 - `libnotify`, optional; without it the app runs and simply never notifies.
-- Omarchy itself, which ships `curl`, `sha256sum`, and `pacman` for the widget's install and update click, and `hyprctl` plus `jq` for `omarchy-launch-or-focus`. No AUR helper is needed.
+- Omarchy itself, which ships `curl`, `sha256sum`, `bsdtar`, and `pacman` for the widget's install and update click, and `hyprctl` plus `jq` for `omarchy-launch-or-focus`. No AUR helper is needed.
 - Network access to Buienradar for observations, forecasts, and radar frames.
 
 ## Development
 
-Install the pinned tools and the pre-commit hook, then run the repository's complete quality gate:
+`bin/test` is the repository's complete quality gate, and the one CI runs on every pull request. It takes over twenty minutes from cold, because CXX-Qt regenerates C++, and leaves a few gigabytes under `target/`; [CONTRIBUTING.md](CONTRIBUTING.md) describes the faster loop for working on one change. To run it, install the pinned tools and the pre-commit hook first:
 
 ```bash
 mise install
@@ -219,7 +235,7 @@ bin/build
 
 Among other gates, `bin/test` checks the per-file module-size budget, rustfmt, Clippy with warnings denied, ShellCheck and actionlint, the offscreen Qt workspace tests and their re-run in four time zones, the zero-CXX core dependency seam, at least 90% line coverage for `allesbuien-core`, the pinned `cargo-llvm-cov` and `cargo-about` versions, the third-party notices the package ships against `Cargo.lock` and the headers of the crates the binary links, Qt 6 QML lint and the QML type contract, the bar widget's install and update script against fake `pacman`, `curl`, and `sha256sum`, and finally that every gate still fails on its known-bad inputs.
 
-Bugs and ideas are welcome as [GitHub issues](https://github.com/robi42/AllesBuien/issues). The maintainer tracks work in-repo as [beads](https://github.com/steveyegge/beads): `bd ready` lists what is actionable, `bd show <id>` reads one.
+Bugs and ideas are welcome as [GitHub issues](https://github.com/robi42/AllesBuien/issues), and pull requests as [CONTRIBUTING.md](CONTRIBUTING.md) describes; a security problem goes privately, as [SECURITY.md](SECURITY.md) says. The maintainer also keeps a backlog in [beads](https://github.com/gastownhall/beads) for their own agent pipeline. Its database syncs to `refs/dolt/data` and is not part of a clone (`bd bootstrap` fetches it; then `bd ready` and `bd show <id>`), and you do not need it to contribute. That pipeline, the software factory, is not part of this repository either: its only footprint here is the two files below, `.factory/gate`, which runs `bin/test`, and `.factory/protected`.
 
 `.factory/gate` is the software factory's definition of done and wraps `bin/test`, so an agent-driven branch is held to the same gate CI runs. `.factory/protected` lists the paths whose diffs a human has to read before that branch can land: the gate's scripts, the fixture allowlist, the workflows and `deny.toml`, `pkgbuild/about.toml` and `pkgbuild/about.hbs`, whose accepted licences and hand-kept notices no gate can judge, the justfile, whose `just install` runs sudo, and mise's and lefthook's config files, which steer the pre-commit hook every worktree shares, with the root `.gitignore`, whose re-includes keep a global ignore from hiding a local one. A branch that drops `no_auto_install` or the postinstall's guard, or adds a `lefthook-local` file that turns `no_auto_install` off, has rewritten that hook at its first commit or `mise install` in its worktree, before Factory flags it; `mise install` in the main checkout writes it back.
 
@@ -404,6 +420,8 @@ Submit while the pin commit is still the head of `main`. A first listing takes n
 Publishing `allesbuien-bin` to the AUR comes later, as an additional channel, once AUR account registration reopens; the widget does not depend on it.
 
 ## Data and basemap licensing
+
+AllesBuien uses Buienradar's free weather data under its [terms](https://www.buienradar.nl/overbuienradar/gratis-weerdata), which list the JSON feed among the free data but not three of the endpoints the app reads: the two-hour rain expectation from `gpsgadget.buienradar.nl`, the sprite metadata API on `image.buienradar.nl` that names the radar frames, and the condition icons the feed links to on `cdn.buienradar.nl`. The app uses them on the same terms, non-commercially and with the attribution. Condition icons and radar frames are Buienradar's: the app fetches them at run time, and this repository ships none, except in the screenshot `preview.png`, which is shown with the same attribution.
 
 - Weather observations, forecasts, and radar: **Buienradar.nl**. Free-data use requires attribution and is limited to non-commercial use. The required attribution is visible in the app and this README.
 - Basemap: **Natural Earth 1:10m vector data**, public domain. Natural Earth permits use, modification, redistribution, and commercial use without required credit.

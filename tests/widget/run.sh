@@ -4,9 +4,9 @@ set -euo pipefail
 # The proof of plugin/widget.sh, without Omarchy, a network, or root. Each case
 # runs a fresh copy of the script, with or without a release.sha256 beside it,
 # against the fakes in tests/widget/fakes: pacman, vercmp, curl, sha256sum,
-# sudo, pgrep, and omarchy-launch-or-focus. Each fake appends the command line
-# it was given to a per-case log, and the cases assert on that log and on the
-# script's exit code and output.
+# bsdtar, sudo, pgrep, and omarchy-launch-or-focus. Each fake appends the
+# command line it was given to a per-case log, and the cases assert on that
+# log and on the script's exit code and output.
 #
 # The script sees a PATH built from nothing: the fakes, a directory of links to
 # the handful of real tools the script and the fakes use, and an allesbuien
@@ -77,6 +77,8 @@ begin() {
     FAKE_PACKAGE_FILES=
     FAKE_CURL=ok
     "FAKE_DOWNLOAD=$digest"
+    FAKE_QT=6.12.0-2
+    FAKE_BUILT_QT=6.12.0-2
     FAKE_PACMAN_U=ok
     FAKE_RUNNING=0
   )
@@ -247,6 +249,8 @@ finish() {
 readonly launch_call="omarchy-launch-or-focus [^allesbuien\$] [uwsm-app -- allesbuien]"
 readonly curl_call="curl [--fail] [--silent] [--show-error] [--location] [--proto] [=https] [--proto-redir] [=https] [--tlsv1.2] [--output] [<tmp>/$asset] [$url]"
 readonly check_call="sha256sum [--check] [--strict] [<case>/plugin/release.sha256]"
+readonly buildinfo_call="bsdtar [-xOf] [<tmp>/$asset] [.BUILDINFO]"
+readonly qt_call="pacman [-Q] [qt6-declarative]"
 readonly auth_call="sudo [-v]"
 readonly sudo_call="sudo [pacman] [-U] [--needed] [<tmp>/$asset]"
 readonly pacman_call="pacman [-U] [--needed] [<tmp>/$asset]"
@@ -357,7 +361,8 @@ begin install-happy
 pin 0.2.0-1
 run install
 expect_status 0
-expect_calls "$curl_call" "$check_call" "sha256sum-verdict $asset OK" "$auth_call" "$sudo_call" "$pacman_call" "$launch_call"
+expect_calls "$curl_call" "$check_call" "sha256sum-verdict $asset OK" "$buildinfo_call" "$qt_call" \
+  "$auth_call" "$sudo_call" "$pacman_call" "$launch_call"
 finish
 
 begin install-download-failure
@@ -380,6 +385,7 @@ set_env FAKE_DOWNLOAD=tampered
 run install
 expect_status 1
 expect_calls "$check_call" "sha256sum-verdict $asset FAILED"
+expect_no_call "bsdtar"
 expect_no_call "sudo"
 expect_no_call "pacman [-U]"
 expect_no_call "omarchy-launch-or-focus"
@@ -552,6 +558,120 @@ expect_status 1
 expect_no_call "pacman [-U]"
 expect_calls "$launch_call"
 expect_output "sudo did not authorise pacman"
+finish
+
+# The package needs the Qt it was built against, or a newer one, because its
+# QML is compiled ahead of time against Qt's private API. The click reads that
+# Qt from the package's .BUILDINFO once the download has passed the pin's
+# check, and goes on to sudo only if the installed Qt is the same upstream
+# version or newer; one that cannot be read is never new enough.
+
+begin install-qt-older-than-build
+pin 0.2.0-1
+set_env FAKE_QT=6.11.2-1 FAKE_BUILT_QT=6.12.0-2
+run install
+expect_status 1
+expect_calls "sha256sum-verdict $asset OK" "$buildinfo_call" "$qt_call" "vercmp [6.11.2] [6.12.0]"
+expect_no_call "sudo"
+expect_no_call "pacman [-U]"
+expect_no_call "omarchy-launch-or-focus"
+expect_output "AllesBuien 0.2.0-1 needs Qt 6.12.0 or newer"
+expect_output "has Qt 6.11.2, so nothing was installed"
+expect_output "Update Omarchy with omarchy-update, then click again"
+finish
+
+# An update that needs a newer Qt leaves the installed version, and opens it.
+begin update-qt-older-than-build
+pin 0.2.0-1
+ours 0.1.0-1
+set_env FAKE_QT=6.11.2-1 FAKE_BUILT_QT=6.12.0-2
+run install
+expect_status 1
+expect_no_call "sudo"
+expect_no_call "pacman [-U]"
+expect_calls "$launch_call"
+expect_output "needs Qt 6.12.0 or newer"
+finish
+
+# A pkgrel only rebuilds the same Qt release, so an older one still counts.
+begin install-qt-same-release-older-pkgrel
+pin 0.2.0-1
+set_env FAKE_QT=6.12.0-1 FAKE_BUILT_QT=6.12.0-3
+run install
+expect_status 0
+expect_calls "vercmp [6.12.0] [6.12.0]" "$auth_call" "$pacman_call" "$launch_call"
+finish
+
+begin install-qt-newer-than-build
+pin 0.2.0-1
+set_env FAKE_QT=6.12.1-1 FAKE_BUILT_QT=6.12.0-2
+run install
+expect_status 0
+expect_calls "vercmp [6.12.1] [6.12.0]" "$auth_call" "$pacman_call" "$launch_call"
+finish
+
+begin install-buildinfo-unreadable
+pin 0.2.0-1
+set_env FAKE_BUILT_QT=unreadable
+run install
+expect_status 1
+expect_calls "$buildinfo_call"
+expect_no_call "sudo"
+expect_no_call "pacman [-U]"
+expect_output "Could not read which Qt AllesBuien 0.2.0-1 was built against"
+expect_output "README#install"
+finish
+
+# A .BUILDINFO that names no qt6-declarative is as unreadable as none, and the
+# qt6-base line beside it is not taken for one.
+begin install-buildinfo-names-no-qt
+pin 0.2.0-1
+set_env FAKE_BUILT_QT=none
+run install
+expect_status 1
+expect_no_call "vercmp"
+expect_no_call "sudo"
+expect_no_call "pacman [-U]"
+expect_output "Could not read which Qt AllesBuien 0.2.0-1 was built against"
+finish
+
+begin install-qt-query-fails
+pin 0.2.0-1
+set_env FAKE_QT=absent
+run install
+expect_status 1
+expect_calls "$qt_call"
+expect_no_call "sudo"
+expect_no_call "pacman [-U]"
+expect_output "Could not read which Qt is installed, so nothing was installed"
+finish
+
+# Only vercmp's 0 or 1 lets the click go on. A vercmp that fails, or answers
+# none of its three, leaves the order unknown, and that stops the click as an
+# unreadable version does. Both run on an install, whose decisions ask vercmp
+# nothing, so the Qt check's comparison is the only one the switch reaches.
+
+begin install-qt-compare-fails
+pin 0.2.0-1
+set_env FAKE_VERCMP=fail
+run install
+expect_status 1
+expect_calls "$qt_call" "vercmp [6.12.0] [6.12.0]"
+expect_no_call "sudo"
+expect_no_call "pacman [-U]"
+expect_output "Could not compare Qt 6.12.0 with Qt 6.12.0,"
+finish
+
+begin install-qt-compare-answers-nothing
+pin 0.2.0-1
+set_env FAKE_VERCMP=silent
+run install
+expect_status 1
+expect_calls "$qt_call" "vercmp [6.12.0] [6.12.0]"
+expect_no_call "sudo"
+expect_no_call "pacman [-U]"
+expect_output "Could not compare Qt 6.12.0 with Qt 6.12.0,"
+expect_no_output "needs Qt"
 finish
 
 # The installed version cannot be read. An unknown version is never older than
