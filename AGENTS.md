@@ -47,7 +47,7 @@ AllesBuien/
 ├── justfile              Shortcuts for people over bin/ and pkgbuild/; nothing in the gate runs them
 ├── .github/              SHA-pinned CI, release automation, Dependabot configuration, the issue forms, and the pull request template
 ├── .factory/             Software-factory gate and protected-path list; ignored run/ scratch
-├── .beads/               Tracked beads config; the issues live in the ignored Dolt database, which syncs to origin's refs/dolt/data
+├── .beads/               Tracked beads config; the issues live in the ignored Dolt database, which syncs to a private repository, robi42/AllesBuien-beads
 ├── .qmllint.ini          Committed qmllint strictness, so a Qt bump is a reviewable diff
 ├── Cargo.toml            The workspace: its six crates, the =0.10.0 CXX-Qt pins, and the workspace lints; Cargo.lock beside it
 ├── rust-toolchain.toml   The 1.98.0 channel and its components; clippy.toml beside it holds the 50-line function and nesting-6 thresholds

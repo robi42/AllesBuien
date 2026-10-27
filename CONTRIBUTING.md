@@ -80,7 +80,7 @@ AllesBuien is [MIT-licensed](LICENSE), and so is what you contribute: opening a 
 
 The maintainer runs an agent pipeline of their own, the software factory. It is not part of this repository, and you need none of it:
 
-- `.beads/` configures [beads](https://github.com/gastownhall/beads), the tracker that pipeline works from. Its database is not part of a clone: it syncs to `refs/dolt/data`, and `bd bootstrap` fetches it. File your work as GitHub issues instead.
+- `.beads/` configures [beads](https://github.com/gastownhall/beads), the tracker that pipeline works from. Its database lives in a private repository, robi42/AllesBuien-beads, so a clone carries only this configuration. File your work as GitHub issues instead.
 - `.factory/gate`, which runs `bin/test`, and `.factory/protected` are the factory's only files here. For you, `bin/test` is what counts.
 - AGENTS.md is written for agents, and an agent of your own should skip its beads and factory notes.
 

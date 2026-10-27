@@ -65,4 +65,6 @@
 # - linear.api_key  → use LINEAR_API_KEY env var instead
 # - github.token    → use GITHUB_TOKEN env var instead
 
-sync.remote: "git+https://github.com/robi42/AllesBuien.git"
+# Dolt remote the database syncs to: a private repository rather than
+# this one, which is public. bd bootstrap clones the database from it.
+sync.remote: "git+https://github.com/robi42/AllesBuien-beads.git"
