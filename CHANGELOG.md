@@ -14,7 +14,7 @@ renames that section after itself and its date.
 ### Added
 
 - An Omarchy bar launcher. `manifest.json` and `plugin/BarWidget.qml` make this repository an
-  Omarchy plugin: a single radar-dish button (the Nerd Font glyph `nf-md-radar`) that focuses the
+  Omarchy plugin: a single radar-screen button (the Nerd Font glyph `nf-md-radar`) that focuses the
   open AllesBuien window, launches it, or — while the app is not installed — opens Omarchy's
   floating terminal, downloads the release package `plugin/release.sha256` pins, checks it
   against that digest, and installs it with pacman. A package built against a newer Qt than the
@@ -44,8 +44,8 @@ renames that section after itself and its date.
 - The weather text no longer waits for condition icons. It is shown as soon as the feed answers,
   with the icons already on disk; the rest download concurrently and appear one by one. A slot
   still waiting for its icon shows a placeholder, and the current-conditions one pulses.
-- Radar frames download four at a time instead of one after another, and a frame whose download
-  was interrupted can no longer be mistaken for a cached one.
+- Radar frames download four at a time instead of one after another, and a frame only partly
+  written to disk can no longer be mistaken for a cached one.
 - The loading state no longer wears an error's clothes: the notice pulses while a refresh is in
   flight, one failure line is shown, and a stale reading says it may be out of date instead of
   calling itself unavailable.
@@ -66,8 +66,8 @@ renames that section after itself and its date.
 - A rain-soon notification says rain starts about now instead of in zero minutes.
 - The window no longer opens on "Weather unavailable", in the error colour, while its first refresh
   is still under way; the pulsing current-conditions icon already says it is loading.
-- Every radar legend bucket gets the equal block the key promises, and the station label is
-  written in the app's language.
+- Every radar legend bucket gets the equal block the key promises, and the station label drops
+  the feed's Dutch `Meetstation` and names only the place.
 - The radar animation ends where the rain graph below it does, with the graph's cursor on its
   last bar. The radar counts from its latest image, usually five to fifteen minutes old, while
   the rain expectation counts from the present, so two hours of radar often ended a bar or two
@@ -100,6 +100,10 @@ renames that section after itself and its date.
   of those keys can impersonate Buienradar to it. webpki-roots 1.0.10 no longer bundles the
   intermediates' root, emSign ECC Root CA - G3, and rustls-webpki 0.103.16 refuses any chain
   that contains one of their keys.
+- tokio 1.53.3 deprecates the `AsyncFd` constructors that RUSTSEC-2026-0386 reports as unsound:
+  they accept a file descriptor the caller does not own, which can end in a use-after-free.
+  AllesBuien is not affected, and neither was 0.1.0, which used tokio 1.53.1: nothing in the app
+  or in the crates it is built from constructs an `AsyncFd`.
 - The release build no longer holds a token that can write to this repository. The workflow's
   checkout left the job's token in the workspace's git configuration while makepkg ran every
   dependency's build script and proc macro, any of which could have used it to push to `main`,
