@@ -9,7 +9,7 @@ renames that section after itself and its date.
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-10-22
+## [0.2.0] - 2026-10-29
 
 ### Added
 
