@@ -103,9 +103,9 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "󰐷" // U+F0437, Nerd Font nf-md-radar: a dish, never a weather
-              // condition, because the Omarchy weather pill beside it already
-              // draws the sky.
+    text: "󰐷" // U+F0437, Nerd Font nf-md-radar: a radar screen, never a
+              // weather condition, because the Omarchy weather pill beside it
+              // already draws the sky.
     dimmed: root.known && !root.installed
     // The bar's urgent colour, as Omarchy's own update indicator uses it.
     active: root.known && root.updateReady
