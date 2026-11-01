@@ -6,7 +6,7 @@
 gate="lefthook pin"
 script="bin/check-fast"
 outcome="red"
-expect=("lefthook.yml: 2.1.16, mise.toml: 2.1.6")
+expect=("lefthook.yml: 2.2.2, mise.toml: 2.1.6")
 
 mutate() {
   sed -i 's/^lefthook = .*/lefthook = "2.1.6"/' mise.toml
