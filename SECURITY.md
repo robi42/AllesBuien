@@ -12,7 +12,7 @@ Only the release that `plugin/release.sha256` on `main` pins. Fixes are not back
 
 ## What runs as root, and when
 
-Only the two `sudo` calls at the end of `plugin/widget.sh`'s install verb: `sudo -v`, which takes the password, and `sudo pacman -U`. The widget runs the verb itself as you, in Omarchy's floating terminal, when a click finds the app missing, or older than the release its plugin checkout pins, and everything before those two calls runs as you too. In this order:
+Only two `sudo` commands, both at the end of `plugin/widget.sh`'s install verb: `sudo -v`, which takes the password, and `sudo pacman -U --needed`, which the script spells out once for an install and once for an update. The widget runs the verb itself as you, in Omarchy's floating terminal, when a click finds the app missing, or older than the release its plugin checkout pins, and everything before those two commands runs as you too. In this order:
 
 1. It reads `plugin/release.sha256` from that checkout and refuses any content but one line: a SHA-256 digest, two spaces, and an asset name of the form `allesbuien-<version>-<pkgrel>-x86_64.pkg.tar.zst`.
 2. `curl` downloads that asset from this repository's GitHub release over HTTPS only (`--proto =https --proto-redir =https`, TLS 1.2 or newer) into a fresh directory from `mktemp -d`, which is removed when the script ends.
@@ -25,7 +25,7 @@ Nothing is piped into a shell, and GitHub is never asked which release is the la
 
 ## Where trust comes from
 
-- **The plugin checkout.** `omarchy plugin add` and `omarchy plugin update` install whatever `main` holds when they run, not the snapshot the Omarchy plugin marketplace verified, so your checkout is `main` as of your last add or update. `git -C ~/.config/omarchy/plugins/io.github.robi42.allesbuien log -1` shows which commit you run. `omarchy plugin update` shows the diff before it applies it, and its changes to `plugin/release.sha256` and `plugin/widget.sh` are the ones that decide what a click installs with sudo.
+- **The plugin checkout.** `omarchy plugin add` and `omarchy plugin update` install whatever `main` holds when they run, not the snapshot the Omarchy plugin marketplace verified, so your checkout is `main` as of your last add or update. `git -C ~/.config/omarchy/plugins/io.github.robi42.allesbuien log -1` shows which commit you run. `omarchy plugin update` shows the diff before it applies it, and its changes to `manifest.json` and under `plugin/` are the ones to read: `manifest.json` names the QML file the bar loads, `plugin/BarWidget.qml` decides which commands the widget runs, and `plugin/widget.sh` and `plugin/release.sha256` decide what a click installs with sudo.
 - **The pin.** The digest in that checkout's `plugin/release.sha256` is the only copy of the package's digest anywhere, and the only check on the bytes a click downloads. `bin/pin-release` writes it once the release exists: it takes the digest GitHub records for the asset, and writes it only after a download of the asset has passed `sha256sum --check` against it.
 - **The release.** Releases from v0.2.0 on are immutable: once one is published, nobody can change or replace its assets or move its tag. GitHub can also attest an immutable release; whether it has is checked when each release is made, and nothing on this page relies on an attestation. v0.1.0 predates the setting and is not immutable, and no pin names it.
 
