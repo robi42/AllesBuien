@@ -255,10 +255,14 @@ cargo-about, which writes the third-party notices, against
 `.cargo-about-version`. The mise pin sits beside its cargo-llvm-cov
 counterpart, straight after `bin/check-fast`, for the same reason. The version
 pin sits with the notices gates instead, before the build, since neither it
-nor they need one, and it compares `cargo about --version` with the whole
-`cargo-about <version>` it expects, so 0.9.30 does not pass for 0.9.3. Their
-fixtures move the mise pin and the version file to versions no release will
-carry.
+nor they need one. Their fixtures move the mise pin and the version file to
+versions no release will carry.
+
+Both version pins compare the tool's whole report, `cargo-about <version>` or
+`cargo-llvm-cov <version>`, with the one they expect, so 1.2.30 does not pass
+for 1.2.3. Each has a second fixture that plants the tool's own name as the
+pinned version: every report contains it, so a substring match would take it
+for any version, and no release will carry it either.
 
 `third-party notices` regenerates `pkgbuild/THIRD-PARTY-LICENSES` with
 cargo-about from `Cargo.lock`, `pkgbuild/about.toml` and `pkgbuild/about.hbs`,
@@ -274,8 +278,10 @@ baseline in this runner, and its two fixtures, each from a few seconds to half
 a minute depending on cores. Two limits are written down rather than gated.
 cargo-about never collects NOTICE files, which none of the crates the notices
 cover ships today, and no fixture could prove a refusal without planting one
-in the cargo registry. And it reads licence files, never the headers of source
-files, which is what the next gate is for.
+in the cargo registry. And it keeps a file only when the whole file scores as
+a licence text, so a notice in the header of a source file that holds more
+than its licence never reaches the notices, which is what the next gate is
+for.
 
 `third-party notice coverage` keeps the notices `about.hbs` carries by hand
 complete, without running cargo-about. It asks `cargo tree` which crates the

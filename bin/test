@@ -96,7 +96,7 @@ actionlint
 # and compares it byte for byte. Another release of cargo-about can word the
 # same Cargo.lock differently, so the comparison means something only against
 # the version CI installs. Equality rather than a substring, which would take
-# 0.9.20 for 0.9.2, and captured before it is matched, for the reason the core
+# 1.2.30 for 1.2.3, and captured before it is matched, for the reason the core
 # purity gate below spells out.
 echo "==> gate: cargo-about version pin"
 require_tool cargo-about
@@ -145,11 +145,13 @@ if ! notices_diff=$(diff -u pkgbuild/THIRD-PARTY-LICENSES target/THIRD-PARTY-LIC
 fi
 
 # Third-party notice coverage. The gate above proves the committed notices are
-# what cargo-about writes, and cargo-about writes what the licence files say of
-# the crates about.toml lets it see. Two things get past that. A crate
-# about.toml leaves out is missing from the file as well. And a notice in a
-# source file's own header is one cargo-about never reads: ring's C and Rust
-# files name ISC copyright holders that its licence files do not, and so do
+# what cargo-about writes, and cargo-about writes those files of the crates
+# about.toml lets it see that score as a licence text as a whole: their
+# licence files, and a source file only when it is little more than its
+# licence header, as some of ring's are. Two things get past that. A crate
+# about.toml leaves out is missing from the file as well. And a notice in the
+# header of any other source file never reaches it: ring's C and Rust files
+# name ISC copyright holders that the files cargo-about keeps do not, and so do
 # rustls-webpki's, and futures-channel's mpsc queue is under a two-clause BSD
 # licence of its own, whose second clause asks every binary's documentation
 # for its whole text. about.hbs carries those notices by hand, and this gate
@@ -364,11 +366,13 @@ cargo llvm-cov -p allesbuien-core --locked --fail-under-lines 90
 # and pipefail turns an agreeing version into 141 - but it is the same shape,
 # and it is the last one left in this file. Writing the fixture for this gate is
 # what showed the old form also said nothing at all when it failed: its entire
-# failure output was an exit code.
+# failure output was an exit code. It matches the whole report, as the
+# cargo-about version pin does: a substring would take 1.2.30 for 1.2.3, and
+# the tool's own name, which every report contains, for any version.
 echo "==> gate: cargo-llvm-cov version pin"
 pinned_llvm_cov=$(cat .llvm-cov-version)
 installed_llvm_cov=$(cargo llvm-cov --version)
-if [[ "$installed_llvm_cov" != *"$pinned_llvm_cov"* ]]; then
+if [[ $installed_llvm_cov != "cargo-llvm-cov $pinned_llvm_cov" ]]; then
   printf 'error: cargo-llvm-cov reports "%s" but .llvm-cov-version pins %s\n' \
     "$installed_llvm_cov" "$pinned_llvm_cov" >&2
   exit 1
