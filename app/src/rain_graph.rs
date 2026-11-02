@@ -162,16 +162,12 @@ mod tests {
         let graph = RainGraph::build(&[], "");
 
         // Then
-        assert!(graph.levels.is_empty());
-        assert!(graph.axis_labels.is_empty());
+        assert_eq!(graph.levels, [] as [f64; 0]);
+        assert_eq!(graph.axis_labels, [] as [String; 0]);
         assert!(!graph.wet);
     }
 
     #[test]
-    #[expect(
-        clippy::float_cmp,
-        reason = "encoded rain value zero must map to the exact zero-height baseline asserted by this regression test"
-    )]
     fn light_rain_stays_visible_against_the_fixed_full_scale() {
         // Given: 0.04 mm/h, two orders of magnitude below the 5 mm/h reference.
         let points = series("000|12:00\n065|12:05\n");
@@ -180,6 +176,8 @@ mod tests {
         let graph = RainGraph::build(&points, "next 2h: dry");
 
         // Then
+        // Compared exactly: encoded rain value zero must map to the exact
+        // zero-height baseline asserted by this regression test.
         assert_eq!(graph.levels[0], 0.0);
         assert!(
             graph.levels[1] > 0.05,

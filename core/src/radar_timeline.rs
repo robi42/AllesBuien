@@ -210,7 +210,7 @@ mod tests {
 
         // Then
         assert_eq!(timeline.first_forecast_index, 0);
-        assert!(timeline.observed.is_empty());
+        assert_eq!(timeline.observed, [] as [bool; 0]);
     }
 
     #[test]

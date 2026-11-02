@@ -267,13 +267,13 @@ mod tests {
         store_icon("RU", FrameBytes::from(b"icon".to_vec()));
 
         // Then
-        assert!(withheld.is_empty());
+        assert_eq!(withheld, "");
         assert_eq!(published_url(url), url);
         assert_eq!(
             published_url("https://cdn.buienradar.nl/x/30x30/f.png"),
             "https://cdn.buienradar.nl/x/30x30/f.png"
         );
-        assert!(published_url("").is_empty());
+        assert_eq!(published_url(""), "");
     }
 
     #[test]

@@ -43,10 +43,6 @@ impl FeedApi for FiveDayOrEmptyFeedApi {
     clippy::too_many_lines,
     reason = "this one-process GUI regression keeps bootstrap, async settling, property checks, model roles, and refresh replacement in one ordered narrative"
 )]
-#[expect(
-    clippy::float_cmp,
-    reason = "the encoded dry rain sample must map to the exact zero-height baseline asserted by this regression test"
-)]
 fn populates_weather_properties_when_boot_triggers_initial_refresh() {
     // Given: one GUI application builder with a fake feed and a long recurring interval.
     let feed = Arc::new(FiveDayOrEmptyFeedApi {
@@ -98,6 +94,8 @@ fn populates_weather_properties_when_boot_triggers_initial_refresh() {
 
         let levels: Vec<f64> = controller.rain_levels().iter().copied().collect();
         assert_eq!(levels.len(), 4);
+        // Compared exactly: the encoded dry rain sample must map to the exact
+        // zero-height baseline asserted by this regression test.
         assert_eq!(levels[0], 0.0);
         assert!(levels[2] > 0.0, "wet sample flattened to {}", levels[2]);
         assert!(levels[3] > levels[2], "bars ignore intensity: {levels:?}");

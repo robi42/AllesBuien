@@ -197,7 +197,7 @@ mod tests {
 
         // Then
         assert_eq!(weather.forecast.len(), 5);
-        assert!(!rain.line.is_empty());
+        assert_ne!(rain.line, "");
     }
 
     #[test]

@@ -213,11 +213,10 @@ mod tests {
 
         // Then
         assert_eq!(local.time_label, "not-a");
-        assert!(local.weekday_label.is_empty());
-        assert!(
-            !LocalTimestamp::from_feed_in("2026-13-99T99:99:99", "UTC")
-                .time_label
-                .is_empty()
+        assert_eq!(local.weekday_label, "");
+        assert_ne!(
+            LocalTimestamp::from_feed_in("2026-13-99T99:99:99", "UTC").time_label,
+            ""
         );
     }
 
@@ -227,8 +226,8 @@ mod tests {
         let local = LocalTimestamp::from_feed_in("2026-08-30T17:50:00", "Mars/Olympus_Mons");
 
         // Then: resolved in the system zone, not passed through.
-        assert!(!local.time_label.is_empty());
-        assert!(!local.weekday_label.is_empty());
+        assert_ne!(local.time_label, "");
+        assert_ne!(local.weekday_label, "");
     }
 
     #[test]

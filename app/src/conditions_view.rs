@@ -115,7 +115,7 @@ mod tests {
         assert_eq!(view.condition, "Heavily clouded with rain");
         assert_eq!(view.icon_url, "image://condition/QQ");
         assert_eq!(view.observed_label, "17:50");
-        assert!(view.status.is_empty());
+        assert_eq!(view.status, "");
     }
 
     #[test]
@@ -131,8 +131,8 @@ mod tests {
 
         // Then
         assert_eq!(view.condition, "Half bewolkt");
-        assert!(view.icon_url.is_empty());
-        assert!(view.observed_label.is_empty());
+        assert_eq!(view.icon_url, "");
+        assert_eq!(view.observed_label, "");
     }
 
     #[test]
@@ -144,8 +144,8 @@ mod tests {
         assert_eq!(view.temperature, "—");
         assert_eq!(view.wind, "Unavailable");
         assert_eq!(view.condition, "Unavailable");
-        assert!(view.feels_like.is_empty());
-        assert!(view.humidity.is_empty());
+        assert_eq!(view.feels_like, "");
+        assert_eq!(view.humidity, "");
         assert_eq!(view.status, "Current conditions unavailable");
     }
 
@@ -167,7 +167,7 @@ mod tests {
         assert_eq!(view.condition, "Clear");
         assert_eq!(view.feels_like, "");
         assert_eq!(view.humidity, "");
-        assert!(view.status.is_empty());
+        assert_eq!(view.status, "");
     }
 
     #[test]
@@ -183,6 +183,6 @@ mod tests {
 
         // Then
         assert_eq!(view.humidity, "94%");
-        assert!(view.feels_like.is_empty());
+        assert_eq!(view.feels_like, "");
     }
 }

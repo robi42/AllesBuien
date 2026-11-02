@@ -104,7 +104,7 @@ mod tests {
         // When / Then
         assert_eq!(display_url("", published), published);
         assert_eq!(display_url("a.png", published), published);
-        assert!(display_url("4", " ").is_empty());
+        assert_eq!(display_url("4", " "), "");
     }
 
     #[test]
