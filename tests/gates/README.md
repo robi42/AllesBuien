@@ -255,8 +255,8 @@ cargo-about, which writes the third-party notices, against
 `.cargo-about-version`. The mise pin sits beside its cargo-llvm-cov
 counterpart, straight after `bin/check-fast`, for the same reason. The version
 pin sits with the notices gates instead, before the build, since neither it
-nor they need one. Their fixtures move the mise pin and the version file to
-versions no release will carry.
+nor they need one. Their first fixtures move the mise pin and the version
+file to versions no release will carry.
 
 Both version pins compare the tool's whole report, `cargo-about <version>` or
 `cargo-llvm-cov <version>`, with the one they expect, so 1.2.30 does not pass
