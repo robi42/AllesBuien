@@ -50,7 +50,7 @@ jobs:
       # linters, both fail loudly, and a rule a newer release adds surfaces as a
       # red run here instead of as a check that quietly stopped applying.
       - name: Install system dependencies and Rust
-        run: pacman -Syu --noconfirm git rustup qt6-base qt6-declarative shellcheck actionlint && rustup default 1.98.0 && rustup component add llvm-tools-preview
+        run: pacman -Syu --noconfirm git rustup qt6-base qt6-declarative shellcheck actionlint && rustup default 1.99.1 && rustup component add llvm-tools-preview
 
       # No later step talks to GitHub through git. Persisted, the job's token
       # would stay in a file under RUNNER_TEMP, included from .git/config, where
@@ -85,7 +85,7 @@ jobs:
 
       # fallback: none for the reason the cargo-about steps below give.
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
         with:
           tool: cargo-llvm-cov@${{ steps.llvm-cov-version.outputs.version }}
           fallback: none
@@ -102,7 +102,7 @@ jobs:
         run: echo "version=$(<.cargo-about-version)" >> "$GITHUB_OUTPUT"
 
       - name: Install cargo-about
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
         with:
           tool: cargo-about@${{ steps.cargo-about-version.outputs.version }}
           fallback: none

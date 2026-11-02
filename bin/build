@@ -2,8 +2,8 @@
 set -euo pipefail
 
 cargo_version=$(cargo --version)
-grep -q '^cargo 1\.98\.0 ' <<<"$cargo_version" || {
-  printf 'error: expected Cargo 1.98.0, got %s\n' "$cargo_version" >&2
+grep -q '^cargo 1\.99\.1 ' <<<"$cargo_version" || {
+  printf 'error: expected Cargo 1.99.1, got %s\n' "$cargo_version" >&2
   exit 1
 }
 printf 'cargo: %s\n' "$(command -v cargo)"

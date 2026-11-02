@@ -256,7 +256,7 @@ cargo-about, which writes the third-party notices, against
 counterpart, straight after `bin/check-fast`, for the same reason. The version
 pin sits with the notices gates instead, before the build, since neither it
 nor they need one, and it compares `cargo about --version` with the whole
-`cargo-about <version>` it expects, so 0.9.20 does not pass for 0.9.2. Their
+`cargo-about <version>` it expects, so 0.9.30 does not pass for 0.9.3. Their
 fixtures move the mise pin and the version file to versions no release will
 carry.
 
