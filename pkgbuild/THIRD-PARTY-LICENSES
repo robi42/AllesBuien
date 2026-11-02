@@ -54,9 +54,9 @@ Notices the licence texts below do not carry
 --------------------------------------------
 The licence texts below are the crates' own licence files, or a licence's
 standard text where a crate publishes none, and some of the crates' source
-files, given whole because each is little more than its licence header. Other
-source files compiled into the binary also carry a notice in their header, and
-what those notices ask for that the texts below do not already carry is here.
+files, given whole because each is mostly its licence header. Other source
+files compiled into the binary also carry a notice in their header, and what
+those notices ask for that the texts below do not already carry is here.
 
 These copyright holders are named in the ISC headers of such files, which are
 under the ISC License text below:

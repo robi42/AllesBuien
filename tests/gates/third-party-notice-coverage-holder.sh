@@ -1,14 +1,14 @@
 # shellcheck shell=bash
 #
 # cargo-about copies a crate's licence files, and a source file only when it
-# is little more than its licence header, so a copyright holder named only in
-# the ISC header of any other source file reaches the notices through
+# is mostly its licence header, so a copyright holder named only in the ISC
+# header of any other source file reaches the notices through
 # pkgbuild/about.hbs's hand-kept section or not at all, and the third-party
-# notices gate cannot tell which. Deleting the section's
-# first holder line, read out of the committed file with its crate, stands in
-# for a header whose holder nobody added: the gate has to name the crate and
-# the holder its headers carry. The holder is the line with its years taken
-# off, as the gate takes them off the headers.
+# notices gate cannot tell which. Deleting the section's first holder line,
+# read out of the committed file with its crate, stands in for a header whose
+# holder nobody added: the gate has to name the crate and the holder its
+# headers carry. The holder is the line with its years taken off, as the gate
+# takes them off the headers.
 
 gate="third-party notice coverage"
 script="bin/test"

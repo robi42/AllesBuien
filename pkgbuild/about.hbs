@@ -9,14 +9,14 @@
   "Notices the licence texts below do not carry" is the part that has to keep
   up with the crates. cargo-about keeps a crate's file only when the whole
   file scores as a licence text: its licence files do, and a source file does
-  only when it is little more than its licence header, as some of ring's are.
-  A notice in the header of any other source file never reaches the output,
-  so it is written down here. bin/test's third-party notice coverage gate
-  reads those headers in every crate allesbuien links, and names each
-  copyright holder no Copyright line of the output names, and each BSD-style
-  header whose text the output does not reproduce; add what it names here. A
-  holder line keeps the shape "<crate>  Copyright ...", two spaces after the
-  crate, which that gate's fixtures read.
+  only when it is mostly its licence header, as some of ring's are. A notice
+  in the header of any other source file never reaches the output through
+  cargo-about, so it is written down here. bin/test's third-party notice
+  coverage gate reads those headers in every crate allesbuien links, and
+  names each copyright holder no Copyright line of the output names, and each
+  BSD-style header whose text the output does not reproduce; add what it
+  names here. A holder line keeps the shape "<crate>  Copyright ...", two
+  spaces after the crate, which that gate's fixtures read.
 --}}
 Third-party notices for allesbuien
 ==================================
@@ -74,9 +74,9 @@ Notices the licence texts below do not carry
 --------------------------------------------
 The licence texts below are the crates' own licence files, or a licence's
 standard text where a crate publishes none, and some of the crates' source
-files, given whole because each is little more than its licence header. Other
-source files compiled into the binary also carry a notice in their header, and
-what those notices ask for that the texts below do not already carry is here.
+files, given whole because each is mostly its licence header. Other source
+files compiled into the binary also carry a notice in their header, and what
+those notices ask for that the texts below do not already carry is here.
 
 These copyright holders are named in the ISC headers of such files, which are
 under the ISC License text below:
