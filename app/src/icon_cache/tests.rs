@@ -181,7 +181,7 @@ fn only_distinct_usable_codes_the_provider_lacks_are_missing() {
 
     // Then
     assert_eq!(before, ["RG"]);
-    assert!(missing_keys(&codes).is_empty());
+    assert_eq!(missing_keys(&codes), [] as [String; 0]);
 }
 
 #[test]

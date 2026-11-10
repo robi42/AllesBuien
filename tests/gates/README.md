@@ -242,23 +242,29 @@ compares `.llvm-cov-version` with whichever copy it finds, so on its own it
 notices the two files drifting apart only on a machine mise set up, and never in
 CI. It reads text alone but lives in `bin/test`, straight after
 `bin/check-fast`, because this runner puts `bin/check-fast` in front of every
-`bin/test` gate it slices: there it would refuse the `.llvm-cov-version` that
-the version pin's fixture plants before the version pin could. Its fixture moves
-the mise pin to a version no release will carry and leaves `.llvm-cov-version`
-behind. The gate never runs cargo-llvm-cov, so no mise shim in the scratch copy
-tries to resolve that version, and the runner turns mise's auto-install off, so
-a baseline that needs a pinned tool the machine lacks goes red rather than
-downloading it.
+`bin/test` gate it slices: there it would refuse the `.llvm-cov-version` each
+of the version pin's fixtures plants before the version pin could. Its own
+fixture moves the mise pin to a version no release will carry and leaves
+`.llvm-cov-version` behind. The gate never runs cargo-llvm-cov, so no mise
+shim in the scratch copy tries to resolve that version, and the runner turns
+mise's auto-install off, so a baseline that needs a pinned tool the machine
+lacks goes red rather than downloading it.
 
 `cargo-about mise pin` and `cargo-about version pin` do the same for
 cargo-about, which writes the third-party notices, against
 `.cargo-about-version`. The mise pin sits beside its cargo-llvm-cov
 counterpart, straight after `bin/check-fast`, for the same reason. The version
 pin sits with the notices gates instead, before the build, since neither it
-nor they need one, and it compares `cargo about --version` with the whole
-`cargo-about <version>` it expects, so 0.9.20 does not pass for 0.9.2. Their
-fixtures move the mise pin and the version file to versions no release will
-carry.
+nor they need one. Their first fixtures move the mise pin and the version
+file to versions no release will carry.
+
+Both version pins compare the tool's whole report, `cargo-about <version>` or
+`cargo-llvm-cov <version>`, with the one they expect, so 1.2.30 does not pass
+for 1.2.3. Each has a second fixture that plants its pin with the last
+character taken off, read from the version file, so the installed version
+extends the planted one as 1.2.30 extends 1.2.3: a substring, a prefix, or a
+match after the report's space would take it, and the fixture moves with the
+pin.
 
 `third-party notices` regenerates `pkgbuild/THIRD-PARTY-LICENSES` with
 cargo-about from `Cargo.lock`, `pkgbuild/about.toml` and `pkgbuild/about.hbs`,
@@ -274,8 +280,10 @@ baseline in this runner, and its two fixtures, each from a few seconds to half
 a minute depending on cores. Two limits are written down rather than gated.
 cargo-about never collects NOTICE files, which none of the crates the notices
 cover ships today, and no fixture could prove a refusal without planting one
-in the cargo registry. And it reads licence files, never the headers of source
-files, which is what the next gate is for.
+in the cargo registry. And it keeps a file only when the whole file scores as
+a licence text, so a notice in the header of a source file that is not
+mostly that header never reaches the notices through it, which is what the
+next gate is for.
 
 `third-party notice coverage` keeps the notices `about.hbs` carries by hand
 complete, without running cargo-about. It asks `cargo tree` which crates the
@@ -361,8 +369,8 @@ is where `lefthook` runs it, on the commit that would introduce the unproven
 gate.
 
 `gate violations` does not have a fixture of its own; it is proven by the
-seventy-five it runs, each of which fails loudly if its gate stops biting. One
-of those seventy-five aims at the runner rather than at a gate: the slicer
+seventy-seven it runs, each of which fails loudly if its gate stops biting. One
+of those seventy-seven aims at the runner rather than at a gate: the slicer
 checks a gate exists by substring and cuts its block by whole line, so a
 reformatted header satisfies the first and cuts nothing under the second, and
 the empty block that results goes green where the fixture asked for red. That

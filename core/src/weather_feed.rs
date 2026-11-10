@@ -299,7 +299,7 @@ mod tests {
 
         // Then
         let current = weather.current.expect("station expected");
-        assert!(current.condition_code.is_empty());
+        assert_eq!(current.condition_code, "");
         assert_eq!(current.condition, None);
     }
 }

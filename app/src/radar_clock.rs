@@ -134,6 +134,6 @@ mod tests {
         // Given / When / Then
         assert_eq!(frame_label("not-a-timestamp", Some(2)), "not-a");
         assert_eq!(frame_label("not-a-timestamp", None), "not-a");
-        assert!(frame_label("", Some(2)).is_empty());
+        assert_eq!(frame_label("", Some(2)), "");
     }
 }

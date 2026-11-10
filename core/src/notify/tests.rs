@@ -143,7 +143,7 @@ fn imminent_rain_is_never_announced_while_notifications_are_switched_off() {
     viewer.refresh(&home(), &forecasts);
 
     // Then
-    assert!(viewer.calls().is_empty());
+    assert_eq!(viewer.calls(), [] as [(String, String); 0]);
 }
 
 #[test]

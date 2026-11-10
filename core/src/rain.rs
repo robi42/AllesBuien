@@ -182,10 +182,6 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        clippy::float_cmp,
-        reason = "both sides come from the same deterministic conversion applied to the same code, so they are bit-identical; an epsilon window would also accept the neighbouring sample this test exists to rule out"
-    )]
     fn peak_is_the_maximum_intensity_not_the_last_wet_sample() {
         // Given
         let raw = "000|12:00\n050|12:05\n080|12:10\n060|12:15\n";
@@ -198,6 +194,9 @@ mod tests {
         let rain = series.rain_soon.expect("expected rain_soon");
         assert_eq!(rain.minutes_until, 5);
         assert_eq!(rain.time_label, "12:05");
+        // Compared exactly: both sides come from the same deterministic conversion
+        // applied to the same code, so they are bit-identical; an epsilon window
+        // would also accept the neighbouring sample this test exists to rule out.
         assert_eq!(rain.max_mmh, code_to_mmh(80));
     }
 
@@ -232,13 +231,12 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        clippy::float_cmp,
-        reason = "clamping is the behaviour under test and it returns the literal 0.0; the neighbouring assertion already uses a tolerance where the value really is computed"
-    )]
     fn conversion_is_monotonic_and_clamps_dry_codes_to_zero() {
         // Given / When / Then
         assert!(code_to_mmh(90) > code_to_mmh(70));
+        // Compared exactly: clamping is the behaviour under test and it returns the
+        // literal 0.0; the neighbouring assertion already uses a tolerance where the
+        // value really is computed.
         assert_eq!(code_to_mmh(0), 0.0);
         assert_eq!(code_to_mmh(-5), 0.0);
         assert!((code_to_mmh(109) - 1.0).abs() < 1e-9);

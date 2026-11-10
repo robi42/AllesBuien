@@ -22,7 +22,7 @@ You need Arch Linux or Omarchy on x86_64, with `qt6-base` and `qt6-declarative`,
 mise install
 ```
 
-That installs every tool `mise.toml` pins, from Rust 1.98.0 with its components to lefthook, as README's [Development](README.md#development) section lists them. It also trusts the checkout's `mise.toml` without asking, and installs the pre-commit hook that runs `cargo fmt --all --check` and `bin/check-fast` before every commit. If you only want to build, rustup alone is enough: `rust-toolchain.toml` selects 1.98.0.
+That installs every tool `mise.toml` pins, from Rust 1.99.1 with its components to lefthook, as README's [Development](README.md#development) section lists them. It also trusts the checkout's `mise.toml` without asking, and installs the pre-commit hook that runs `cargo fmt --all --check` and `bin/check-fast` before every commit. If you only want to build, rustup alone is enough: `rust-toolchain.toml` selects 1.99.1.
 
 Not on Arch? Replay the quality job of [`.github/workflows/ci.yml`](.github/workflows/ci.yml) in an `archlinux:base-devel` container: its environment, then its steps in order, from the pacman line that installs Qt and rustup to `bin/test`.
 
