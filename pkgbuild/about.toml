@@ -42,4 +42,7 @@ private = { ignore = true }
 # and ring's own files already name every licence its compiled code is under.
 # clarify entries are checksummed as well, so they break on the next bump, and
 # they are the one thing that would send cargo-about to the network. And
-# max-depth, which only drops the licence files that sit deeper in a crate.
+# max-depth, which bounds how deep in a crate cargo-about looks for every file
+# it keeps, licence files and the source files it gives whole alike, so all it
+# could do is drop those that sit deeper, such as ring's source files and
+# tracing-core's src/spin/LICENSE.
