@@ -100,6 +100,6 @@ An outside pull request's branch is untrusted code, and the maintainer's desktop
 CI is the safe first run: a pull request's workflows are the branch's own files, but they get a read-only token and no secrets. So:
 
 - Let CI run first, and approve a fork's workflow runs only after reading the diff.
-- Before checking the branch out, read its changes to the paths `.factory/protected` lists, `app/build.rs`, every `Cargo.toml` and `Cargo.lock` (new crates, git sources), `.cargo/config.toml`, `rust-toolchain.toml`, `pkgbuild/PKGBUILD`, `plugin/widget.sh`, `tests/widget/`'s runner and fakes, and every `.gitattributes`, which decides how git writes the rest when you check the branch out.
+- Before checking the branch out, read its changes to the paths `.factory/protected` lists, `app/build.rs`, every `Cargo.toml` and `Cargo.lock` (new crates, git sources), `.cargo/config.toml`, `rust-toolchain.toml`, `pkgbuild/PKGBUILD`, `plugin/widget.sh`, `tests/widget/`'s runner and fakes and its QML check with the fake modules beside it, and every `.gitattributes`, which decides how git writes the rest when you check the branch out.
 - Check it out in a throwaway worktree or a container.
 - Never run `mise install`, or commit with hooks, on a branch whose `mise.toml` and `lefthook.yml` you have not read.

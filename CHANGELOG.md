@@ -9,6 +9,13 @@ renames that section after itself and its date.
 
 ## [Unreleased]
 
+### Fixed
+
+- The bar icon no longer keeps the urgent colour after an update until the next click, as 0.2.0's
+  did. After a click that opens the floating terminal, the widget checks again every five
+  seconds, on every monitor, until the app is current or ten minutes have passed, so the icon
+  returns to its ordinary colour within about five seconds of the update finishing.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added
