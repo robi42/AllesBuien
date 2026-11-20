@@ -16,10 +16,11 @@
 //
 // Every wait is a condition with a budget: the widget's own `following` says
 // when a follow-up has ended, so no case infers it from a pause. A fixed wait
-// appears in two places only: quiet(), whose claim is that nothing happens,
-// and the case that lets half a window pass before a second click. A stall
-// can only make a measured window longer, so the bound cases cannot fail for
-// a slow machine.
+// appears in three places only: quiet(), whose claim is that nothing happens,
+// the case that lets half a window pass before a second click, and the case
+// that lets a window a 0 has ended run out, whose claim is again that nothing
+// happens. A stall can only make a measured window longer, so the bound cases
+// cannot fail for a slow machine.
 import QtQuick
 import QtTest
 import Script
@@ -175,6 +176,36 @@ TestCase {
     click(widget, 2)
     ranToTheBound(widget, since)
     quiet(widget)
+  }
+
+  // An update that lands after the follow-up's last tick, in the seconds
+  // before the window closes: the probe made as it closes still sees it. No
+  // tick fits in the window here, so the only probes are the load's, the
+  // click's, and that last one.
+  function test_the_window_closes_with_one_last_probe() {
+    var widget = make(12)
+    widget.pollInterval = suite.window * 100
+    click(widget, 1)
+    compare(widget.following, true)
+    Desktop.answer = 0
+    tryCompare(widget, "probeStatus", 0, suite.window * 6)
+    compare(probe(widget).starts, 3)
+    compare(button(widget).active, false)
+    compare(widget.following, false)
+  }
+
+  // A follow-up that a 0 has ended makes no last probe when its window runs
+  // out: the icon is already right.
+  function test_a_follow_up_a_0_has_ended_makes_no_last_probe() {
+    var widget = make(12)
+    click(widget, 1)
+    var since = Date.now()
+    Desktop.answer = 0
+    tryCompare(widget, "probeStatus", 0)
+    var before = probe(widget).starts
+    wait(Math.max(0, since + suite.window + suite.grain - Date.now()))
+    quiet(widget)
+    compare(probe(widget).starts, before)
   }
 
   function test_absent_polls_past_the_bound() {

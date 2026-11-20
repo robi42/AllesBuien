@@ -294,16 +294,16 @@ sed -i 's/sudo -v/echo dry-run sudo -v/; s/sudo pacman -U/echo dry-run pacman -U
 grep -c 'echo dry-run' "$widget"   # 3: the password prompt, the install, and the update
 ```
 
-Then make every probe write the time it ran to a log, and keep the log in view in a second terminal, so the click-through can see when the widget probes:
+Then make every probe write the time it ran to a log, and keep the log in view in a second terminal, so the click-through can see when the widget probes. The log goes in your private runtime directory, never under the plugin's own: the shell reloads a plugin whenever a file in its directory changes, so a log there would recreate the widget at every probe.
 
 ```bash
-sed -i '/^  probe)$/a\    date +%T >>/tmp/allesbuien-probes' "$widget"
-tail -F /tmp/allesbuien-probes
+sed -i '/^  probe)$/a\    date +%T >>"$XDG_RUNTIME_DIR/allesbuien-probes"' "$widget"
+tail -F "$XDG_RUNTIME_DIR/allesbuien-probes"
 ```
 
 The widget runs the script afresh on every probe and click, so the edits take effect at once. An edited installed copy also misleads `omarchy plugin update`. An update that changes a file edited there cannot fast-forward it. Any other, such as a pin commit while only `plugin/widget.sh` is edited, fast-forwards it and keeps the dry run, so its click would still never install, unless the update then fails Omarchy's validation: the `git reset --hard` that rolls it back takes the dry run with it. That is one more reason these checks end by removing the plugin.
 
-Now click the icon and watch the states: dimmed while the application is absent, with the install tooltip while a release is pinned and one pointing to *Install* while none is, and a click opening the floating terminal, which with a pin downloads, checks, and echoes the dry run instead of installing, and without one says nothing is pinned yet; while the repository is private the download fails, and the terminal says so and installs nothing. Then: lit within five seconds of an install finishing elsewhere (`cargo install --locked --root ~/.local --path app` is enough); launching the window when none is open; focusing the open window instead of opening a second one. None of these may need a shell restart or a plugin reload. The log shows when the widget probes. Each monitor's copy writes one line when the widget loads, and a click writes one, from the clicked copy. Each copy writes one every five seconds while the application is absent, and during the ten minutes that follow a click that opened the terminal, so does each copy whose last probe did not find the application ready to launch. While the application is installed and no click is being followed, no line appears. Check the last two with another window open whose title mentions AllesBuien — this repository's GitHub page, as the browser's active tab, will do, but not a window titled exactly AllesBuien, which is the application's own title: the click has to launch or focus the application itself, never that window.
+Now click the icon and watch the states: dimmed while the application is absent, with the install tooltip while a release is pinned and one pointing to *Install* while none is, and a click opening the floating terminal, which with a pin downloads, checks, and echoes the dry run instead of installing, and without one says nothing is pinned yet; while the repository is private the download fails, and the terminal says so and installs nothing. Then: lit within five seconds of an install finishing elsewhere (`cargo install --locked --root ~/.local --path app` is enough); launching the window when none is open; focusing the open window instead of opening a second one. None of these may need a shell restart or a plugin reload. Check the last two with another window open whose title mentions AllesBuien — this repository's GitHub page, as the browser's active tab, will do, but not a window titled exactly AllesBuien, which is the application's own title: the click has to launch or focus the application itself, never that window. The log shows when the widget probes. Each monitor's copy writes one line when the widget loads, and a click writes one, from the clicked copy. Each copy writes one every five seconds while the application is absent, and during the ten minutes that follow a click that opened the terminal, so does each copy whose last probe did not find the application ready to launch, with one more from each such copy as the ten minutes end. While the application is installed and no click is being followed, no line appears.
 
 Once the checked commit carries a pin, check update ready too. It needs an `allesbuien` package older than the pin to own the binary PATH finds, so in your own terminal install v0.1.0's package and move the Mode B binary aside, since `~/.local/bin` comes before `/usr/bin` on the login PATH and an unowned binary must keep launching rather than being updated:
 
@@ -317,13 +317,14 @@ omarchy-shell shell rescanPlugins
 
 The rescan recreates the widget, and its first probe turns the icon the bar's urgent colour with the update tooltip. A click shows `0.1.0-1` and the pinned version, downloads, checks, echoes the dry run instead of running pacman, and opens or focuses AllesBuien. While the repository is private that download fails: the terminal says so, installs nothing, and still opens the installed version. That is the failure check, and naming `9.9.9-1` in the installed copy's `release.sha256` reproduces it at any time; the successful half belongs to the dry run once the repository is public.
 
-After that click the package is still the old one, since the dry run installed nothing, so the icon stays urgent and the log grows every five seconds. Within ten minutes of the click, put the Mode B binary back with `mv ~/.local/bin/allesbuien.mode-b ~/.local/bin/allesbuien`, which the probe finds first and does not update, so it answers that the click would launch: the icon has to leave the urgent colour within about five seconds, with no click, and the log has to stop. With a second monitor connected, click the icon on one and watch both clear. Left alone instead, the log stops ten minutes after the click, and the icon stays urgent until the next click. A real update click shows the same without the `mv`, once the update finishes.
+After that click the package is still the old one, since the dry run installed nothing, so the icon stays urgent and the log grows every five seconds. Within ten minutes of the click, put the Mode B binary back with `mv ~/.local/bin/allesbuien.mode-b ~/.local/bin/allesbuien`, which the probe finds first and does not update, so it answers that the click would launch: the icon has to leave the urgent colour within about five seconds, with no click, and the log has to stop. With a second monitor connected, click the icon on one and watch both clear. Left alone instead, the log stops ten minutes after the click, with one last line from each copy, and the icon stays urgent until the next click. A real update click shows the same without the `mv`, once the update finishes.
 
 Finish by putting the desktop back as it was, the last two lines only if you ran the update-ready check, and its `mv` only if that check has not already put the binary back:
 
 ```bash
 omarchy plugin remove io.github.robi42.allesbuien
-rm -rf /tmp/allesbuien-candidate /tmp/allesbuien-probes
+rm -rf /tmp/allesbuien-candidate
+rm -f "$XDG_RUNTIME_DIR/allesbuien-probes"
 sudo pacman -Rns allesbuien
 mv ~/.local/bin/allesbuien.mode-b ~/.local/bin/allesbuien
 ```

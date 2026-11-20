@@ -98,9 +98,15 @@ BarWidget {
   // 10, 12, 0; both would leave the icon urgent after the update. The cost is
   // that an answer that changes to anything but 0 is probed until the window
   // closes.
+  //
+  // The five-second ticks need not meet the window's end, so the last one can
+  // fall up to five seconds before it. As the window closes, the widget probes
+  // once more unless the last answer was 0, so an update that lands after
+  // that tick still clears the icon.
   Timer {
     id: followUp
     interval: root.followUpWindow
+    onTriggered: if (root.probeStatus !== 0) probe.running = true
   }
 
   // bar.run is `bash -lc`, whose PATH carries ~/.local/bin. A probe run through
@@ -130,13 +136,14 @@ BarWidget {
   // it is for good: that is the price of the icon lighting within five seconds
   // of an install finishing elsewhere. And while a click that opened the
   // floating terminal is followed, until a probe answers 0 or ten minutes
-  // pass, so the icon leaves the urgent colour within five seconds of an
-  // update finishing, with no click. An installed app is otherwise never
-  // polled, and a failed probe alone starts no polling; the next click or load
-  // probes again. When the ten minutes run out before the terminal is done,
-  // the icon keeps its look until the next click, which probes and catches up.
-  // A newer pin arrives through `omarchy plugin update`, whose rescan recreates
-  // this widget, and the load-time probe is what turns the icon urgent.
+  // pass, with one last probe as they end, so the icon leaves the urgent
+  // colour within five seconds of an update finishing, with no click. An
+  // installed app is otherwise never polled, and a failed probe alone starts
+  // no polling; the next click or load probes again. When the terminal is
+  // done only after the ten minutes and that last probe, the icon keeps its
+  // look until the next click, which probes and catches up. A newer pin
+  // arrives through `omarchy plugin update`, whose rescan recreates this
+  // widget, and the load-time probe is what turns the icon urgent.
   Timer {
     interval: root.pollInterval
     repeat: true
