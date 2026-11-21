@@ -19,23 +19,18 @@ mod zoomed_window;
 
 use std::{
     fs,
-    path::Path,
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use allesbuien::{TimerIntervals, theme_controller::WINDOW};
-use allesbuien_core::window_fit::{Size, WindowFit, WindowFitter, ZOOM_UNIT};
-use allesbuien_harness::{Harness, HarnessBuilder};
+use allesbuien_core::window_fit::{Screen, Size, WindowFit, WindowFitter, ZOOM_UNIT};
+use allesbuien_harness::{
+    Harness, HarnessBuilder,
+    probe::{number_of, property},
+};
 use allesbuien_testkit::{SETTLE_BUDGET, StubFeedApi, pump_until};
-
-/// Omarchy's Nord, so the play button's fill stands out from its bar.
-const NORD: &str = "background = \"#2e3440\"\nforeground = \"#d8dee9\"\n\
-    accent = \"#81a1c1\"\nselection = \"#434c5e\"\nlighter_background = \"#3b4252\"\n\
-    muted = \"#4c566a\"\n";
-
-/// The play button's side, in layout units, from `RadarTransport.qml`.
-const BUTTON_SIDE: f64 = 36.0;
+use zoomed_window::{NORD, assert_zoomed, write_text_size};
 
 /// The play glyph's side, in layout units, from `RadarTransport.qml`.
 const GLYPH_SIDE: f64 = 12.0;
@@ -45,14 +40,6 @@ const LANDED: Size = Size {
     width: 1512,
     height: 1037,
 };
-
-/// Writes `size` as the text size, as `omarchy-display-text-size` does: into a
-/// new file that is renamed over the old one.
-fn write_text_size(shell_config: &Path, size: u32) {
-    let next = shell_config.with_extension("next");
-    fs::write(&next, format!("[font]\nbase-size = {size}\n")).expect("the setting is written");
-    fs::rename(next, shell_config).expect("the setting replaces the old one");
-}
 
 fn fit(zoom: u32, minimum: (u32, u32), opening: Size) -> WindowFit {
     let (width, height) = minimum;
@@ -112,23 +99,28 @@ fn settle(booted: &Harness) {
     });
 }
 
-/// Requires the content to be zoomed by `zoom`: the rendered button first, so
-/// a wrapper that does not scale is caught by its pixels, then the wrapper's
-/// corners, then its scale, which pins `Theme.qml`'s 12000 to core's unit.
-fn assert_zoomed(phase: &str, zoom: u32) {
-    let factor = f64::from(zoom) / f64::from(ZOOM_UNIT);
-    let (fill, pixel) = zoomed_window::fill_width();
-    assert!(
-        (fill - BUTTON_SIDE * factor).abs() <= pixel.max(1.0),
-        "{phase}: the play button is drawn {fill} wide, not {}",
-        BUTTON_SIDE * factor
-    );
-    zoomed_window::assert_content_fills(phase);
-    assert!(
-        (zoomed_window::scale() - factor).abs() < 1e-9,
-        "{phase}: the content is scaled by {}, not {factor}",
-        zoomed_window::scale()
-    );
+/// The screen `ScreenReport.qml` shows in its four mirrored properties.
+fn reported_screen() -> Option<Screen> {
+    let (_, report) = zoomed_window::item("screenReport")?;
+    // SAFETY: called only on the GUI thread while the booted app is alive.
+    let side = |name| {
+        unsafe { property(report, name) }
+            .value::<i32>()
+            .unwrap_or(0)
+    };
+    Screen::from_report(
+        side("screenWidth"),
+        side("screenHeight"),
+        side("workWidth"),
+        side("workHeight"),
+    )
+}
+
+/// The play glyph's `width` and `scale`.
+fn glyph() -> (f64, f64) {
+    let (_, glyph) = zoomed_window::item("transportGlyph").expect("the window has focus");
+    // SAFETY: called only on the GUI thread while the booted app is alive.
+    unsafe { (number_of(glyph, "width"), number_of(glyph, "scale")) }
 }
 
 /// Before any event has run, the window is launching, and a report of the
@@ -155,13 +147,13 @@ fn shows_the_zoom_where_it_landed(booted: &Harness, launched: WindowFit) {
             zoomed_window::has_size(LANDED)
         },
     );
-    let reported = zoomed_window::reported_screen().expect("QML shows a whole screen");
+    let reported = reported_screen().expect("QML shows a whole screen");
     let mut expected = WindowFitter::new(WINDOW, 20);
     expected.track_screen(reported);
     assert_eq!(launched, expected.fit(), "the launch fit for {reported:?}");
     assert_zoomed("at 20 px", 18_517);
     assert_holds_minimum(booted, "at 20 px");
-    let (width, scale) = zoomed_window::glyph();
+    let (width, scale) = glyph();
     let factor = 18_517.0 / f64::from(ZOOM_UNIT);
     assert!(
         (width - GLYPH_SIDE * factor).abs() <= 0.5,

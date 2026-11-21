@@ -1,6 +1,7 @@
-//! The zoomed window as `text_size_zoom` reads it: its size, the zoom wrapper's
-//! scale and corners, the screen QML reports, the play button's rendered fill,
-//! and the play glyph's raster.
+//! The zoomed window as the text-size harnesses read it: the theme and the
+//! text-size setting they boot over, the window's size, and whether its
+//! content is zoomed, by the wrapper's scale and corners and by the play
+//! button's rendered fill, since a zoom is only proven by what it draws.
 //!
 //! Every reading looks the window up again rather than holding a pointer, so
 //! none can outlive the application the harness booted, and each is in
@@ -11,24 +12,40 @@
 //! within one logical pixel: at `QT_SCALE_FACTOR=0.5` a 1037-high window is
 //! 518.5 device pixels, which Qt rounds, and it comes back 1038 high.
 
-use std::ptr::NonNull;
+use std::{fs, path::Path, ptr::NonNull};
 
-use allesbuien_core::window_fit::{Screen, Size};
+use allesbuien_core::window_fit::{Size, ZOOM_UNIT};
 use allesbuien_harness::probe::{
-    QObject, QQuickWindow, child, focused_window, grab_window, map_to_scene, number_of, property,
+    QObject, QQuickWindow, child, focused_window, grab_window, map_to_scene, number_of,
 };
 use allesbuien_testkit::{Rgb, VISIBLE_LEVELS, spread};
+
+/// Omarchy's Nord, so the play button's fill stands out from its bar.
+pub(crate) const NORD: &str = "background = \"#2e3440\"\nforeground = \"#d8dee9\"\n\
+    accent = \"#81a1c1\"\nselection = \"#434c5e\"\nlighter_background = \"#3b4252\"\n\
+    muted = \"#4c566a\"\n";
+
+/// The play button's side, in layout units, from `RadarTransport.qml`.
+const BUTTON_SIDE: f64 = 36.0;
 
 /// How far left of the play button its background is sampled, in layout units:
 /// inside the transport bar's own margin.
 const GROUND_OFFSET: f64 = 4.0;
+
+/// Writes `size` as the text size, as `omarchy-display-text-size` does: into a
+/// new file that is renamed over the old one.
+pub(crate) fn write_text_size(shell_config: &Path, size: u32) {
+    let next = shell_config.with_extension("next");
+    fs::write(&next, format!("[font]\nbase-size = {size}\n")).expect("the setting is written");
+    fs::rename(next, shell_config).expect("the setting replaces the old one");
+}
 
 /// The focused window and its item named `name`.
 ///
 /// # Panics
 ///
 /// When the window has focus but holds no such item.
-fn item(name: &str) -> Option<(NonNull<QQuickWindow>, NonNull<QObject>)> {
+pub(crate) fn item(name: &str) -> Option<(NonNull<QQuickWindow>, NonNull<QObject>)> {
     // SAFETY: called only on the GUI thread while the booted app is alive.
     unsafe {
         let window = focused_window()?;
@@ -65,25 +82,8 @@ pub(crate) fn holds(minimum: Size) -> bool {
     found.0 >= f64::from(minimum.width) - 1.0 && found.1 >= f64::from(minimum.height) - 1.0
 }
 
-/// The screen `ScreenReport.qml` shows in its four mirrored properties.
-pub(crate) fn reported_screen() -> Option<Screen> {
-    let (_, report) = item("screenReport")?;
-    // SAFETY: called only on the GUI thread while the booted app is alive.
-    let side = |name| {
-        unsafe { property(report, name) }
-            .value::<i32>()
-            .unwrap_or(0)
-    };
-    Screen::from_report(
-        side("screenWidth"),
-        side("screenHeight"),
-        side("workWidth"),
-        side("workHeight"),
-    )
-}
-
 /// The zoom wrapper's `scale`.
-pub(crate) fn scale() -> f64 {
+fn scale() -> f64 {
     let (_, zoom_root) = item("zoomRoot").expect("the window has focus");
     // SAFETY: called only on the GUI thread while the booted app is alive.
     unsafe { number_of(zoom_root, "scale") }
@@ -122,7 +122,7 @@ pub(crate) fn assert_content_fills(phase: &str) {
 /// The play button's rendered fill, measured along a row a quarter of the way
 /// down the button, clear of the glyph, and the size of the device pixel it was
 /// counted in, both in logical units.
-pub(crate) fn fill_width() -> (f64, f64) {
+fn fill_width() -> (f64, f64) {
     let (window, button) = item("playButton").expect("the window has focus");
     // SAFETY: called only on the GUI thread while the booted app is alive, and
     // the play button is a `QQuickItem`.
@@ -161,9 +161,21 @@ pub(crate) fn fill_width() -> (f64, f64) {
     (f64::from(right - left + 1) / ratio, 1.0 / ratio)
 }
 
-/// The play glyph's `width` and `scale`.
-pub(crate) fn glyph() -> (f64, f64) {
-    let (_, glyph) = item("transportGlyph").expect("the window has focus");
-    // SAFETY: called only on the GUI thread while the booted app is alive.
-    unsafe { (number_of(glyph, "width"), number_of(glyph, "scale")) }
+/// Requires the content to be zoomed by `zoom`: the rendered button first, so
+/// a wrapper that does not scale is caught by its pixels, then the wrapper's
+/// corners, then its scale, which pins `Theme.qml`'s 12000 to core's unit.
+pub(crate) fn assert_zoomed(phase: &str, zoom: u32) {
+    let factor = f64::from(zoom) / f64::from(ZOOM_UNIT);
+    let (fill, pixel) = fill_width();
+    assert!(
+        (fill - BUTTON_SIDE * factor).abs() <= pixel.max(1.0),
+        "{phase}: the play button is drawn {fill} wide, not {}",
+        BUTTON_SIDE * factor
+    );
+    assert_content_fills(phase);
+    assert!(
+        (scale() - factor).abs() < 1e-9,
+        "{phase}: the content is scaled by {}, not {factor}",
+        scale()
+    );
 }
