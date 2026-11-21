@@ -29,9 +29,13 @@
 //!   primary screen until the window is mapped and the real monitor only after,
 //!   and is fixed for good when the launch ends: at the second poll after the
 //!   window's first frame, at least one full poll interval after the
-//!   compositor had that frame. A later text size or monitor moves only the
-//!   zoom and the minimum, so an open window grows when it must and is
-//!   otherwise left alone.
+//!   compositor had that frame. While the launch lasts it is never smaller
+//!   than the minimum on either axis: a larger text size read during the
+//!   launch raises the minimum past an opening size fitted at the smaller one,
+//!   and Qt resizes a window to the size it is asked for, minimum or not. A
+//!   text size or monitor after the launch moves only the zoom and the
+//!   minimum, so an open window grows when it must and is otherwise left
+//!   alone.
 
 use crate::text_size::DEFAULT_BASE_SIZE;
 
@@ -137,15 +141,17 @@ impl WindowFitter {
     #[must_use]
     pub fn fit(&self) -> WindowFit {
         let zoom = zoom(self.design, self.base_size, self.screen);
+        let minimum = scaled_up(self.design.minimum, zoom);
         let opening = match self.launch {
             Launch::Ended(opening) => opening,
-            Launch::Starting | Launch::Shown(_) => {
-                opening(self.design, self.launch_base_size, self.screen)
-            }
+            Launch::Starting | Launch::Shown(_) => at_least(
+                opening(self.design, self.launch_base_size, self.screen),
+                minimum,
+            ),
         };
         WindowFit {
             zoom,
-            minimum: scaled_up(self.design.minimum, zoom),
+            minimum,
             opening,
         }
     }
@@ -213,6 +219,14 @@ fn opening(design: WindowDesign, base_size: u32, screen: Option<Screen>) -> Size
             }
         }
         _ => opening,
+    }
+}
+
+/// `size`, raised to `floor` on each axis where it falls short of it.
+fn at_least(size: Size, floor: Size) -> Size {
+    Size {
+        width: size.width.max(floor.width),
+        height: size.height.max(floor.height),
     }
 }
 

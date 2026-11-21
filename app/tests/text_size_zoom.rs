@@ -94,6 +94,15 @@ fn waits_for_zoom(booted: &Harness, zoom: u32) {
     });
 }
 
+/// Requires the window to be no smaller than the minimum the bridge publishes.
+fn assert_holds_minimum(booted: &Harness, phase: &str) {
+    let minimum = bridge_fit(booted).minimum;
+    assert!(
+        zoomed_window::holds(minimum),
+        "{phase}: the window is smaller than its minimum {minimum:?}"
+    );
+}
+
 /// Runs the event loop for a while, long enough for several theme polls.
 fn settle(booted: &Harness) {
     let until = Instant::now() + Duration::from_millis(200);
@@ -151,6 +160,7 @@ fn shows_the_zoom_where_it_landed(booted: &Harness, launched: WindowFit) {
     expected.track_screen(reported);
     assert_eq!(launched, expected.fit(), "the launch fit for {reported:?}");
     assert_zoomed("at 20 px", 18_517);
+    assert_holds_minimum(booted, "at 20 px");
     let (width, scale) = zoomed_window::glyph();
     let factor = 18_517.0 / f64::from(ZOOM_UNIT);
     assert!(
@@ -177,6 +187,7 @@ fn keeps_its_size_after_the_launch(booted: &mut Harness) {
         zoomed_window::has_size(LANDED),
         "a monitor resized the window"
     );
+    assert_holds_minimum(booted, "on a smaller monitor");
 }
 
 #[test]
@@ -211,10 +222,12 @@ fn the_window_zooms_its_content_with_omarchys_text_size() {
         zoomed_window::has_size(LANDED),
         "a smaller text size resized the window"
     );
+    assert_holds_minimum(&booted, "at 9 px");
 
     // When / Then: `reset` removes the line, here the whole file.
     fs::remove_file(&shell_config).expect("the setting is removed");
     waits_for_zoom(&booted, ZOOM_UNIT);
     assert_eq!(bridge_fit(&booted), fit(ZOOM_UNIT, (852, 672), LANDED));
     zoomed_window::assert_content_fills("at 12 px");
+    assert_holds_minimum(&booted, "at 12 px");
 }

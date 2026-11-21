@@ -12,7 +12,11 @@
 //! text size over a line about colours. So the walk below follows `parseShell`
 //! instead:
 //!
-//! - lines are trimmed, and blank lines and `#` comments are skipped;
+//! - the file is decoded as Qt decodes it, a byte that is not UTF-8 becoming
+//!   a replacement character rather than costing the whole file;
+//! - lines are trimmed of whitespace as JavaScript's `\s` counts it, which
+//!   takes in the byte-order mark Rust's own whitespace leaves out, and blank
+//!   lines and `#` comments are skipped;
 //! - `[name]` opens a section, optionally followed by a `#` comment;
 //! - `key = value` counts when the value is quoted, a number, two to four
 //!   numbers, or a bare word, each optionally followed by a `#` comment; any
@@ -37,14 +41,16 @@ const BASE_SIZE_KEY: &str = "base-size";
 /// Never fails: an unreadable file is the same as one that sets nothing.
 #[must_use]
 pub fn read_base_size(shell_config: &Path) -> u32 {
-    fs::read_to_string(shell_config).map_or(DEFAULT_BASE_SIZE, |contents| base_size(&contents))
+    fs::read(shell_config).map_or(DEFAULT_BASE_SIZE, |bytes| {
+        base_size(&String::from_utf8_lossy(&bytes))
+    })
 }
 
 /// The base size a shell configuration's text sets, or the default.
 fn base_size(contents: &str) -> u32 {
     let mut section = None;
     let mut value = None;
-    for line in contents.lines().map(str::trim) {
+    for line in contents.lines().map(|line| line.trim_matches(is_blank)) {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
@@ -70,11 +76,11 @@ fn section_header(line: &str) -> Option<&str> {
 /// The key and raw value of a `key = value` line, if the shell would read it.
 fn key_value(line: &str) -> Option<(&str, &str)> {
     let (key, value) = line.split_once('=')?;
-    let key = key.trim_end();
+    let key = key.trim_end_matches(is_blank);
     if !is_name(key) {
         return None;
     }
-    let value = value.trim_start();
+    let value = value.trim_start_matches(is_blank);
     match value.chars().next()? {
         '"' | '\'' => quoted(value),
         _ => unquoted(value),
@@ -93,7 +99,7 @@ fn unquoted(value: &str) -> Option<&str> {
     let body = value
         .split_once('#')
         .map_or(value, |(body, _)| body)
-        .trim_end();
+        .trim_end_matches(is_blank);
     let numbers = body.split_whitespace().count();
     let shaped = if numbers == 1 {
         is_number(body) || is_bare_word(body)
@@ -108,7 +114,7 @@ fn unquoted(value: &str) -> Option<&str> {
 /// A negative number is reported as 0, since every caller floors it to 1
 /// anyway, and one too large for `u32` saturates rather than wrapping.
 fn leading_integer(value: &str) -> Option<u32> {
-    let value = value.trim_start();
+    let value = value.trim_start_matches(is_blank);
     let (negative, unsigned) = match value.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, value.strip_prefix('+').unwrap_or(value)),
@@ -147,9 +153,15 @@ fn is_bare_word(text: &str) -> bool {
     text.starts_with(|character: char| character.is_ascii_alphabetic()) && is_name(text)
 }
 
+/// Whitespace as JavaScript's `\s` matches it: Unicode's, and the byte-order
+/// mark, which a file saved with one carries before its first line.
+fn is_blank(character: char) -> bool {
+    character.is_whitespace() || character == '\u{feff}'
+}
+
 /// What may follow a section header or a value: nothing, or a comment.
 fn is_comment_or_nothing(rest: &str) -> bool {
-    let rest = rest.trim_start();
+    let rest = rest.trim_start_matches(is_blank);
     rest.is_empty() || rest.starts_with('#')
 }
 
@@ -262,6 +274,27 @@ mod tests {
             base_size(&contents.replace("[font.x]\nbase-size = 9\n", "")),
             16
         );
+    }
+
+    #[test]
+    fn a_byte_order_mark_before_the_first_section_is_whitespace() {
+        // Given: a file an editor saved with a byte-order mark.
+        let contents = "\u{feff}[font]\nbase-size = 16\n";
+
+        // When / Then: the shell reads 16, and so does this.
+        assert_eq!(base_size(contents), 16);
+    }
+
+    #[test]
+    fn a_byte_that_is_not_utf8_costs_only_its_own_character() {
+        // Given: a Latin-1 é in a comment, which is no UTF-8.
+        let directory = tempdir().expect("a temporary directory");
+        let path = directory.path().join("shell.toml");
+        fs::write(&path, b"# caf\xe9\n[font]\nbase-size = 16\n")
+            .expect("the setting should be written");
+
+        // When / Then: the shell decodes it leniently and reads 16, and so does this.
+        assert_eq!(read_base_size(&path), 16);
     }
 
     #[test]

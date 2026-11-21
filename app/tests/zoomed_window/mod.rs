@@ -51,6 +51,20 @@ pub(crate) fn has_size(size: Size) -> bool {
         && (found.1 - f64::from(size.height)).abs() <= 1.0
 }
 
+/// Whether the window has focus and is no smaller than `minimum`, within one
+/// logical pixel.
+pub(crate) fn holds(minimum: Size) -> bool {
+    // SAFETY: called only on the GUI thread while the booted app is alive.
+    let found = unsafe {
+        let Some(window) = focused_window() else {
+            return false;
+        };
+        let window = window.cast::<QObject>();
+        (number_of(window, "width"), number_of(window, "height"))
+    };
+    found.0 >= f64::from(minimum.width) - 1.0 && found.1 >= f64::from(minimum.height) - 1.0
+}
+
 /// The screen `ScreenReport.qml` shows in its four mirrored properties.
 pub(crate) fn reported_screen() -> Option<Screen> {
     let (_, report) = item("screenReport")?;
