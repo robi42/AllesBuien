@@ -9,5 +9,6 @@ publish = false
 [lints]
 workspace = true
 
-# Deliberately dependency-free: the proof it runs is shell, and the two tests
-# only start bash and shellcheck and report what they say.
+# Deliberately dependency-free: the proofs it runs are shell and QML, and the
+# three tests only start bash, shellcheck and qmltestrunner and report what
+# they say.

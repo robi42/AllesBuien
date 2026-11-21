@@ -33,6 +33,18 @@ BarWidget {
   property int probeStatus: 0
   property bool pendingClick: false
 
+  // The two intervals the schedule below runs on, five seconds between probes
+  // and the ten minutes a click is followed for. Nothing in the shell sets
+  // them; they are properties so that tests/widget/qml/tst_schedule.qml can
+  // shorten them, and so the timers name no number of their own.
+  property int pollInterval: 5000
+  property int followUpWindow: 600000
+
+  // Whether a click that opened the floating terminal is still being followed:
+  // its window is open and the last probe did not answer 0. A 0 says the
+  // terminal has nothing left to do, so it ends the follow-up at once.
+  readonly property bool following: followUp.running && root.probeStatus !== 0
+
   readonly property bool installed: root.probeStatus === 0 || root.probeStatus === 12
   readonly property bool absent: root.probeStatus === 10 || root.probeStatus === 11
   readonly property bool updateReady: root.probeStatus === 12
@@ -57,7 +69,44 @@ BarWidget {
   function dispatch(): void {
     if (!root.bar) return
 
-    root.bar.run(root.probeStatus === 0 ? root.launchCommand : root.installCommand)
+    const launching = root.probeStatus === 0
+    root.bar.run(launching ? root.launchCommand : root.installCommand)
+    if (!launching) root.broadcast("follow")
+  }
+
+  // Opens, or reopens, the follow-up window on this copy of the widget. A click
+  // that opened the terminal reaches it through `broadcast`, which Omarchy's
+  // bar answers by calling it on every monitor's copy, the clicked one
+  // included, so the icon clears on each of them and not only where it was
+  // clicked.
+  function follow(): void {
+    followUp.restart()
+  }
+
+  // The follow-up window: ten minutes from the last click that opened the
+  // floating terminal. bar.run starts that terminal detached and hands nothing
+  // back, and its password and pacman prompts wait as long as the person does,
+  // so the widget cannot know when it ends and bounds its interest instead.
+  //
+  // A probe that answers 0 ends the follow-up, as `following` says; one that
+  // answers anything else, a changed answer included, does not, because the
+  // answer can change twice before the terminal is done. A probe that fails
+  // while an update is under way goes 12, a failure, 0, and would leave the
+  // icon dimmed with the failed-check tooltip. A click on a failed probe opens
+  // a terminal that decides again and updates, the failure, 12, 0, and an
+  // install click whose terminal finds an older package and updates it goes
+  // 10, 12, 0; both would leave the icon urgent after the update. The cost is
+  // that an answer that changes to anything but 0 is probed until the window
+  // closes.
+  //
+  // The five-second ticks need not meet the window's end, so the last one can
+  // fall up to five seconds before it. As the window closes, the widget probes
+  // once more unless the last answer was 0, so an update that lands after
+  // that tick still clears the icon.
+  Timer {
+    id: followUp
+    interval: root.followUpWindow
+    onTriggered: if (root.probeStatus !== 0) probe.running = true
   }
 
   // bar.run is `bash -lc`, whose PATH carries ~/.local/bin. A probe run through
@@ -82,18 +131,23 @@ BarWidget {
     }
   }
 
-  // Only while the app is known to be missing, so the icon lights within five
-  // seconds of an install finishing elsewhere and nothing polls forever on a
-  // machine that never installs it. A failed probe is not known absence, so it
-  // starts no polling either; the next click or load probes again. The other
-  // direction is not polled; the next click catches it. A newer pin arrives
-  // through `omarchy plugin update`, whose rescan recreates this widget, and the
-  // load-time probe is what turns the icon urgent; after an update it stays so
-  // until the next click, which probes, finds the app current, and launches it.
+  // Probes every five seconds on two occasions. While the app is known to be
+  // absent, for as long as that lasts, which on a machine that never installs
+  // it is for good: that is the price of the icon lighting within five seconds
+  // of an install finishing elsewhere. And while a click that opened the
+  // floating terminal is followed, until a probe answers 0 or ten minutes
+  // pass, with one last probe as they end, so the icon leaves the urgent
+  // colour within five seconds of an update finishing, with no click. An
+  // installed app is otherwise never polled, and a failed probe alone starts
+  // no polling; the next click or load probes again. When the terminal is
+  // done only after the ten minutes and that last probe, the icon keeps its
+  // look until the next click, which probes and catches up. A newer pin
+  // arrives through `omarchy plugin update`, whose rescan recreates this
+  // widget, and the load-time probe is what turns the icon urgent.
   Timer {
-    interval: 5000
+    interval: root.pollInterval
     repeat: true
-    running: root.known && root.absent
+    running: root.known && (root.absent || root.following)
     onTriggered: probe.running = true
   }
 

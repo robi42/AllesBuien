@@ -20,7 +20,9 @@ set -euo pipefail
 #                       Any other code is this script failing: the widget
 #                       dims the icon and a click opens the floating terminal,
 #                       as for 11, where the failure can be read, but the
-#                       tooltip says the check failed and no polling starts.
+#                       tooltip says the check failed. The failure alone
+#                       starts no polling; a click on it is followed like
+#                       any other click that opens the terminal.
 #   widget.sh launch    focus the open window, or start the app
 #   widget.sh install   what Omarchy's floating terminal runs for 10, 11, 12
 #                       and a failed probe: decide again, then download,

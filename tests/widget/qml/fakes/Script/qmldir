@@ -1,0 +1,2 @@
+module Script
+singleton Desktop 1.0 Desktop.qml
