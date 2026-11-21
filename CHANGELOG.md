@@ -9,6 +9,14 @@ renames that section after itself and its date.
 
 ## [Unreleased]
 
+### Added
+
+- Text size following. The window zooms its whole content with `omarchy-display-text-size`
+  within about two seconds, by the size over Omarchy's default of 12 px, with its minimum size
+  growing to match and the zoom capped where that minimum would no longer fit the screen above
+  the bar. The window opens at the zoomed size, fitted to the monitor it opens on, and at 12 px
+  is exactly as before.
+
 ### Fixed
 
 - The bar icon no longer keeps the urgent colour after an update until the next click, as 0.2.0's

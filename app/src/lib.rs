@@ -24,6 +24,7 @@ use allesbuien_core::{
 };
 mod app_style;
 mod bootstrap;
+mod bootstrap_error;
 pub mod condition_icon;
 pub mod conditions_view;
 pub mod forecast_model;
@@ -61,7 +62,8 @@ pub mod weather_controller;
 mod weather_state;
 
 pub const BASEMAP_PNG: &[u8] = include_bytes!("../assets/basemap-nl.png");
-pub use bootstrap::{AppBuilder, BootedApp, BootstrapError};
+pub use bootstrap::{AppBuilder, BootedApp};
+pub use bootstrap_error::BootstrapError;
 pub use services::{CoreServiceConfig, CoreServices, NotifierService, TimerIntervals};
 
 #[derive(Debug)]
@@ -123,6 +125,7 @@ pub fn run() -> Result<(), RunError> {
         home.join(".local/state/omarchy/current/theme"),
         TimerIntervals::default(),
     )
+    .with_shell_config(home.join(".config/omarchy/shell.toml"))
     .with_icons(icons)
     .boot()
     .map_err(RunError::Bootstrap)?

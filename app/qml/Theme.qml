@@ -83,6 +83,13 @@ QtObject {
     // Scrims that sit over the radar raster and have to stay readable on it.
     readonly property real scrimOpacity: 0.92
 
+    // Omarchy's text size, as the factor the window zooms its whole content
+    // by: 1 at the default 12 px. The bridge counts it in twelve-thousandths,
+    // so that base-size / 12 is a whole number for every whole base size and
+    // no float crosses into Rust; 12000 is `ZOOM_UNIT` in
+    // core/src/window_fit.rs, and the text-size GUI test pins the two together.
+    readonly property real zoom: theme.themeController.zoomParts / 12000
+
     // Sizes two files have to agree on.
     readonly property int iconHero: 56
     readonly property int iconRow: 34

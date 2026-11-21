@@ -23,6 +23,10 @@ pub(crate) mod station;
 pub mod status;
 #[cfg(test)]
 mod test_support;
+pub mod text_size;
 pub mod theme;
 pub mod weather;
 pub mod weather_feed;
+pub mod window_fit;
+#[cfg(test)]
+mod window_fit_tests;

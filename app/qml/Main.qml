@@ -29,21 +29,15 @@ ApplicationWindow {
     onRainEndLabelChanged: root.radarSource.trackRainEnd(root.rainEndLabel)
 
     objectName: "rootWindow"
-    width: 980
-    height: 760
-    // The radar's own floor plus the column beside it, the outer margins and
-    // the gap between them: 400 + 380 + 24 * 2 + 24. Below that the two panels
-    // start taking width from each other, and the first thing to go is the map,
-    // which is the one element here that gets worse the smaller it is.
-    //
-    // The height is measured, not derived: the forecast list clips rather than
-    // squashing its rows, so the floor is whatever makes all five of them fit.
-    // 640 renders four and slices the fifth, 660 still slices it, 664 lands the
-    // last row's icon on the clip edge, 668 is clean. 672 adds one 4 px step as
-    // the margin for a themed font with taller metrics, since the window
-    // follows whichever theme Omarchy has on.
-    minimumWidth: 852
-    minimumHeight: 672
+    // The window's sizes follow Omarchy's text size, so they come from the
+    // theme bridge, which zooms the design sizes and caps the zoom by the
+    // screen. The design sizes themselves, 852×672 at the least and 980×760 to
+    // open at, and the reasoning behind each, are `WINDOW` in
+    // app/src/theme_controller.rs.
+    width: root.themeSource.openingWidth
+    height: root.themeSource.openingHeight
+    minimumWidth: root.themeSource.minimumWidth
+    minimumHeight: root.themeSource.minimumHeight
     visible: true
     title: "AllesBuien"
     color: appTheme.background
@@ -63,114 +57,145 @@ ApplicationWindow {
         onActivated: Qt.quit()
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: appTheme.spaceXl
-        spacing: appTheme.spaceLg
+    // The window's two hand-offs to the theme bridge, which only the window
+    // can make. The screen it is on caps the zoom and fits the opening size;
+    // the first frame starts the end of the launch, after which the opening
+    // size stays put, and once the launch is over the window stops listening.
+    ScreenReport {
+        objectName: "screenReport"
+        onReported: (screenWidth, screenHeight, workWidth, workHeight) => root.themeSource.trackScreen(screenWidth, screenHeight, workWidth, workHeight)
+    }
 
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: appTheme.spaceXl
+    Connections {
+        target: root
+        enabled: root.themeSource.launching
 
-            RadarPanel {
-                objectName: "radarView"
-                radarController: root.radarSource
-                theme: appTheme
+        function onFrameSwapped() {
+            root.themeSource.trackFrame();
+        }
+    }
+
+    // Omarchy's text size zooms the whole content, so the layout stays the one
+    // that was tested at 12 px. The wrapper is laid out at the window's size
+    // divided by the zoom and scaled back up from its top-left corner, so it
+    // always fills the window exactly.
+    Item {
+        id: zoomRoot
+        objectName: "zoomRoot"
+        width: parent.width / appTheme.zoom
+        height: parent.height / appTheme.zoom
+        scale: appTheme.zoom
+        transformOrigin: Item.TopLeft
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: appTheme.spaceXl
+            spacing: appTheme.spaceLg
+
+            RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.minimumWidth: 400
-            }
+                spacing: appTheme.spaceXl
 
-            // 380, down from 420. The forecast row carries three short columns
-            // and nothing else; at 420 they could not be spread without leaving
-            // a hole, and the 40 px goes to the radar, which is the one thing
-            // here that gets better the larger it is.
-            Rectangle {
-                Layout.preferredWidth: 380
-                Layout.fillHeight: true
-                color: appTheme.surface
-                radius: appTheme.radiusXl
+                RadarPanel {
+                    objectName: "radarView"
+                    radarController: root.radarSource
+                    theme: appTheme
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumWidth: 400
+                }
 
-                // No standalone rule between the conditions block and the list:
-                // the metrics panel already ends the block with a filled edge,
-                // and the list draws its own row rules. The rule that used to
-                // sit here cost 33 px of column and separated nothing.
-                ColumnLayout {
-                    id: rightCol
-                    anchors.fill: parent
-                    anchors.margins: appTheme.spaceLg
-                    spacing: appTheme.spaceMd
+                // 380, down from 420. The forecast row carries three short columns
+                // and nothing else; at 420 they could not be spread without leaving
+                // a hole, and the 40 px goes to the radar, which is the one thing
+                // here that gets better the larger it is.
+                Rectangle {
+                    Layout.preferredWidth: 380
+                    Layout.fillHeight: true
+                    color: appTheme.surface
+                    radius: appTheme.radiusXl
 
-                    ConditionsView {
-                        objectName: "conditionsView"
-                        weatherController: root.weatherSource
-                        theme: appTheme
-                        Layout.fillWidth: true
-                    }
+                    // No standalone rule between the conditions block and the list:
+                    // the metrics panel already ends the block with a filled edge,
+                    // and the list draws its own row rules. The rule that used to
+                    // sit here cost 33 px of column and separated nothing.
+                    ColumnLayout {
+                        id: rightCol
+                        anchors.fill: parent
+                        anchors.margins: appTheme.spaceLg
+                        spacing: appTheme.spaceMd
 
-                    // fillHeight without a preferred height: the list takes the
-                    // column's whole remainder and divides it across its rows,
-                    // so slack becomes row rhythm instead of a void above the
-                    // attribution. Binding preferredHeight to contentHeight
-                    // while the rows size themselves from the view would be a
-                    // loop, which is why that binding is gone.
-                    ForecastView {
-                        objectName: "forecastView"
-                        weatherController: root.weatherSource
-                        theme: appTheme
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                    }
-
-                    // Buienradar's free-data terms ask for three things: the use
-                    // stays non-commercial, the words `Buienradar.nl` are
-                    // visible, and they link to the root domain. `Bron:` was
-                    // ours, not theirs — a Dutch source label on an otherwise
-                    // English surface, naming what the domain already names.
-                    //
-                    // The URL is a property rather than a literal inside the
-                    // handler so the GUI test can read the licence's actual
-                    // invariant off the rendered object — visible domain text
-                    // plus a root-domain link — instead of pinning a sentence.
-                    Label {
-                        id: attribution
-                        objectName: "attribution"
-
-                        readonly property string link: "https://www.buienradar.nl"
-
-                        text: "Buienradar.nl"
-                        font.pointSize: appTheme.fontCaption
-                        font.bold: true
-                        font.underline: attributionHover.hovered
-                        color: appTheme.text
-                        opacity: attributionHover.hovered ? appTheme.emphasisFull : appTheme.emphasisLow
-                        Layout.alignment: Qt.AlignRight
-
-                        HoverHandler {
-                            id: attributionHover
-                            cursorShape: Qt.PointingHandCursor
+                        ConditionsView {
+                            objectName: "conditionsView"
+                            weatherController: root.weatherSource
+                            theme: appTheme
+                            Layout.fillWidth: true
                         }
 
-                        TapHandler {
-                            onTapped: Qt.openUrlExternally(attribution.link)
+                        // fillHeight without a preferred height: the list takes the
+                        // column's whole remainder and divides it across its rows,
+                        // so slack becomes row rhythm instead of a void above the
+                        // attribution. Binding preferredHeight to contentHeight
+                        // while the rows size themselves from the view would be a
+                        // loop, which is why that binding is gone.
+                        ForecastView {
+                            objectName: "forecastView"
+                            weatherController: root.weatherSource
+                            theme: appTheme
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                        }
+
+                        // Buienradar's free-data terms ask for three things: the use
+                        // stays non-commercial, the words `Buienradar.nl` are
+                        // visible, and they link to the root domain. `Bron:` was
+                        // ours, not theirs — a Dutch source label on an otherwise
+                        // English surface, naming what the domain already names.
+                        //
+                        // The URL is a property rather than a literal inside the
+                        // handler so the GUI test can read the licence's actual
+                        // invariant off the rendered object — visible domain text
+                        // plus a root-domain link — instead of pinning a sentence.
+                        Label {
+                            id: attribution
+                            objectName: "attribution"
+
+                            readonly property string link: "https://www.buienradar.nl"
+
+                            text: "Buienradar.nl"
+                            font.pointSize: appTheme.fontCaption
+                            font.bold: true
+                            font.underline: attributionHover.hovered
+                            color: appTheme.text
+                            opacity: attributionHover.hovered ? appTheme.emphasisFull : appTheme.emphasisLow
+                            Layout.alignment: Qt.AlignRight
+
+                            HoverHandler {
+                                id: attributionHover
+                                cursorShape: Qt.PointingHandCursor
+                            }
+
+                            TapHandler {
+                                onTapped: Qt.openUrlExternally(attribution.link)
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 132
-            color: appTheme.surface
-            radius: appTheme.radiusXl
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 132
+                color: appTheme.surface
+                radius: appTheme.radiusXl
 
-            RainView {
-                weatherController: root.weatherSource
-                theme: appTheme
-                anchors.fill: parent
-                anchors.margins: appTheme.spaceLg
+                RainView {
+                    weatherController: root.weatherSource
+                    theme: appTheme
+                    anchors.fill: parent
+                    anchors.margins: appTheme.spaceLg
+                }
             }
         }
     }

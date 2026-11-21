@@ -10,5 +10,5 @@ publish = false
 workspace = true
 
 # Deliberately dependency-free: the proofs it runs are shell and QML, and the
-# three tests only start bash, shellcheck and qmltestrunner and report what
+# four tests only start bash, shellcheck and qmltestrunner and report what
 # they say.
