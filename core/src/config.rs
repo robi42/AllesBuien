@@ -32,8 +32,12 @@ use crate::notify::NotifyConfig;
 
 /// Buienradar's published feed endpoint, and the fallback its override returns to.
 pub const DEFAULT_FEED_URL: &str = "https://data.buienradar.nl/2.0/feed/json";
-/// The raintext endpoint; [`crate::weather`] appends the viewer's coordinates.
-pub const DEFAULT_RAINTEXT_URL: &str = "https://gpsgadget.buienradar.nl/data/raintext";
+/// The rain expectation's address; [`crate::weather`] appends the viewer's
+/// coordinates. Buienradar's free-data terms give this address and ask that it
+/// be used rather than the address behind it. It answers with a redirect, which
+/// the weather transport follows over HTTPS only, and where it forwards to is
+/// deliberately named nowhere in the code: that is Buienradar's to move.
+pub const DEFAULT_RAINTEXT_URL: &str = "https://gps.buienradar.nl/getrr.php";
 /// The radar host alone; [`crate::radar_transport`] appends the metadata path.
 pub const DEFAULT_RADAR_URL: &str = "https://image.buienradar.nl";
 /// How every request to Buienradar names its client: the app and its version,

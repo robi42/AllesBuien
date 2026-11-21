@@ -17,6 +17,13 @@ renames that section after itself and its date.
   the bar. The window opens at the zoomed size, fitted to the monitor it opens on, and at 12 px
   is exactly as before.
 
+### Changed
+
+- The rain expectation is read from `gps.buienradar.nl/getrr.php`, the address Buienradar's
+  free-data terms give for it, where 0.2.0 read the address behind it. Buienradar forwards the
+  request, which carries the location, to `gadgets.buienradar.nl`, and the app follows that
+  forward over HTTPS only.
+
 ### Fixed
 
 - The bar icon no longer keeps the urgent colour after an update until the next click, as 0.2.0's

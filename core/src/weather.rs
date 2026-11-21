@@ -32,9 +32,24 @@ pub trait FeedApi: Send + Sync {
     fn fetch(&self, latitude: f64, longitude: f64) -> FeedFuture<'_>;
 }
 
+/// The Buienradar transport behind [`FeedApi`], with a client for each request.
+///
+/// The rain request is the one that carries the viewer's coordinates, so it is
+/// sent on a client of its own, held to HTTPS whenever the rain address is
+/// HTTPS. reqwest checks that switch on the first request and on every redirect
+/// target, and the shipped address answers with a redirect, so the forward can
+/// never take the coordinates below HTTPS: a forward to plain HTTP fails the
+/// request instead. reqwest's default redirect policy, ten hops at most, is kept
+/// on both clients, and it is what follows that forward.
+///
+/// The floor follows the rain address alone. Only a plain-HTTP override of that
+/// address, which is how a local stub is reached, lifts it; the feed's address
+/// has no say, because the feed, like the radar and the icons, sends no location
+/// and keeps the client it always had.
 #[derive(Debug, Clone)]
 pub struct ReqwestFeedApi {
-    client: reqwest::Client,
+    feed_client: reqwest::Client,
+    rain_client: reqwest::Client,
     feed_url: String,
     raintext_url: String,
 }
@@ -43,29 +58,55 @@ impl ReqwestFeedApi {
     /// Builds a transport for the supplied feed and raintext endpoints.
     ///
     /// # Errors
-    /// Returns [`WeatherError::ClientBuild`] if the HTTP client cannot be built.
+    /// Returns [`WeatherError::ClientBuild`] if either HTTP client cannot be built.
     pub fn new(
         feed_url: impl Into<String>,
         raintext_url: impl Into<String>,
     ) -> Result<Self, WeatherError> {
-        let client = reqwest::Client::builder()
-            .timeout(REQUEST_TIMEOUT)
-            .user_agent(crate::config::USER_AGENT)
-            .build()
-            .map_err(WeatherError::ClientBuild)?;
+        let raintext_url = raintext_url.into();
         Ok(Self {
-            client,
+            feed_client: client(false)?,
+            rain_client: client(is_https(&raintext_url))?,
             feed_url: feed_url.into(),
-            raintext_url: raintext_url.into(),
+            raintext_url,
         })
     }
+
+    /// The rain request for a location, on the rain client and not yet sent:
+    /// the coordinates go in the query at four decimal places, about 11 metres.
+    fn raintext_request(&self, latitude: f64, longitude: f64) -> reqwest::RequestBuilder {
+        self.rain_client
+            .get(&self.raintext_url)
+            .query(&[
+                ("lat", format!("{latitude:.4}")),
+                ("lon", format!("{longitude:.4}")),
+            ])
+            .timeout(REQUEST_TIMEOUT)
+    }
+}
+
+/// One HTTP client as both requests want it, refusing every plain-HTTP address,
+/// redirect targets included, when `https_only` is set.
+fn client(https_only: bool) -> Result<reqwest::Client, WeatherError> {
+    reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .user_agent(crate::config::USER_AGENT)
+        .https_only(https_only)
+        .build()
+        .map_err(WeatherError::ClientBuild)
+}
+
+/// Whether `address` is an HTTPS URL, which is when its client is held to HTTPS.
+/// An address that does not parse is not, and its requests fail on their own.
+fn is_https(address: &str) -> bool {
+    reqwest::Url::parse(address).is_ok_and(|url| url.scheme() == "https")
 }
 
 impl FeedApi for ReqwestFeedApi {
     fn fetch(&self, latitude: f64, longitude: f64) -> FeedFuture<'_> {
         Box::pin(async move {
             let feed = self
-                .client
+                .feed_client
                 .get(&self.feed_url)
                 .timeout(REQUEST_TIMEOUT)
                 .send()
@@ -77,13 +118,7 @@ impl FeedApi for ReqwestFeedApi {
                 .await
                 .map_err(WeatherError::FeedRequest)?;
             let raintext = self
-                .client
-                .get(&self.raintext_url)
-                .query(&[
-                    ("lat", format!("{latitude:.4}")),
-                    ("lon", format!("{longitude:.4}")),
-                ])
-                .timeout(REQUEST_TIMEOUT)
+                .raintext_request(latitude, longitude)
                 .send()
                 .await
                 .map_err(WeatherError::RaintextRequest)?
@@ -177,8 +212,11 @@ pub struct WeatherData {
 
 #[cfg(test)]
 mod tests {
-    use super::{ReqwestFeedApi, parse_feed, parse_series};
-    use crate::config::{DEFAULT_FEED_URL, DEFAULT_RAINTEXT_URL};
+    use super::{ReqwestFeedApi, is_https, parse_feed, parse_series};
+    use crate::{
+        config::{DEFAULT_FEED_URL, DEFAULT_RAINTEXT_URL},
+        test_support::block_on,
+    };
 
     const FEED_FIXTURE: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -209,5 +247,68 @@ mod tests {
         // Then
         assert_eq!(client.feed_url, DEFAULT_FEED_URL);
         assert_eq!(client.raintext_url, DEFAULT_RAINTEXT_URL);
+    }
+
+    #[test]
+    fn rain_request_asks_getrr_with_the_coordinates_at_four_places() {
+        // Given: the shipped endpoints.
+        let api = ReqwestFeedApi::new(DEFAULT_FEED_URL, DEFAULT_RAINTEXT_URL)
+            .expect("client should build");
+
+        // When
+        let url_for = |latitude, longitude| {
+            api.raintext_request(latitude, longitude)
+                .build()
+                .expect("rain request should build")
+                .url()
+                .as_str()
+                .to_owned()
+        };
+
+        // Then: the literal, not the constant, is what pins the address the
+        // terms ask for, and the second place shows the rounding.
+        assert_eq!(
+            url_for(52.37, 4.84),
+            "https://gps.buienradar.nl/getrr.php?lat=52.3700&lon=4.8400"
+        );
+        assert_eq!(
+            url_for(53.219_38, 6.566_52),
+            "https://gps.buienradar.nl/getrr.php?lat=53.2194&lon=6.5665"
+        );
+    }
+
+    #[test]
+    fn rain_request_is_sent_on_a_client_that_refuses_plain_http() {
+        // Given: the shipped pair, and a plain-HTTP feed stub beside the shipped
+        // rain address, which must not lift the rain request's floor.
+        let pairs = [
+            (DEFAULT_FEED_URL, DEFAULT_RAINTEXT_URL),
+            ("http://127.0.0.1:9", DEFAULT_RAINTEXT_URL),
+        ];
+        for (feed_url, raintext_url) in pairs {
+            let api = ReqwestFeedApi::new(feed_url, raintext_url).expect("client should build");
+            let (client, request) = api.raintext_request(52.37, 4.84).build_split();
+            request.expect("rain request should build");
+
+            // When: the client the rain request would be sent on is handed a
+            // plain-HTTP address. A client without the floor accepts it, and
+            // reqwest then panics with "there is no reactor running" as it
+            // starts the request's timeout, before anything is dialled: that
+            // panic, not an assertion, is what a red run of this test shows.
+            let refused = block_on(client.get("http://127.0.0.1:9/getrr.php").send())
+                .expect_err("plain HTTP should be refused");
+
+            // Then
+            assert!(refused.is_builder(), "{feed_url}: {refused}");
+        }
+    }
+
+    #[test]
+    fn only_an_https_address_holds_its_client_to_https() {
+        // Given / When / Then
+        assert!(is_https(DEFAULT_RAINTEXT_URL));
+        assert!(is_https("HTTPS://gps.buienradar.nl/getrr.php"));
+        assert!(!is_https("http://127.0.0.1:9"));
+        assert!(!is_https("not a URL"));
     }
 }
