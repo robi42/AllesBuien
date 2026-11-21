@@ -24,18 +24,20 @@
 //!   layout inside is never handed less than its floor, and wherever the room
 //!   holds the design minimum, the zoomed one fits the room.
 //! - **The opening size** is the design opening size zoomed at the text size
-//!   read at creation, and bounded to the room when the zoom is above 1. It
-//!   follows the screen while the window is launching, because Qt names the
-//!   primary screen until the window is mapped and the real monitor only after,
-//!   and is fixed for good when the launch ends: at the second poll after the
-//!   window's first frame, at least one full poll interval after the
-//!   compositor had that frame. While the launch lasts it is never smaller
-//!   than the minimum on either axis: a larger text size read during the
-//!   launch raises the minimum past an opening size fitted at the smaller one,
-//!   and Qt resizes a window to the size it is asked for, minimum or not. A
-//!   text size or monitor after the launch moves only the zoom and the
-//!   minimum, so an open window grows when it must and is otherwise left
-//!   alone.
+//!   read at creation, and bounded to the room when the zoom is above 1. It is
+//!   fitted when the window is created, and fitted again at each report of a
+//!   different screen while the window is launching, because Qt names the
+//!   primary screen until the window is mapped and the real monitor only
+//!   after. Each fitting raises it to the minimum of that moment on either
+//!   axis, since the window is resized to whatever the opening size says and
+//!   Qt applies a size below the minimum as readily as any other. Nothing else
+//!   moves it: a text size read during the launch changes only the zoom and the
+//!   minimum, as one read later does, so a window that already fits keeps its
+//!   size, one the person enlarged included, and Qt grows one that does not to
+//!   the new minimum. The launch ends at the second poll after the window's
+//!   first frame, at least one full poll interval after the compositor had
+//!   that frame, and from then on no screen moves the opening size either, so
+//!   an open window grows when it must and is otherwise left alone.
 
 use crate::text_size::DEFAULT_BASE_SIZE;
 
@@ -103,13 +105,15 @@ pub struct WindowFit {
     pub opening: Size,
 }
 
-/// Keeps the inputs the window's fit follows, and the launch.
+/// Keeps the inputs the window's fit follows, the opening size, and the
+/// launch.
 #[derive(Clone, Debug)]
 pub struct WindowFitter {
     design: WindowDesign,
     base_size: u32,
     launch_base_size: u32,
     screen: Option<Screen>,
+    opening: Size,
     launch: Launch,
 }
 
@@ -119,20 +123,21 @@ enum Launch {
     Starting,
     /// A frame has been shown, and this many polls have run since.
     Shown(u8),
-    /// The launch is over, and the opening size is fixed at this.
-    Ended(Size),
+    /// The launch is over, and the opening size is fixed.
+    Ended,
 }
 
 impl WindowFitter {
     /// Starts a launch at `base_size`, the text size read at creation, which
     /// the opening size keeps for good.
     #[must_use]
-    pub const fn new(design: WindowDesign, base_size: u32) -> Self {
+    pub fn new(design: WindowDesign, base_size: u32) -> Self {
         Self {
             design,
             base_size,
             launch_base_size: base_size,
             screen: None,
+            opening: launch_opening(design, base_size, base_size, None),
             launch: Launch::Starting,
         }
     }
@@ -141,28 +146,22 @@ impl WindowFitter {
     #[must_use]
     pub fn fit(&self) -> WindowFit {
         let zoom = zoom(self.design, self.base_size, self.screen);
-        let minimum = scaled_up(self.design.minimum, zoom);
-        let opening = match self.launch {
-            Launch::Ended(opening) => opening,
-            Launch::Starting | Launch::Shown(_) => at_least(
-                opening(self.design, self.launch_base_size, self.screen),
-                minimum,
-            ),
-        };
         WindowFit {
             zoom,
-            minimum,
-            opening,
+            minimum: scaled_up(self.design.minimum, zoom),
+            opening: self.opening,
         }
     }
 
-    /// Whether the window is still launching, so the opening size can move.
+    /// Whether the window is still launching, so a screen can move the
+    /// opening size.
     #[must_use]
     pub const fn launching(&self) -> bool {
-        !matches!(self.launch, Launch::Ended(_))
+        !matches!(self.launch, Launch::Ended)
     }
 
-    /// Takes a new text size, returning whether the fit changed.
+    /// Takes a new text size, returning whether the fit changed. The zoom and
+    /// the minimum follow it; the opening size never does.
     pub fn set_base_size(&mut self, base_size: u32) -> bool {
         let before = self.fit();
         self.base_size = base_size;
@@ -170,9 +169,21 @@ impl WindowFitter {
     }
 
     /// Takes the screen the window is on, returning whether the fit changed.
+    /// While the window is launching, a screen other than the last one
+    /// reported fits the opening size again; a report of the same screen
+    /// fits nothing again.
     pub fn track_screen(&mut self, screen: Screen) -> bool {
         let before = self.fit();
+        let moved = self.screen != Some(screen);
         self.screen = Some(screen);
+        if moved && self.launching() {
+            self.opening = launch_opening(
+                self.design,
+                self.launch_base_size,
+                self.base_size,
+                self.screen,
+            );
+        }
         self.fit() != before
     }
 
@@ -192,7 +203,7 @@ impl WindowFitter {
         self.launch = if polls < LAUNCH_POLLS {
             Launch::Shown(polls)
         } else {
-            Launch::Ended(self.fit().opening)
+            Launch::Ended
         };
         !self.launching()
     }
@@ -204,6 +215,21 @@ fn zoom(design: WindowDesign, base_size: u32, screen: Option<Screen>) -> u32 {
     screen.map_or(requested, |screen| {
         requested.min(fit(design.minimum, room(screen, base_size)).max(ZOOM_UNIT))
     })
+}
+
+/// The opening size a fitting during the launch gives: the design opening size
+/// zoomed at `launch_base_size`, the text size read at creation, raised to the
+/// minimum at `base_size`, the one read last.
+fn launch_opening(
+    design: WindowDesign,
+    launch_base_size: u32,
+    base_size: u32,
+    screen: Option<Screen>,
+) -> Size {
+    at_least(
+        opening(design, launch_base_size, screen),
+        scaled_up(design.minimum, zoom(design, base_size, screen)),
+    )
 }
 
 /// The design opening size, zoomed for `base_size` and bounded to the room.

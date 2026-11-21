@@ -3,13 +3,14 @@
 //!
 //! The opening size is fitted at the text size read at creation and the
 //! minimum at the live one, so a larger size read during the launch raises the
-//! minimum past the opening size, and Qt resizes a window to the size it is
-//! asked for, minimum or not. Launched at 14 px, a poll reading 20 px, then
-//! the window landing on a 1920×1080 monitor: before the opening size was held
-//! to the minimum, that resized the window to 1143×887 under a 1315×1037
-//! minimum. This harness runs that sequence before the window's
-//! first frame, so all of it falls within the launch, and requires the bridge
-//! to ask for no less than the minimum and the window to come up no smaller.
+//! minimum past the opening size, and a screen reported after it fits the
+//! opening size again, which Qt then resizes the window to, minimum or not.
+//! Launched at 14 px, a poll reading 20 px, then the window landing on a
+//! 1920×1080 monitor: before a fitting raised the opening size to the minimum
+//! of its moment, that resized the window to 1143×887 under a 1315×1037
+//! minimum. This harness runs that sequence before the window's first frame,
+//! so all of it falls within the launch, and requires the bridge to ask for no
+//! less than the minimum and the window to come up no smaller.
 
 use std::{fs, sync::Arc};
 
