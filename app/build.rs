@@ -33,6 +33,7 @@ fn main() {
         "qml/MetricChip.qml",
         "qml/RadarLegend.qml",
         "qml/ScrimNotice.qml",
+        "qml/ScreenReport.qml",
         "qml/ConditionsView.qml",
         "qml/ForecastView.qml",
         "qml/RainView.qml",

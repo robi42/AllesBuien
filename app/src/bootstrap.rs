@@ -9,8 +9,6 @@
 //! instead of waiting on real timers.
 
 use std::{
-    error::Error,
-    fmt::{Display, Formatter},
     path::PathBuf,
     sync::{
         Arc,
@@ -26,6 +24,7 @@ use cxx_qt_lib::{
 
 use crate::{
     CoreServices, TimerIntervals, app_style,
+    bootstrap_error::BootstrapError,
     icon_cache::IconCache,
     image_provider,
     qt_values::interval_ms,
@@ -42,6 +41,7 @@ const MAIN_QML_URL: &str = "qrc:/qt/qml/nl/allesbuien/qml/Main.qml";
 pub struct AppBuilder {
     services: CoreServices,
     theme_base_path: PathBuf,
+    shell_config: Option<PathBuf>,
     intervals: TimerIntervals,
     icons: IconCache,
 }
@@ -56,9 +56,19 @@ impl AppBuilder {
         Self {
             services,
             theme_base_path,
+            shell_config: None,
             intervals,
             icons: IconCache::disabled(),
         }
+    }
+
+    /// Follows the text size Omarchy's shell configuration at `shell_config`
+    /// sets. Callers that omit it — every test that does not ask — read no file
+    /// and get the window at 12 px, as designed.
+    #[must_use]
+    pub fn with_shell_config(mut self, shell_config: PathBuf) -> Self {
+        self.shell_config = Some(shell_config);
+        self
     }
 
     /// Supplies the condition-icon cache. Callers that omit it — every test —
@@ -136,6 +146,7 @@ impl AppBuilder {
         radar_controller::ffi::set_radar_controller(engine_pin.as_mut(), radar_controller_pin);
         let mut theme_controller = theme_controller::create(ThemeControllerConfig {
             theme_base_path: self.theme_base_path,
+            shell_config: self.shell_config,
             poll_interval_ms: interval_ms(self.intervals.theme_poll),
         });
         let Some(theme_controller_pin) = theme_controller.as_mut() else {
@@ -252,6 +263,19 @@ impl BootedApp {
         }
     }
 
+    /// Hands the theme bridge a screen, as `Main.qml`'s screen report does.
+    pub fn track_screen(
+        &mut self,
+        width: i32,
+        height: i32,
+        available_width: i32,
+        available_height: i32,
+    ) {
+        if let Some(controller) = self.theme_controller.as_mut() {
+            controller.track_screen(width, height, available_width, available_height);
+        }
+    }
+
     /// Drives both location polls, as the one QML Timer that owns them does.
     pub fn poll_location(&mut self) {
         if let Some(controller) = self.weather_controller.as_mut() {
@@ -266,28 +290,3 @@ impl BootedApp {
         self.application.as_mut().map_or(1, QGuiApplication::exec)
     }
 }
-
-#[derive(Debug)]
-pub enum BootstrapError {
-    ApplicationCreation,
-    EngineCreation,
-    RuntimeCreation(std::io::Error),
-    ControllerCreation,
-    RootWindowCreation,
-}
-
-impl Display for BootstrapError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ApplicationCreation => formatter.write_str("failed to create QGuiApplication"),
-            Self::EngineCreation => formatter.write_str("failed to create QQmlApplicationEngine"),
-            Self::RuntimeCreation(error) => write!(formatter, "failed to create runtime: {error}"),
-            Self::ControllerCreation => {
-                formatter.write_str("failed to create application controller")
-            }
-            Self::RootWindowCreation => formatter.write_str("failed to create root QML window"),
-        }
-    }
-}
-
-impl Error for BootstrapError {}

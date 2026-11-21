@@ -148,15 +148,24 @@ Rectangle {
             }
             contentItem: Item {}
 
+            // The one raster in the window drawn at layout size, so the zoom
+            // that follows Omarchy's text size would stretch its texture and
+            // soften it. It is painted at the size it is shown at instead:
+            // `side` times the zoom, scaled back down by the same factor, so
+            // its footprint on the button stays `side` while its pixels match
+            // the screen's. Everything is drawn in `width` units, the play
+            // triangle's 1 px inset included.
             Canvas {
                 id: transportGlyph
+                objectName: "transportGlyph"
                 readonly property bool showPause: radarTransport.radarController.playing
                 readonly property color ink: radarTransport.theme.buttonText
                 readonly property int side: 12
                 anchors.centerIn: parent
                 z: 2
-                width: transportGlyph.side
-                height: transportGlyph.side
+                width: transportGlyph.side * radarTransport.theme.zoom
+                height: transportGlyph.side * radarTransport.theme.zoom
+                scale: 1 / radarTransport.theme.zoom
                 onShowPauseChanged: transportGlyph.requestPaint()
                 onInkChanged: transportGlyph.requestPaint()
                 onWidthChanged: transportGlyph.requestPaint()
@@ -165,19 +174,19 @@ Rectangle {
                 onAvailableChanged: if (transportGlyph.available) transportGlyph.requestPaint()
                 onPaint: {
                     const ctx = transportGlyph.getContext("2d");
-                    ctx.clearRect(0, 0, transportGlyph.width, transportGlyph.height);
+                    const size = transportGlyph.width;
+                    const inset = size / transportGlyph.side;
+                    ctx.clearRect(0, 0, size, transportGlyph.height);
                     ctx.fillStyle = transportGlyph.ink;
-                    const left = (transportGlyph.width - transportGlyph.side) / 2;
-                    const top = (transportGlyph.height - transportGlyph.side) / 2;
                     if (transportGlyph.showPause) {
-                        const bar = transportGlyph.side / 3;
-                        ctx.fillRect(left, top, bar, transportGlyph.side);
-                        ctx.fillRect(left + transportGlyph.side - bar, top, bar, transportGlyph.side);
+                        const bar = size / 3;
+                        ctx.fillRect(0, 0, bar, size);
+                        ctx.fillRect(size - bar, 0, bar, size);
                     } else {
                         ctx.beginPath();
-                        ctx.moveTo(left + 1, top);
-                        ctx.lineTo(left + transportGlyph.side, top + transportGlyph.side / 2);
-                        ctx.lineTo(left + 1, top + transportGlyph.side);
+                        ctx.moveTo(inset, 0);
+                        ctx.lineTo(size, size / 2);
+                        ctx.lineTo(inset, size);
                         ctx.closePath();
                         ctx.fill();
                     }

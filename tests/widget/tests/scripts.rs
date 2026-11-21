@@ -1,5 +1,6 @@
-//! Runs the bar widget's shell proof, lints the shell behind it, and runs the
-//! check of the widget's probe schedule.
+//! Runs the bar widget's shell proof, lints the shell behind it, runs the
+//! check of the widget's probe schedule, and runs the check of the app
+//! window's screen report on a desktop of two monitors.
 //!
 //! `run.sh` prints one `ok` or `FAIL` line per case, and `qmltestrunner` one
 //! `PASS` or `FAIL!` line, so a failure here carries its whole output, and the
@@ -91,6 +92,28 @@ fn widget_probe_schedule_passes() {
     assert!(
         output.status.success(),
         "tests/widget/qml/tst_schedule.qml failed:\n{}",
+        report(&output)
+    );
+}
+
+/// `app/qml/ScreenReport.qml` on two offscreen monitors of different sizes.
+/// The configuration goes into this child's environment only: the GUI
+/// harnesses under `app/tests` share one offscreen screen, and a window cannot
+/// be moved between monitors there.
+#[test]
+fn screen_report_sends_one_screen_at_a_time() {
+    let output = Command::new(qmltestrunner())
+        .args(["-input", "tests/window/qml/tst_screen_report.qml"])
+        .env(
+            "QT_QPA_PLATFORM",
+            "offscreen:configfile=tests/window/qml/two-screens.json",
+        )
+        .current_dir(repository_root())
+        .output()
+        .expect("qmltestrunner should start");
+    assert!(
+        output.status.success(),
+        "tests/window/qml/tst_screen_report.qml failed:\n{}",
         report(&output)
     );
 }

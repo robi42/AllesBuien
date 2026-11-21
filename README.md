@@ -82,6 +82,21 @@ Unlike Omarchy's own weather widget, **AllesBuien does not auto-detect your loca
 
 And a location outside the radar's coverage says so on the map, rather than leaving a blank raster that looks like a failed download. `omarchy-weather-location --set Malibu` — a name with no coordinates — is treated as no setting at all, because geocoding it would mean owning a copy of a setting the desktop already owns.
 
+## Text size
+
+AllesBuien follows Omarchy's text size, so the window grows and shrinks with the rest of the desktop:
+
+```bash
+omarchy-display-text-size 16
+omarchy-display-text-size reset
+```
+
+The open window follows either command within about two seconds. It zooms its whole content by the size over Omarchy's default of 12 px, so 16 px draws everything a third larger: the text, the radar, the icons, and the spacing between them, in the layout that was designed at 12 px. The window's minimum size grows with it, and the window grows when it has to; it never shrinks on its own.
+
+The zoom stops where the window's minimum would no longer fit the screen above Omarchy's bar, so 20 px on a 1080p screen draws about 1.54 times as large rather than 1.67. That limit only ever holds the zoom back, and never below 1: at 12 px the window is exactly what it always was, on any screen. The size the window opens at follows the text size too, once, when the app starts, and fits the monitor it opens on.
+
+AllesBuien reads only the `[font] base-size` line that command writes to `~/.config/omarchy/shell.toml`. A theme's own text size is not followed, and no stock theme sets one.
+
 ## Notifications
 
 When rain is expected to start within 30 minutes, AllesBuien announces it through `notify-send`, which `libnotify` provides, once for each spell of rain: later refreshes stay quiet while that rain is on its way or falling, however its expected start or strength changes. The spell is over when a refresh finds the next two hours dry or, from an hour after the announcement on, finds the rain more than 30 minutes away; the next rain within 30 minutes is then announced again, and so is rain at any place the window moves to. Three environment variables, read when the app starts, tune this:

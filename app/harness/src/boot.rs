@@ -55,6 +55,7 @@ pub struct HarnessBuilder {
     notify_config: Option<NotifyConfig>,
     location: LocationSettings,
     theme_path: PathBuf,
+    shell_config: Option<PathBuf>,
     intervals: TimerIntervals,
     icons: IconCache,
 }
@@ -62,7 +63,9 @@ pub struct HarnessBuilder {
 impl HarnessBuilder {
     /// Starts from `feed`, a failing stub radar, a silent notifier with
     /// notifications off, the pinned Amsterdam-West location, an absent theme,
-    /// the production timer intervals, and an icon cache that serves nothing.
+    /// no shell configuration, so 12 px and never the developer's own text
+    /// size, the production timer intervals, and an icon cache that serves
+    /// nothing.
     #[must_use]
     pub fn with_feed(feed: Arc<dyn FeedApi>) -> Self {
         Self {
@@ -72,6 +75,7 @@ impl HarnessBuilder {
             notify_config: None,
             location: amsterdam_west(),
             theme_path: PathBuf::from(ABSENT_THEME),
+            shell_config: None,
             intervals: TimerIntervals::default(),
             icons: IconCache::disabled(),
         }
@@ -103,6 +107,13 @@ impl HarnessBuilder {
     #[must_use]
     pub fn theme_path(mut self, theme_path: PathBuf) -> Self {
         self.theme_path = theme_path;
+        self
+    }
+
+    /// Reads the text size from the shell configuration at `shell_config`.
+    #[must_use]
+    pub fn shell_config(mut self, shell_config: PathBuf) -> Self {
+        self.shell_config = Some(shell_config);
         self
     }
 
@@ -140,10 +151,12 @@ impl HarnessBuilder {
             Some(notify_config) => CoreServices::new_with_notify(config, notify_config),
             None => CoreServices::new(config),
         };
-        let app = AppBuilder::new(services, self.theme_path, self.intervals)
-            .with_icons(self.icons)
-            .boot()
-            .expect("the fake-wired GUI should boot");
+        let mut builder =
+            AppBuilder::new(services, self.theme_path, self.intervals).with_icons(self.icons);
+        if let Some(shell_config) = self.shell_config {
+            builder = builder.with_shell_config(shell_config);
+        }
+        let app = builder.boot().expect("the fake-wired GUI should boot");
         Harness {
             app,
             _radar_state: radar_state,
