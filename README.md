@@ -78,9 +78,9 @@ Three sources answer in order. An `ALLESBUIEN_LAT`/`ALLESBUIEN_LON` pair, with `
 
 Two behaviours are deliberate, and both follow from this being a Dutch radar viewer rather than a general weather app:
 
-Unlike Omarchy's own weather widget, **AllesBuien does not auto-detect your location from your IP address.** That widget can render any city on Earth, so detection is a good default for it. This one draws Buienradar's Dutch radar and nothing else, so an IP resolving to Berlin would produce a confident-looking window over a permanently empty map. A sensible Dutch default, captioned NO SETTING under the place name, is the better wrong answer.
+Unlike Omarchy's own weather widget, **AllesBuien does not auto-detect your location from your IP address.** That widget can render any city on Earth, so detection is a good default for it. This one draws Buienradar's Dutch radar and nothing else, so an IP resolving to Berlin would produce a confident-looking window over a radar that does not reach it. A sensible Dutch default, captioned NO SETTING under the place name, is the better wrong answer.
 
-And a location outside the radar's coverage says so on the map, rather than leaving a blank raster that looks like a failed download. `omarchy-weather-location --set Malibu` — a name with no coordinates — is treated as no setting at all, because geocoding it would mean owning a copy of a setting the desktop already owns.
+And a location outside the radar's coverage says so on the map. The Dutch radar plays there as it does anywhere, with no marker for the place, and the notice keeps the missing marker from reading as a fault. `omarchy-weather-location --set Malibu` — a name with no coordinates — is treated as no setting at all, because geocoding it would mean owning a copy of a setting the desktop already owns.
 
 ## Text size
 

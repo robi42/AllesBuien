@@ -74,12 +74,13 @@ Item {
         }
 
         // Not the error slot, and deliberately not centred with it. A location
-        // outside the Dutch raster leaves this map painting its base and nothing
-        // else, which is indistinguishable from a failed frame request — so the
-        // one thing worth saying is that the emptiness is the configuration
-        // rather than a fault. It is a standing statement, not a failure, so it
-        // takes the text colour instead of the error colour and sits at the top,
-        // where it cannot collide with a refresh error arriving underneath it.
+        // outside the Dutch raster has nowhere on this map for its marker. The
+        // radar plays as it does for any place and only the marker is missing —
+        // so the one thing worth saying is that the missing marker is the
+        // configuration rather than a fault. It is a standing statement, not a
+        // failure, so it takes the text colour instead of the error colour and
+        // sits at the top, where it cannot collide with a refresh error arriving
+        // underneath it.
         ScrimNotice {
             objectName: "coverageNotice"
             theme: radarPanel.theme

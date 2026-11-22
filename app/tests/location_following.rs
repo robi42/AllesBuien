@@ -140,12 +140,12 @@ fn follows_the_desktop_location_setting_while_the_window_stays_open() {
     booted.poll_location();
     let uncovered = shown(&booted);
 
-    // Then: the blank map is explained rather than left looking like a fault.
+    // Then: the missing marker is explained rather than left looking like a fault.
     assert_eq!(uncovered.name, "Berlin");
     assert_eq!(uncovered.source, "Via Omarchy");
     assert_eq!(
         uncovered.coverage_notice,
-        "Berlin is outside the Dutch radar — the map stays empty"
+        "Berlin is outside the Dutch radar — no map marker"
     );
     assert_eq!(uncovered.marker, None, "no marker outside the raster");
 }
