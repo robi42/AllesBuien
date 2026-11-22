@@ -98,15 +98,22 @@ read_pin() {
 # captured rather than piped into grep, because grep -q exits at its first
 # match and pipefail would turn that match into a SIGPIPE failure. No pacman
 # on PATH fails the capture too, and so counts as not ours.
+#
+# pacman answers a query for a name with the package of that name or, when
+# none is installed, with one that provides it: `pacman -Q sh` prints
+# `bash 5.3.20-1`. So the list asked for allesbuien may be a provider's, such
+# as that allesbuien-bin's, and the quiet list, -Qlq, cannot say whose it is.
+# Each line of -Ql names its package before the path, so only the whole line
+# `allesbuien <binary>` makes the binary ours.
 owned_by_us() {
   local files resolved
-  if ! files=$(pacman -Qlq allesbuien 2>/dev/null); then
+  if ! files=$(pacman -Ql allesbuien 2>/dev/null); then
     return 1
   fi
   if ! resolved=$(readlink -f "$1"); then
     return 1
   fi
-  grep -qxF -- "$resolved" <<<"$files"
+  grep -qxF -- "allesbuien $resolved" <<<"$files"
 }
 
 # Sets decision to one of the probe's exit codes, and installed_version when

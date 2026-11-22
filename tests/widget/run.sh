@@ -109,6 +109,15 @@ ours() {
   set_env "FAKE_PACKAGE=$1" "FAKE_PACKAGE_FILES=$(readlink -f -- "$case_dir/usr-bin/allesbuien")"
 }
 
+# A package named $1, at version $2, that provides allesbuien and owns the
+# binary in usr-bin, while no package named allesbuien is installed: pacman
+# then answers for the name allesbuien with this package, under its own name.
+theirs() {
+  app_at usr-bin
+  set_env "FAKE_PROVIDER=$1" "FAKE_PACKAGE=$2" \
+    "FAKE_PACKAGE_FILES=$(readlink -f -- "$case_dir/usr-bin/allesbuien")"
+}
+
 run() {
   verb=$1
   if output=$(env -u BASH_ENV -u ENV "${env_vars[@]}" "PATH=$fakes:$scratch/bin${app_path:+:$app_path}" \
@@ -304,15 +313,23 @@ run probe
 expect_status 0
 finish
 
-# A package other than allesbuien owns the binary, as an allesbuien-bin from
-# the AUR would: the allesbuien package itself is not installed.
+# A package other than allesbuien owns the binary and provides allesbuien, as
+# an allesbuien-bin from the AUR would, and the allesbuien package itself is
+# not installed. pacman answers a query for allesbuien with that package, so
+# the binary would count as ours if the answer's name went unread, and its
+# version, older than the pin, would read as an update.
 begin probe-foreign-owner
 pin 0.2.0-1
-app_at usr-bin
+theirs allesbuien-bin 0.1.0-1
 run probe
 expect_status 0
+expect_no_call "vercmp"
 finish
 
+# No package owns the binary, as with a Mode B install in ~/.local/bin. The
+# script never asks pacman who owns a path, only what the allesbuien package
+# lists, so this also stands for a binary that a package owns without
+# providing allesbuien.
 begin probe-unowned-mode-b
 pin 0.2.0-1
 app_at local-bin
@@ -427,6 +444,19 @@ finish
 begin install-when-current
 pin 0.2.0-1
 app_at usr-bin
+run install
+expect_status 0
+expect_no_call "curl"
+expect_no_call "pacman [-U]"
+expect_calls "$launch_call"
+expect_output "already installed"
+finish
+
+# And a click on a binary that a package providing allesbuien owns opens it:
+# that package is not ours to update, older than the pin as it is.
+begin install-foreign-owner
+pin 0.2.0-1
+theirs allesbuien-bin 0.1.0-1
 run install
 expect_status 0
 expect_no_call "curl"
