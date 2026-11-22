@@ -6,10 +6,10 @@
 //! the absence of one, and the fix nobody could find was one command away.
 //!
 //! The second is coverage. This app draws Dutch radar and only Dutch radar, so a
-//! location outside [`crate::radar_projection`]'s bounds has no marker and no
-//! rain to show — the map paints its base and nothing else, which is exactly
-//! what a broken image request looks like. Saying so turns a suspected bug into
-//! a stated limit.
+//! location outside [`crate::radar_projection`]'s bounds has nowhere on the map
+//! for its marker. The radar plays there as it does for any place, and the
+//! marker alone is missing, but a marker that goes missing without a word reads
+//! as a fault. Saying so turns a suspected bug into a stated limit.
 //!
 //! The wording lives beside the rule that decides it, for the same reason
 //! [`crate::status`] holds the failure wording: a caption the viewer reads is a
@@ -48,13 +48,18 @@ pub const fn provenance(source: LocationSource) -> &'static str {
 }
 
 /// Warns when the Dutch radar cannot cover this location, and is silent when it can.
+///
+/// The wording is short on purpose: at the minimum window `RadarPanel.qml`
+/// gives the notice two lines of 352 px and elides the rest, and the tests read
+/// this string rather than the label that draws it, so only its length keeps
+/// `no map marker` on screen after a long place name.
 #[must_use]
 pub fn coverage_notice(location: &LocationConfig) -> Option<String> {
     if marker_position(location.latitude, location.longitude).is_some() {
         return None;
     }
     Some(format!(
-        "{} is outside the Dutch radar — the map stays empty",
+        "{} is outside the Dutch radar — no map marker",
         location.display_label()
     ))
 }
@@ -127,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn a_location_beyond_the_raster_names_itself_and_says_the_map_stays_empty() {
+    fn a_location_beyond_the_raster_names_itself_and_says_the_map_has_no_marker() {
         // Given: one miss on each edge, plus a coordinate that is not a number.
         let uncovered = [
             at(48.85, 2.35, "Paris"),
@@ -145,7 +150,8 @@ mod tests {
                 "{notice:?} should name the place"
             );
             assert!(notice.contains("outside the Dutch radar"), "{notice:?}");
-            assert!(notice.contains("the map stays empty"), "{notice:?}");
+            assert!(notice.contains("no map marker"), "{notice:?}");
+            assert!(!notice.contains("empty"), "{notice:?}");
         }
     }
 

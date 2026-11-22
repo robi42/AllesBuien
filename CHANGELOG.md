@@ -34,6 +34,9 @@ renames that section after itself and its date.
   such as an `allesbuien-bin`, and opens it on a click, as it already did for any other package's
   binary. 0.2.0's check took that package's files for its own and failed, dimming the icon and
   saying the check had failed. No package provides `allesbuien` that way yet.
+- The notice for a location outside the Dutch radar no longer says the map stays empty, as
+  0.2.0's did. The radar plays there as it does anywhere and only the place's marker is missing,
+  so the notice now says that instead.
 
 ## [0.2.0] - 2026-10-29
 
