@@ -9,6 +9,14 @@
 .beads-credential-key
 .beads/proxieddb/
 
+# bd 1.3's gate locks: empty files it makes beside each directory it guards
+# and never deletes, among them .beads.gate.lock at the top of the checkout,
+# which no line of .beads/.gitignore can reach. The spelling is the line
+# `bd doctor` looks for. Keep it above the re-includes at the end of this
+# file: when the line is missing, `bd doctor --fix` appends it after them,
+# where it overrides them.
+*.gate.lock*
+
 # Software-factory scratch: plans, reviews, and gate logs for one run. Ignored
 # here rather than only in the checkout the factory runs in, so bin/check-gates'
 # scratch copy - which reads tracked and untracked-but-not-ignored files - never
