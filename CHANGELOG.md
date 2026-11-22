@@ -30,6 +30,10 @@ renames that section after itself and its date.
   did. After a click that opens the floating terminal, the widget checks again every five
   seconds, on every monitor, until the app is current or ten minutes have passed, so the icon
   returns to its ordinary colour within about five seconds of the update finishing.
+- The bar widget leaves alone an `allesbuien` that another package provides under its own name,
+  such as an `allesbuien-bin`, and opens it on a click, as it already did for any other package's
+  binary. 0.2.0's check took that package's files for its own and failed, dimming the icon and
+  saying the check had failed. No package provides `allesbuien` that way yet.
 
 ## [0.2.0] - 2026-10-29
 
