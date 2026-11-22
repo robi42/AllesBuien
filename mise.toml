@@ -36,6 +36,13 @@
 # toolchain without them and say nothing, so min_version makes those refuse
 # this file instead.
 #
+# rust-analyzer is a component too, for editors rather than for any gate.
+# Without it, rustup's rust-analyzer proxy finds none in the pinned toolchain
+# and falls back to the next rust-analyzer on PATH, which on a machine mise set
+# up is mise's shim for that same proxy, so the two call each other until
+# rustup stops with "infinite recursion detected" and the editor's language
+# server never starts.
+#
 # cargo-about writes pkgbuild/THIRD-PARTY-LICENSES, and bin/test's third-party
 # notices gate regenerates that file and compares it byte for byte, so the
 # gate's verdict holds only for the cargo-about CI installs: the version
@@ -56,7 +63,7 @@ min_version = "2026.7.4"
 [tools]
 "aqua:taiki-e/cargo-llvm-cov" = "0.9.1"
 "github:EmbarkStudios/cargo-about" = "0.9.3"
-rust = { version = "1.99.1", components = ["rustfmt", "clippy", "llvm-tools"] }
+rust = { version = "1.99.1", components = ["rustfmt", "clippy", "llvm-tools", "rust-analyzer"] }
 actionlint = "1.7.12"
 shellcheck = "0.11.0"
 lefthook = "2.2.2"

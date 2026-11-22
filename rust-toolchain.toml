@@ -3,4 +3,4 @@
 # the two move together.
 [toolchain]
 channel = "1.99.1"
-components = ["rustfmt", "clippy", "llvm-tools"]
+components = ["rustfmt", "clippy", "llvm-tools", "rust-analyzer"]
