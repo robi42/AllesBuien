@@ -32,11 +32,12 @@ const MAX_METADATA_BYTES: usize = 256 * 1024;
 
 /// The most one frame may hold.
 ///
-/// Frames measured 94 KiB when this transport was written, and from 19 958 to
-/// 34 979 B over the 128 frames of four runs on 24 November 2026. Those frames
-/// were 2.6 to 3.6 % rain at 0.8 to 1.2 B a rain pixel, so a 1058×915 frame
-/// that is rain from edge to edge comes to about 1.1 MB. Twice that is still a
-/// frame; more is not one this query has ever answered with.
+/// Frames measured 94 KiB on 31 August 2026, and weighed from 19 958 to
+/// 34 979 B over the 128 frames of four runs on 24 November 2026. The 32
+/// frames of one of those runs, read pixel by pixel, were 2.6 to 3.6 % rain at
+/// 0.8 to 1.2 B a rain pixel, so a 1058×915 frame that is rain from edge to
+/// edge comes to about 1.1 MB. Twice that is still a frame; more is not one
+/// this query has ever answered with.
 const MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
 
 /// Observed steps requested first, at one frame per five minutes.

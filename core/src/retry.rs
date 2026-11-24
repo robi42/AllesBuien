@@ -67,9 +67,10 @@ pub fn is_retryable(error: &RadarError) -> bool {
 /// status produced by `error_for_status`: a missing status is a request that
 /// failed before a reply, and a 5xx is a transient service fault, while a 4xx
 /// means the request itself is wrong and must not hold the viewer behind waits.
-/// The status split follows the radar precedent and reqwest's contract but is
-/// not unit-tested here: constructing that error requires driving reqwest's
-/// async client inside Tokio, while core deliberately has no async runtime.
+/// The status split follows the radar precedent and reqwest's contract, and is
+/// not yet unit-tested here, although no runtime stands in the way any more:
+/// `error_for_status` on an in-memory response, built with the `http`
+/// dev-dependency, gives a `reqwest::Error` that carries the status.
 /// An answer past its size limit is retried as the radar's is, as a request
 /// that failed without a status would be.
 #[must_use]

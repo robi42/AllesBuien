@@ -42,7 +42,7 @@ Every answer the app reads from Buienradar is read under a limit for its kind, s
 | A radar frame | 19 958 to 34 979 B | 2 MiB |
 | A condition icon | 886 to 2 818 B | 256 KiB |
 
-A radar run accepts at most 32 frames: metadata that lists more is cut to its first 32 in the order it lists them, before any frame is requested, so one run accepts at most 64 MiB of frames. A refused answer fails its request as any failed request does: it is retried, the data already on screen stays, and the status line says Buienradar sent unexpected data.
+A radar run accepts at most 32 frames: metadata that lists more is cut to its first 32 in the order it lists them, before any frame is requested, so one run accepts at most 64 MiB of frames. A refused feed, rain expectation, or radar answer fails its request as any failed request does: it is retried, the data already on screen stays, and the status line says Buienradar sent unexpected data. A refused icon is a miss: nothing retries it or mentions it, and its slot stays empty until the next weather refresh asks for it again.
 
 These limits bound what the app accepts and keeps from one answer and one run, not its network traffic: a refused answer has already delivered the chunk that passed the limit, and a retry asks again. They set no total for memory or for the radar cache on disk. Images are decoded by Qt, whose image reader applies its own allocation limit.
 

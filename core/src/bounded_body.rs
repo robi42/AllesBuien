@@ -47,7 +47,9 @@ pub async fn read_bounded(mut response: Response, limit: usize) -> Result<Vec<u8
     }
     let mut body = Vec::new();
     while let Some(chunk) = response.chunk().await? {
-        if body.len() + chunk.len() > limit {
+        // The body never holds more than `limit`, so what is left of it cannot
+        // wrap, and a chunk of any length compares against it without a sum.
+        if chunk.len() > limit - body.len() {
             return Err(BodyError::TooLarge { limit });
         }
         body.extend_from_slice(&chunk);
@@ -56,14 +58,15 @@ pub async fn read_bounded(mut response: Response, limit: usize) -> Result<Vec<u8
 }
 
 /// The length the server declared, or [`None`] when it declared none it could
-/// mean: an absent header, or one that is no number.
+/// mean: an absent header, or one that is not a number as it stands. The HTTP
+/// parser has already stripped the whitespace around a field's value, so none
+/// is trimmed here, and a value that does not parse is left to the stream.
 fn declared_length(response: &Response) -> Option<u64> {
     response
         .headers()
         .get(CONTENT_LENGTH)?
         .to_str()
         .ok()?
-        .trim()
         .parse()
         .ok()
 }

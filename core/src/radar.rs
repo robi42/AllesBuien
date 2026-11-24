@@ -19,11 +19,13 @@ use serde::Deserialize;
 
 use crate::{bounded_body::BodyError, radar_cache::RadarCache};
 
-/// Runs kept on disk once a run has downloaded. A run holds at most
-/// [`MAX_RUN_FRAMES`] frames, so at the 94 KiB frames on record the cache comes
-/// to about 9 MiB, and at the transport's 2 MiB frame limit to at most 192 MiB.
-/// Pruning runs only after a run completes, so a run that fails is not counted
-/// here until a later one does.
+/// Runs kept on disk once a run has downloaded. A completed run accepted at
+/// most [`MAX_RUN_FRAMES`] frames, so three of them hold about 9 MiB at the
+/// 94 KiB frames on record, and accepted at most 192 MiB at the transport's
+/// 2 MiB frame limit. That is not a bound on the cache: pruning runs only after
+/// a run completes, so a run that fails or is cancelled keeps its frames until
+/// a later one does, and a frame already on disk is trusted by its path
+/// whatever its size.
 pub const MAX_CACHED_RUNS: usize = 3;
 
 /// The most frames one run accepts: the window the preferred metadata query
