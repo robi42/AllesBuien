@@ -41,6 +41,8 @@ The first build of the `allesbuien` crate takes a while, because CXX-Qt generate
 
 `bin/test` is the whole gate, and the one CI runs. It takes over twenty minutes from cold and leaves a few gigabytes under `target/`. CI runs it on every pull request, so you can leave the full run to CI and keep to the fast loop locally. A new push to a pull request cancels the run still going for the push before it. A pull request from outside the repository runs CI only once the maintainer has approved the run, so expect a wait before the first result.
 
+GitHub's CodeQL analysis is the other check on a pull request; today it reads the Rust code, the C++ bridge files, and the workflows. `main`'s rules hold a merge for as long as that analysis is still running, and for as long as it reports an alert of error severity, or a security alert rated high or critical, whose lines are all in the pull request's diff. GitHub applies that rule to every pull request but Dependabot's. A pull request from outside the repository gets no analysis at all, because GitHub's default CodeQL setup leaves out pull requests from forks, so there the rule waits for a result that never comes. Nothing is asked of you for that: the maintainer lets the pull request past the rule once it has been reviewed.
+
 ## What the gates hold you to
 
 Each of these fails `bin/check-fast` or `bin/test`; [AGENTS.md](AGENTS.md#conventions) gives the reasons.
@@ -103,3 +105,5 @@ CI is the safe first run: a pull request's workflows are the branch's own files,
 - Before checking the branch out, read its changes to the paths `.factory/protected` lists, `app/build.rs`, every `Cargo.toml` and `Cargo.lock` (new crates, git sources), `.cargo/config.toml`, `rust-toolchain.toml`, `pkgbuild/PKGBUILD`, `plugin/widget.sh`, `tests/widget/`'s runner and fakes and its QML check with the fake modules beside it, and every `.gitattributes`, which decides how git writes the rest when you check the branch out.
 - Check it out in a throwaway worktree or a container.
 - Never run `mise install`, or commit with hooks, on a branch whose `mise.toml` and `lefthook.yml` you have not read.
+
+Merging is the last step, and for a fork's pull request it takes the owner's bypass: `main`'s code scanning rule waits for a CodeQL result, and GitHub's default setup never analyses a fork's pull request. Use the bypass only when that rule is all that holds the merge, with `quality` green and the reading above done. Until CodeQL analyses `main` after the merge, that reading is all that has looked for what CodeQL would have found.
