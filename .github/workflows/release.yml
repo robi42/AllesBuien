@@ -6,8 +6,10 @@ on:
       - "v*"
 
 # Nothing at the top: each job names what it needs. The build job, which runs
-# every dependency's build script and proc macro, can only read; the publish
-# job, which runs none of them, holds the only token that can write.
+# every dependency's build script and proc macro, can only read; the attest
+# job can sign the package's build provenance and store it, and nothing else;
+# the publish job, which runs none of the build's code, holds the only token
+# that can write to the repository.
 permissions: {}
 
 jobs:
@@ -21,7 +23,8 @@ jobs:
     # A whole re-run uploads its build under a name of its own instead of
     # beside the earlier attempt's under the same one, where download-artifact,
     # which returns the artifact with the highest ID, could pick either; a
-    # re-run of the publish job alone still reads the name its build set.
+    # re-run of the attest and publish jobs alone still reads the name the
+    # build set.
     outputs:
       artifact: release-assets-${{ github.run_attempt }}
     env:
@@ -107,9 +110,10 @@ jobs:
             cd pkgbuild && makepkg -f
           '
 
-      # The publish job uploads exactly these bytes, and a re-run of that job
-      # alone should find them again for as long as the artifact is kept.
-      - name: Hand the package to the publish job
+      # The attest job signs exactly these bytes and the publish job uploads
+      # them, and a re-run of either alone should find them again for as long
+      # as the artifact is kept.
+      - name: Hand the package to the attest and publish jobs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # The job's artifact output above names the same.
@@ -118,8 +122,49 @@ jobs:
           retention-days: 7
           path: pkgbuild/*.pkg.tar.zst
 
-  publish:
+  # A job of its own, so the two permissions that let a run sign as this
+  # workflow never sit beside the build, which runs every dependency's build
+  # script and proc macro, or beside the publish job's third-party release
+  # action. It checks nothing out and runs no step of its own: only GitHub's
+  # actions, on the bytes the build handed over.
+  attest:
     needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Lets the job mint its OIDC token, which Sigstore certifies for the
+      # short-lived key that signs the attestation.
+      id-token: write
+      # Stores the signed attestation with the repository, where
+      # `gh attestation verify` finds it by the package's digest.
+      attestations: write
+      # Nothing else: nothing is checked out, and a download of this run's own
+      # artifact goes through the runner's token, not this one.
+    steps:
+      # The same artifact the publish job uploads, extracted the same way.
+      - name: Fetch the built package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          path: dist
+
+      # Writes a SLSA build-provenance attestation for the package's SHA-256,
+      # naming this workflow, the tag, its commit, and this run's attempt. It
+      # fails the run, before any draft exists, when the glob matches nothing or
+      # when it cannot sign the attestation or store it.
+      #
+      # The action is a composite wrapper around actions/attest, which it pins
+      # by SHA (v4.2.1, 508db95dd578ae2727ebd6217d5ba78e4fbda05d): a bump of
+      # this pin moves that one too, so both diffs are to be read.
+      - name: Attest the package's build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.pkg.tar.zst
+
+  publish:
+    # The attest job too, so a draft exists only for a package whose build
+    # provenance is signed and stored.
+    needs: [build, attest]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

@@ -16,6 +16,10 @@ renames that section after itself and its date.
   growing to match and the zoom capped where that minimum would no longer fit the screen above
   the bar. The window opens at the zoomed size, fitted to the monitor it opens on, and at 12 px
   is exactly as before.
+- Build provenance for the release package: an attestation, signed by the release workflow, that
+  ties the package's digest to the run that built it, the tag, and its commit. SECURITY.md shows
+  how `gh attestation verify` checks it. The bar widget's own check, the committed digest, is
+  unchanged.
 
 ### Changed
 
