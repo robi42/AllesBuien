@@ -20,6 +20,7 @@ dependencies = [
  "cxx-qt-build",
  "cxx-qt-lib",
  "futures",
+ "http",
  "reqwest",
  "tempfile",
  "tokio",
@@ -30,6 +31,8 @@ name = "allesbuien-core"
 version = "0.2.0"
 dependencies = [
  "futures",
+ "http",
+ "http-body",
  "jiff",
  "reqwest",
  "serde",

@@ -42,6 +42,16 @@ renames that section after itself and its date.
   0.2.0's did. The radar plays there as it does anywhere and only the place's marker is missing,
   so the notice now says that instead.
 
+### Security
+
+- Every answer from Buienradar is read under a limit for its kind, and a radar run accepts at
+  most 32 frames, as the Omarchy plugin marketplace's review of 0.2.0 suggested. 0.2.0 read each
+  answer whole, bounded only by its timeout, and downloaded every frame the radar's metadata
+  listed, so an unusually large answer could exhaust memory or disk space. An answer past its
+  limit is now refused, before its body is read when it declares its length, and fails its
+  request like any other failure; metadata listing more frames is cut to its first 32.
+  SECURITY.md lists the limits and the measurements behind them.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added

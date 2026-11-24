@@ -12,7 +12,8 @@ use allesbuien_core::weather::{CurrentConditions, ForecastDay, WeatherData};
 use allesbuien_testkit::block_on;
 use tempfile::{TempDir, tempdir};
 
-use super::{IconCache, IconFuture, IconSource, condition_codes, missing_keys};
+use super::{IconCache, IconFuture, IconSource, condition_codes, icon_body, missing_keys};
+use crate::icon_store::MAX_ICON_BYTES;
 
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\nbody";
 
@@ -273,4 +274,25 @@ fn every_referenced_code_is_collected_once_and_blanks_are_dropped() {
 
     // Then
     assert_eq!(codes, ["a", "f", "qq"]);
+}
+
+/// A successful answer carrying `body` and declaring no length, so the reader
+/// can only refuse it as it streams.
+fn answered(body: Vec<u8>) -> reqwest::Response {
+    http::Response::new(body).into()
+}
+
+#[test]
+fn an_icon_body_past_its_limit_is_a_miss_and_a_small_one_is_served() {
+    // Given: a PNG one byte past the limit, and an ordinary one.
+    let mut oversized = PNG.to_vec();
+    oversized.resize(MAX_ICON_BYTES + 1, 0);
+
+    // When
+    let refused = block_on(icon_body(answered(oversized)));
+    let served = block_on(icon_body(answered(PNG.to_vec())));
+
+    // Then
+    assert_eq!(refused, None);
+    assert_eq!(served.as_deref(), Some(PNG));
 }

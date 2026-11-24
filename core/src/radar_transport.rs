@@ -5,19 +5,40 @@
 //! much of it do we keep". Only this half needs a network, so only this half has
 //! to be swapped for a fake — which is precisely why the trait exists.
 //!
-//! Three vendor facts are encoded here and nowhere else. The metadata query
+//! Four vendor facts are encoded here and nowhere else. The metadata query
 //! fixes the window of frames the radar downloads, the most the animation can
 //! play, while how far into it the animation goes is [`crate::rain_reach`]'s;
 //! the frame URLs it returns answer `302`, so the redirect-following client is
-//! load-bearing rather than incidental; and the run that query is answered from
-//! is not reliably the current one, which is why asking is only half of getting.
+//! load-bearing rather than incidental; the run that query is answered from
+//! is not reliably the current one, which is why asking is only half of getting;
+//! and the size of each answer, measured and bounded here, so one far larger
+//! than any the vendor has sent is refused rather than kept.
 
 use jiff::Timestamp;
 
 use crate::{
+    bounded_body::read_bounded,
     radar::{RadarApi, RadarError, RadarFuture},
     radar_freshness::{RunFreshness, metadata_freshness},
 };
+
+/// The most one metadata answer may hold.
+///
+/// It measured 9 013 B for 32 frames on 24 November 2026, about 280 B a frame,
+/// so this leaves room for a window many times longer than any the query asks
+/// for; [`crate::radar::MAX_RUN_FRAMES`] cuts such a window, and this refuses
+/// an answer whose size no listing of frames explains.
+const MAX_METADATA_BYTES: usize = 256 * 1024;
+
+/// The most one frame may hold.
+///
+/// Frames measured 94 KiB on 31 August 2026, and weighed from 19 958 to
+/// 34 979 B over the 128 frames of four runs on 24 November 2026. The 32
+/// frames of one of those runs, read pixel by pixel, were 2.6 to 3.6 % rain at
+/// 0.8 to 1.2 B a rain pixel, so a 1058×915 frame that is rain from edge to
+/// edge comes to about 1.1 MB. Twice that is still a frame; more is not one
+/// this query has ever answered with.
+const MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
 
 /// Observed steps requested first, at one frame per five minutes.
 ///
@@ -26,10 +47,12 @@ use crate::{
 /// and with [`FORECAST_STEPS`] the response spans 32 frames, from five minutes
 /// before the run to two and a half hours after it.
 ///
-/// Frames measure 94 KiB, so [`crate::radar::MAX_CACHED_RUNS`] × 32 is about
-/// 9 MiB: the run cap dropped 6 → 3 when the window grew to 26 frames, to stay
-/// near the previous window's 5.5 MiB, and the six frames [`FORECAST_STEPS`]
-/// added since cost the other 1.7 MiB.
+/// The window is also [`crate::radar::MAX_RUN_FRAMES`], the most frames a run
+/// accepts. At the 94 KiB frames on record, [`crate::radar::MAX_CACHED_RUNS`] ×
+/// 32 is about 9 MiB: the run cap dropped 6 → 3 when the window grew to 26
+/// frames, to stay near the previous window's 5.5 MiB, and the six frames
+/// [`FORECAST_STEPS`] added since cost the other 1.7 MiB. Frames measured 20 to
+/// 35 KB in November 2026, which makes it nearer 3 MiB.
 const PREFERRED_HISTORY: u8 = 2;
 
 /// Predicted steps requested, at the same cadence: two and a half hours, half an
@@ -142,21 +165,36 @@ impl ReqwestRadarApi {
         })
     }
 
-    async fn fetch(&self, url: &str) -> Result<Vec<u8>, RadarError> {
-        let response = self.client.get(url).send().await?;
-        let status = response.status();
-        if !status.is_success() {
-            return Err(RadarError::HttpStatus {
-                status: status.as_u16(),
-            });
-        }
-        Ok(response.bytes().await?.to_vec())
+    async fn send(&self, url: &str) -> Result<reqwest::Response, RadarError> {
+        Ok(self.client.get(url).send().await?)
     }
 }
 
+/// A metadata answer's body, refused past [`MAX_METADATA_BYTES`].
+async fn metadata_body(response: reqwest::Response) -> Result<Vec<u8>, RadarError> {
+    body_within(response, MAX_METADATA_BYTES).await
+}
+
+/// A frame's body, refused past [`MAX_FRAME_BYTES`].
+async fn frame_body(response: reqwest::Response) -> Result<Vec<u8>, RadarError> {
+    body_within(response, MAX_FRAME_BYTES).await
+}
+
+/// A successful answer's body, read no further than `limit` bytes.
+async fn body_within(response: reqwest::Response, limit: usize) -> Result<Vec<u8>, RadarError> {
+    let status = response.status();
+    if !status.is_success() {
+        return Err(RadarError::HttpStatus {
+            status: status.as_u16(),
+        });
+    }
+    Ok(read_bounded(response, limit).await?)
+}
+
+/// The metadata requests, both windows of them, are the ones this source sends.
 impl BytesSource for ReqwestRadarApi {
     fn get<'a>(&'a self, url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-        Box::pin(self.fetch(url))
+        Box::pin(async move { metadata_body(self.send(url).await?).await })
     }
 }
 
@@ -170,146 +208,9 @@ impl RadarApi for ReqwestRadarApi {
     }
 
     fn frame<'a>(&'a self, url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-        Box::pin(self.fetch(url))
+        Box::pin(async move { frame_body(self.send(url).await?).await })
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Mutex;
-
-    use super::{BytesSource, MetadataUrls, ReqwestRadarApi, metadata_of_a_current_run};
-    use crate::{
-        config::DEFAULT_RADAR_URL,
-        radar::RadarFuture,
-        test_support::{block_on, sample_instant},
-    };
-
-    const STALE_RUN: &[u8] = br#"{"timestamp":"2026-09-02T12:18:00","timeOffset":2,"times":[]}"#;
-    const CURRENT_RUN: &[u8] = br#"{"timestamp":"2026-09-02T13:45:00","timeOffset":2,"times":[]}"#;
-
-    /// Answers each window with a canned body and records what was asked for.
-    struct StubSource {
-        with_history: &'static [u8],
-        requested: Mutex<Vec<String>>,
-    }
-
-    impl StubSource {
-        fn answering(with_history: &'static [u8]) -> Self {
-            Self {
-                with_history,
-                requested: Mutex::new(Vec::new()),
-            }
-        }
-
-        fn requested(&self) -> Vec<String> {
-            self.requested.lock().expect("stub lock").clone()
-        }
-    }
-
-    impl BytesSource for StubSource {
-        fn get<'a>(&'a self, url: &'a str) -> RadarFuture<'a, Vec<u8>> {
-            Box::pin(async move {
-                self.requested
-                    .lock()
-                    .expect("stub lock")
-                    .push(url.to_owned());
-                if url.contains("history=0") {
-                    Ok(CURRENT_RUN.to_vec())
-                } else {
-                    Ok(self.with_history.to_vec())
-                }
-            })
-        }
-    }
-
-    fn answer_for(with_history: &'static [u8]) -> (Vec<u8>, Vec<String>) {
-        let stub = StubSource::answering(with_history);
-        let urls = MetadataUrls::under("https://image.example");
-        let body = block_on(metadata_of_a_current_run(&stub, &urls, sample_instant()))
-            .expect("the stub never fails");
-        (body, stub.requested())
-    }
-
-    #[test]
-    fn a_stale_answer_is_replaced_by_the_current_run() {
-        // Given: the endpoint answers the windowed query from an archived run.
-        // When
-        let (body, requested) = answer_for(STALE_RUN);
-
-        // Then: the second request drops history, and its body is what returns.
-        assert_eq!(body, CURRENT_RUN);
-        assert_eq!(requested.len(), 2);
-        assert!(requested[0].contains("history=2"), "{}", requested[0]);
-        assert!(requested[1].contains("history=0"), "{}", requested[1]);
-    }
-
-    #[test]
-    fn a_current_answer_is_returned_without_a_second_request() {
-        // Given: the endpoint answers the windowed query from the current run.
-        // When
-        let (body, requested) = answer_for(CURRENT_RUN);
-
-        // Then
-        assert_eq!(body, CURRENT_RUN);
-        assert_eq!(requested.len(), 1);
-        assert!(requested[0].contains("history=2"), "{}", requested[0]);
-    }
-
-    #[test]
-    fn an_undatable_answer_is_kept_rather_than_refetched() {
-        // Given: a body the freshness reader cannot date.
-        // When
-        let (body, requested) = answer_for(b"not the sprite schema");
-
-        // Then
-        assert_eq!(body, b"not the sprite schema");
-        assert_eq!(requested.len(), 1);
-    }
-
-    #[test]
-    fn a_trailing_slash_on_the_base_url_does_not_double_the_path_separator() {
-        // Given / When
-        let plain = ReqwestRadarApi::new("https://image.example").expect("client should build");
-        let trailing = ReqwestRadarApi::new("https://image.example/").expect("client should build");
-
-        // Then
-        assert_eq!(plain.urls.with_history, trailing.urls.with_history);
-        assert_eq!(plain.urls.current_run, trailing.urls.current_run);
-        assert!(
-            plain
-                .urls
-                .with_history
-                .starts_with("https://image.example/2.0/"),
-            "{}",
-            plain.urls.with_history
-        );
-    }
-
-    #[test]
-    fn the_metadata_query_asks_for_a_window_that_outlasts_the_rain_graph() {
-        // Given / When
-        let api = ReqwestRadarApi::new(DEFAULT_RADAR_URL).expect("client should build");
-
-        // Then: two observed steps back, two and a half hours ahead, and bare
-        // sprites. The fallback differs in exactly one parameter, so a stale
-        // answer costs the history and nothing else.
-        for parameter in [
-            "history=2",
-            "forecast=30",
-            "renderBackground=false",
-            "renderText=false",
-            "renderBranding=false",
-        ] {
-            assert!(
-                api.urls.with_history.contains(parameter),
-                "missing {parameter} in {}",
-                api.urls.with_history
-            );
-        }
-        assert_eq!(
-            api.urls.current_run,
-            api.urls.with_history.replace("history=2", "history=0")
-        );
-    }
-}
+mod tests;

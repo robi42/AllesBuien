@@ -42,10 +42,16 @@ pub const RETRY_AFTER_FAILURE: Duration = Duration::from_secs(30);
 /// request itself is wrong, and malformed metadata, an unusable run timestamp,
 /// or a cache failure all reproduce identically on a retry, so those surface
 /// immediately instead of stalling the viewer behind pointless waits.
+///
+/// An answer past its size limit usually reproduces too, and is retried all
+/// the same: it is an ordinary failed request, refused by the reader rather
+/// than the network, and a retry is cheap. Frames already on disk are skipped,
+/// so a further attempt asks only for the metadata and the frames still
+/// missing, and an oversize the server declares is refused on its headers.
 #[must_use]
 pub fn is_retryable(error: &RadarError) -> bool {
     match error {
-        RadarError::Request(_) => true,
+        RadarError::Request(_) | RadarError::BodyTooLarge { .. } => true,
         RadarError::HttpStatus { status } => *status >= 500,
         RadarError::Metadata(_) | RadarError::InvalidRunTimestamp { .. } | RadarError::Cache(_) => {
             false
@@ -61,15 +67,19 @@ pub fn is_retryable(error: &RadarError) -> bool {
 /// status produced by `error_for_status`: a missing status is a request that
 /// failed before a reply, and a 5xx is a transient service fault, while a 4xx
 /// means the request itself is wrong and must not hold the viewer behind waits.
-/// The status split follows the radar precedent and reqwest's contract but is
-/// not unit-tested here: constructing that error requires driving reqwest's
-/// async client inside Tokio, while core deliberately has no async runtime.
+/// The status split follows the radar precedent and reqwest's contract, and is
+/// not yet unit-tested here, although no runtime stands in the way any more:
+/// `error_for_status` on an in-memory response, built with the `http`
+/// dev-dependency, gives a `reqwest::Error` that carries the status.
+/// An answer past its size limit is retried as the radar's is, as a request
+/// that failed without a status would be.
 #[must_use]
 pub fn is_weather_retryable(error: &WeatherError) -> bool {
     match error {
         WeatherError::FeedRequest(error) | WeatherError::RaintextRequest(error) => {
             error.status().is_none_or(|status| status.is_server_error())
         }
+        WeatherError::BodyTooLarge { .. } => true,
         WeatherError::ClientBuild(_) | WeatherError::FeedDecode(_) => false,
     }
 }
@@ -112,6 +122,15 @@ mod tests {
     }
 
     #[test]
+    fn retries_an_oversized_radar_answer_as_an_ordinary_failed_request() {
+        // Given: a frame refused one byte past its limit.
+        let error = RadarError::BodyTooLarge { limit: 2_097_152 };
+
+        // When / Then
+        assert!(is_retryable(&error));
+    }
+
+    #[test]
     fn gives_up_on_a_client_error_because_the_request_itself_is_wrong() {
         // Given / When / Then
         assert!(!is_retryable(&RadarError::HttpStatus { status: 404 }));
@@ -135,6 +154,18 @@ mod tests {
     fn retries_a_weather_request_that_received_no_http_status() {
         // Given: the no-response shape used by a failed weather request.
         let error = WeatherError::FeedRequest(endpoint_error());
+
+        // When / Then
+        assert!(is_weather_retryable(&error));
+    }
+
+    #[test]
+    fn retries_an_oversized_weather_answer_as_an_ordinary_failed_request() {
+        // Given: a feed refused one byte past its limit.
+        let error = WeatherError::BodyTooLarge {
+            response: "weather feed",
+            limit: 1_048_576,
+        };
 
         // When / Then
         assert!(is_weather_retryable(&error));

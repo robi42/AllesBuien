@@ -18,4 +18,6 @@ thiserror = "2"
 jiff = { version = "0.2.35", features = ["tzdb-bundle-always"] }
 
 [dev-dependencies]
+http = "1"
+http-body = "1"
 tempfile = "3"

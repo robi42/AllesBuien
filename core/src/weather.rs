@@ -16,6 +16,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::{
+    bounded_body::{BodyError, read_bounded},
     datetime::{LocalTimestamp, clock_shift_minutes},
     rain::parse_series,
     weather_feed::parse_feed,
@@ -24,6 +25,20 @@ use crate::{
 pub use crate::rain::{RainPoint, RainSoon};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The most one feed answer may hold.
+///
+/// It measured 35 390 B on 24 November 2026, and the capture under
+/// `tests/fixtures/feed.json` is 33 287 B: every station in the country and a
+/// five-day forecast. Thirty times that is still a feed; more is not one the
+/// vendor has ever sent.
+const MAX_FEED_BYTES: usize = 1024 * 1024;
+
+/// The most one rain expectation may hold.
+///
+/// It is 24 lines of `value|HH:MM`, 240 B as measured on 24 November 2026, so
+/// this leaves room for a series many times longer than two hours.
+const MAX_RAINTEXT_BYTES: usize = 16 * 1024;
 
 pub type FeedFuture<'a> =
     Pin<Box<dyn Future<Output = Result<WeatherData, WeatherError>> + Send + 'a>>;
@@ -111,22 +126,14 @@ impl FeedApi for ReqwestFeedApi {
                 .timeout(REQUEST_TIMEOUT)
                 .send()
                 .await
-                .map_err(WeatherError::FeedRequest)?
-                .error_for_status()
-                .map_err(WeatherError::FeedRequest)?
-                .text()
-                .await
                 .map_err(WeatherError::FeedRequest)?;
+            let feed = feed_text(feed).await?;
             let raintext = self
                 .raintext_request(latitude, longitude)
                 .send()
                 .await
-                .map_err(WeatherError::RaintextRequest)?
-                .error_for_status()
-                .map_err(WeatherError::RaintextRequest)?
-                .text()
-                .await
                 .map_err(WeatherError::RaintextRequest)?;
+            let raintext = raintext_text(raintext).await?;
             let parsed = parse_feed(&feed, latitude, longitude)?;
             let rain = parse_series(&raintext, clock_shift_minutes());
             Ok(WeatherData {
@@ -140,6 +147,51 @@ impl FeedApi for ReqwestFeedApi {
     }
 }
 
+/// The feed's body as text, refused past [`MAX_FEED_BYTES`].
+async fn feed_text(response: reqwest::Response) -> Result<String, WeatherError> {
+    body_text(
+        response,
+        MAX_FEED_BYTES,
+        "weather feed",
+        WeatherError::FeedRequest,
+    )
+    .await
+}
+
+/// The rain expectation's body as text, refused past [`MAX_RAINTEXT_BYTES`].
+async fn raintext_text(response: reqwest::Response) -> Result<String, WeatherError> {
+    body_text(
+        response,
+        MAX_RAINTEXT_BYTES,
+        "raintext",
+        WeatherError::RaintextRequest,
+    )
+    .await
+}
+
+/// A successful answer's body, read no further than `limit` bytes, as text.
+///
+/// The bytes become text the way reqwest's `Response::text` makes them without
+/// its `charset` feature, which this workspace does not enable, so the text is
+/// what it was before the limit: invalid UTF-8 becomes the replacement
+/// character. A failed status or read keeps its request's own variant, `failed`.
+async fn body_text(
+    response: reqwest::Response,
+    limit: usize,
+    name: &'static str,
+    failed: fn(reqwest::Error) -> WeatherError,
+) -> Result<String, WeatherError> {
+    let response = response.error_for_status().map_err(failed)?;
+    match read_bounded(response, limit).await {
+        Ok(body) => Ok(String::from_utf8_lossy(&body).into_owned()),
+        Err(BodyError::TooLarge { limit }) => Err(WeatherError::BodyTooLarge {
+            response: name,
+            limit,
+        }),
+        Err(BodyError::Transport(error)) => Err(failed(error)),
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum WeatherError {
     #[error("failed to build weather HTTP client: {0}")]
@@ -148,6 +200,11 @@ pub enum WeatherError {
     FeedRequest(reqwest::Error),
     #[error("raintext request failed: {0}")]
     RaintextRequest(reqwest::Error),
+    #[error("{response} response exceeded its {limit}-byte limit")]
+    BodyTooLarge {
+        response: &'static str,
+        limit: usize,
+    },
     #[error("failed to decode weather feed JSON: {0}")]
     FeedDecode(#[from] serde_json::Error),
 }
@@ -211,104 +268,4 @@ pub struct WeatherData {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{ReqwestFeedApi, is_https, parse_feed, parse_series};
-    use crate::{
-        config::{DEFAULT_FEED_URL, DEFAULT_RAINTEXT_URL},
-        test_support::block_on,
-    };
-
-    const FEED_FIXTURE: &str = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/feed.json"
-    ));
-    const RAINTEXT_FIXTURE: &str = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/raintext.txt"
-    ));
-
-    #[test]
-    fn live_fixtures_parse_offline() {
-        // Given / When
-        let weather = parse_feed(FEED_FIXTURE, 52.37, 4.84).expect("fixture should parse");
-        let rain = parse_series(RAINTEXT_FIXTURE, 0);
-
-        // Then
-        assert_eq!(weather.forecast.len(), 5);
-        assert_ne!(rain.line, "");
-    }
-
-    #[test]
-    fn client_accepts_owned_and_borrowed_endpoint_urls() {
-        // Given / When
-        let client = ReqwestFeedApi::new(DEFAULT_FEED_URL.to_owned(), DEFAULT_RAINTEXT_URL)
-            .expect("client should build");
-
-        // Then
-        assert_eq!(client.feed_url, DEFAULT_FEED_URL);
-        assert_eq!(client.raintext_url, DEFAULT_RAINTEXT_URL);
-    }
-
-    #[test]
-    fn rain_request_asks_getrr_with_the_coordinates_at_four_places() {
-        // Given: the shipped endpoints.
-        let api = ReqwestFeedApi::new(DEFAULT_FEED_URL, DEFAULT_RAINTEXT_URL)
-            .expect("client should build");
-
-        // When
-        let url_for = |latitude, longitude| {
-            api.raintext_request(latitude, longitude)
-                .build()
-                .expect("rain request should build")
-                .url()
-                .as_str()
-                .to_owned()
-        };
-
-        // Then: the literal, not the constant, is what pins the address the
-        // terms ask for, and the second place shows the rounding.
-        assert_eq!(
-            url_for(52.37, 4.84),
-            "https://gps.buienradar.nl/getrr.php?lat=52.3700&lon=4.8400"
-        );
-        assert_eq!(
-            url_for(53.219_38, 6.566_52),
-            "https://gps.buienradar.nl/getrr.php?lat=53.2194&lon=6.5665"
-        );
-    }
-
-    #[test]
-    fn rain_request_is_sent_on_a_client_that_refuses_plain_http() {
-        // Given: the shipped pair, and a plain-HTTP feed stub beside the shipped
-        // rain address, which must not lift the rain request's floor.
-        let pairs = [
-            (DEFAULT_FEED_URL, DEFAULT_RAINTEXT_URL),
-            ("http://127.0.0.1:9", DEFAULT_RAINTEXT_URL),
-        ];
-        for (feed_url, raintext_url) in pairs {
-            let api = ReqwestFeedApi::new(feed_url, raintext_url).expect("client should build");
-            let (client, request) = api.raintext_request(52.37, 4.84).build_split();
-            request.expect("rain request should build");
-
-            // When: the client the rain request would be sent on is handed a
-            // plain-HTTP address. A client without the floor accepts it, and
-            // reqwest then panics with "there is no reactor running" as it
-            // starts the request's timeout, before anything is dialled: that
-            // panic, not an assertion, is what a red run of this test shows.
-            let refused = block_on(client.get("http://127.0.0.1:9/getrr.php").send())
-                .expect_err("plain HTTP should be refused");
-
-            // Then
-            assert!(refused.is_builder(), "{feed_url}: {refused}");
-        }
-    }
-
-    #[test]
-    fn only_an_https_address_holds_its_client_to_https() {
-        // Given / When / Then
-        assert!(is_https(DEFAULT_RAINTEXT_URL));
-        assert!(is_https("HTTPS://gps.buienradar.nl/getrr.php"));
-        assert!(!is_https("http://127.0.0.1:9"));
-        assert!(!is_https("not a URL"));
-    }
-}
+mod tests;
