@@ -1,5 +1,8 @@
 //! Bounded materialisation and retention for one metadata-defined radar run.
 //!
+//! A run accepts at most [`MAX_RUN_FRAMES`] frames: a longer `times[]` is cut
+//! to its first entries in metadata order before any frame is requested, so a
+//! vendor that lists more costs the radar its furthest frames, not the disk.
 //! Four frame requests may be in flight: the bound is a courteous policy for a
 //! free public CDN, while still letting three requests advance if one stalls.
 //! Completed frames are indexed and sorted back into metadata order. Each body
@@ -10,7 +13,9 @@ use std::path::Path;
 
 use futures::{StreamExt, TryStreamExt, stream};
 
-use crate::radar::{MAX_CACHED_RUNS, MetadataTime, RadarApi, RadarError, RadarFrame};
+use crate::radar::{
+    MAX_CACHED_RUNS, MAX_RUN_FRAMES, MetadataTime, RadarApi, RadarError, RadarFrame,
+};
 
 const MAX_CONCURRENT_FRAMES: usize = 4;
 
@@ -31,25 +36,29 @@ impl<'a> RadarCache<'a> {
     ) -> Result<Vec<RadarFrame>, RadarError> {
         let run_dir = self.state_dir.join("runs").join(run_id);
         std::fs::create_dir_all(&run_dir)?;
-        let downloads = times.into_iter().enumerate().map(|(index, time)| {
-            let run_dir = &run_dir;
-            async move {
-                let path = run_dir.join(format!("frame-{index}.png"));
-                if !path.exists() {
-                    let temporary = path.with_extension("png.tmp");
-                    let bytes = api.frame(&time.url).await?;
-                    std::fs::write(&temporary, bytes)?;
-                    std::fs::rename(temporary, &path)?;
+        let downloads = times
+            .into_iter()
+            .take(MAX_RUN_FRAMES)
+            .enumerate()
+            .map(|(index, time)| {
+                let run_dir = &run_dir;
+                async move {
+                    let path = run_dir.join(format!("frame-{index}.png"));
+                    if !path.exists() {
+                        let temporary = path.with_extension("png.tmp");
+                        let bytes = api.frame(&time.url).await?;
+                        std::fs::write(&temporary, bytes)?;
+                        std::fs::rename(temporary, &path)?;
+                    }
+                    Ok::<(usize, RadarFrame), RadarError>((
+                        index,
+                        RadarFrame {
+                            timestamp: time.timestamp,
+                            path,
+                        },
+                    ))
                 }
-                Ok::<(usize, RadarFrame), RadarError>((
-                    index,
-                    RadarFrame {
-                        timestamp: time.timestamp,
-                        path,
-                    },
-                ))
-            }
-        });
+            });
         let mut indexed_frames: Vec<(usize, RadarFrame)> = stream::iter(downloads)
             .buffer_unordered(MAX_CONCURRENT_FRAMES)
             .try_collect()

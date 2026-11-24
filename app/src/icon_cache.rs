@@ -22,7 +22,7 @@
 
 use std::{collections::BTreeSet, future::Future, path::PathBuf, pin::Pin, sync::Arc};
 
-use allesbuien_core::weather::WeatherData;
+use allesbuien_core::{bounded_body::read_bounded, weather::WeatherData};
 use futures::{StreamExt, stream};
 
 use crate::{condition_icon, icon_store, image_provider};
@@ -126,7 +126,8 @@ pub fn missing_keys(codes: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// Downloads icons over HTTP, treating any non-success response as a miss.
+/// Downloads icons over HTTP, treating any non-success response, and any body
+/// past [`icon_store::MAX_ICON_BYTES`], as a miss.
 pub struct ReqwestIconSource(reqwest::Client);
 
 impl ReqwestIconSource {
@@ -145,11 +146,18 @@ impl ReqwestIconSource {
 impl IconSource for ReqwestIconSource {
     fn get(&self, url: &str) -> IconFuture<'_> {
         let request = self.0.get(url).send();
-        Box::pin(async move {
-            let response = request.await.ok()?.error_for_status().ok()?;
-            response.bytes().await.ok().map(|body| body.to_vec())
-        })
+        Box::pin(async move { icon_body(request.await.ok()?).await })
     }
+}
+
+/// One icon's body, or [`None`] for a refused status, a failed read, or a body
+/// past [`icon_store::MAX_ICON_BYTES`], which is refused as it arrives rather
+/// than read whole and dropped.
+async fn icon_body(response: reqwest::Response) -> Option<Vec<u8>> {
+    let response = response.error_for_status().ok()?;
+    read_bounded(response, icon_store::MAX_ICON_BYTES)
+        .await
+        .ok()
 }
 
 /// Every condition code one weather payload references, deduplicated.

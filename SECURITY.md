@@ -30,6 +30,22 @@ Nothing is piped into a shell, and GitHub is never asked which release is the la
 - **The release.** Releases from v0.2.0 on are immutable: once one is published, nobody can change or replace its assets or move its tag. GitHub can also attest an immutable release; whether it has is checked when each release is made, and nothing on this page relies on that release attestation. v0.1.0 predates the setting and is not immutable, and no pin names it.
 - **Build provenance.** Releases after v0.2.0 carry a build-provenance attestation for the package, which `release.yml` signs in a job of its own before it makes the draft. It ties the package's digest to a run of `release.yml`, and through that run to the tag and its commit. With the GitHub CLI, anyone can check a package against it: `gh attestation verify <package> --repo robi42/AllesBuien --signer-workflow robi42/AllesBuien/.github/workflows/release.yml --source-ref refs/tags/v<version> --source-digest <commit>`, where `<commit>` is the one the tag names, which `git ls-remote https://github.com/robi42/AllesBuien 'refs/tags/v<version>^{}'` prints. The commit is there because without it a run for an earlier tag of the same name, whose draft was deleted, passes too. README's [Releasing](README.md#releasing) section runs the same check before a release is published. The attestation says where a package was built, not that the build is benign. It does not say these are the bytes the release published either: a re-run can leave a second attested package for the same tag and commit, and the pin names the published one. The widget's click does not check it. v0.2.0 and v0.1.0 have none.
 
+## What the app accepts from Buienradar
+
+Every answer the app reads from Buienradar is read under a limit for its kind, sized from measured answers with ample room, and refused once it passes that limit: before its body is read when its `Content-Length` declares more, and otherwise at the chunk that would take it past the limit.
+
+| Answer | Measured on 24 November 2026 | Limit |
+|---|---|---|
+| The feed | 35 390 B | 1 MiB |
+| The rain expectation | 240 B | 16 KiB |
+| Radar metadata | 9 013 B, listing 32 frames | 256 KiB |
+| A radar frame | 19 958 to 34 979 B | 2 MiB |
+| A condition icon | 886 to 2 818 B | 256 KiB |
+
+A radar run accepts at most 32 frames: metadata that lists more is cut to its first 32 in the order it lists them, before any frame is requested, so one run accepts at most 64 MiB of frames. A refused answer fails its request as any failed request does: it is retried, the data already on screen stays, and the status line says Buienradar sent unexpected data.
+
+These limits bound what the app accepts and keeps from one answer and one run, not its network traffic: a refused answer has already delivered the chunk that passed the limit, and a retry asks again. They set no total for memory or for the radar cache on disk. Images are decoded by Qt, whose image reader applies its own allocation limit.
+
 ## Scope
 
 In scope:

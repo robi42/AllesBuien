@@ -73,7 +73,9 @@ pub fn radar_message(error: &RadarError, stale: bool) -> String {
     let hint = match error {
         RadarError::Request(_) => CONNECTION_HINT,
         RadarError::HttpStatus { .. } => SERVICE_HINT,
-        RadarError::Metadata(_) | RadarError::InvalidRunTimestamp { .. } => DATA_HINT,
+        RadarError::Metadata(_)
+        | RadarError::InvalidRunTimestamp { .. }
+        | RadarError::BodyTooLarge { .. } => DATA_HINT,
         RadarError::Cache(_) => "could not write the radar cache",
     };
     compose("Radar", hint, stale)
@@ -86,7 +88,7 @@ pub fn weather_message(error: &WeatherError, stale: bool) -> String {
         WeatherError::ClientBuild(_)
         | WeatherError::FeedRequest(_)
         | WeatherError::RaintextRequest(_) => CONNECTION_HINT,
-        WeatherError::FeedDecode(_) => DATA_HINT,
+        WeatherError::FeedDecode(_) | WeatherError::BodyTooLarge { .. } => DATA_HINT,
     };
     compose("Weather", hint, stale)
 }
@@ -107,6 +109,7 @@ mod tests {
             RadarError::Cache(io::Error::other(
                 "/home/someone/.local/state/allesbuien denied",
             )),
+            RadarError::BodyTooLarge { limit: 2_097_152 },
         ]
     }
 
@@ -116,6 +119,10 @@ mod tests {
             WeatherError::FeedRequest(endpoint_error()),
             WeatherError::RaintextRequest(endpoint_error()),
             WeatherError::FeedDecode(json_decode_error()),
+            WeatherError::BodyTooLarge {
+                response: "raintext",
+                limit: 16_384,
+            },
         ]
     }
 
@@ -170,6 +177,25 @@ mod tests {
             malformed_metadata_message.contains("unexpected data"),
             "{malformed_metadata_message}"
         );
+    }
+
+    #[test]
+    fn blames_the_data_not_the_connection_for_an_oversized_answer() {
+        // Given / When: an answer refused past its limit arrived over a working
+        // connection, so the connection is the one thing not to blame.
+        let radar = radar_message(&RadarError::BodyTooLarge { limit: 2_097_152 }, false);
+        let weather = weather_message(
+            &WeatherError::BodyTooLarge {
+                response: "weather feed",
+                limit: 1_048_576,
+            },
+            true,
+        );
+
+        // Then
+        for message in [radar, weather] {
+            assert!(message.contains("unexpected data"), "{message}");
+        }
     }
 
     #[test]
